@@ -15,6 +15,12 @@ shopee/__chrome_profile/
 **/__chrome_profile/
 data/
 
+# Frontend Next.js (dashboard premium) — di-deploy ke Vercel (root dir: web).
+# web/.env.local (DB+password) di-ignore oleh web/.gitignore (.env*).
+web/node_modules/
+web/.next/
+web/.env*
+
 # Python
 __pycache__/
 *.py[cod]

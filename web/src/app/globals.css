@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f4f6fb;
+  --ink: #161a27;
+  --muted: #8a90a2;
+  --orange: #ee4d2d;
+  --teal: #16b8a6;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.card {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 6px 26px rgba(20, 23, 40, 0.05);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8dce6;
+  border-radius: 8px;
+}
