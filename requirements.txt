@@ -1,11 +1,11 @@
-# ETL (migrasi Google Sheets -> PostgreSQL/Supabase)
-gspread==6.1.4
-google-auth==2.35.0
-pandas==2.2.3
-psycopg[binary]==3.2.3
-python-dotenv==1.0.1
-SQLAlchemy==2.0.36
-
-# Dashboard
+# Dependensi untuk DASHBOARD (Streamlit Cloud). Minimal & cepat di-build.
 streamlit==1.40.1
 plotly==5.24.1
+pandas==2.2.3
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3
+python-dotenv==1.0.1
+
+# Catatan: modul puller lokal (shopee/, etl/pull_*) butuh tambahan
+# DrissionPage, requests, colorama, gspread — install terpisah di mesin lokal,
+# TIDAK dipakai oleh dashboard online (jadi tidak ditaruh di sini).
