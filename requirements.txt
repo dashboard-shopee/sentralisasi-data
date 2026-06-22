@@ -1,0 +1,11 @@
+# ETL (migrasi Google Sheets -> PostgreSQL/Supabase)
+gspread==6.1.4
+google-auth==2.35.0
+pandas==2.2.3
+psycopg[binary]==3.2.3
+python-dotenv==1.0.1
+SQLAlchemy==2.0.36
+
+# Dashboard
+streamlit==1.40.1
+plotly==5.24.1

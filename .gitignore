@@ -1,0 +1,27 @@
+# Rahasia — JANGAN pernah commit
+.env
+*.env
+.streamlit/secrets.toml
+*.key
+*.json.key
+
+# Folder bot referensi (punya kredensial & dikembangkan terpisah) — JANGAN upload
+01 Otomatisasi Iklan/
+02 Otomatisasi Monitoring Harga/
+03 Otomatisasi Riset Kompetitor/
+
+# Profil Chrome (login) & data lokal
+shopee/__chrome_profile/
+**/__chrome_profile/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# OS
+Thumbs.db
+.DS_Store
