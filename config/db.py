@@ -15,18 +15,27 @@ from sqlalchemy.engine import Engine
 # Muat .env dari root project (parent dari folder config/).
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+def _database_url() -> str:
+    """Ambil DATABASE_URL dari env (.env lokal) ATAU st.secrets (Streamlit Cloud)."""
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        try:
+            import streamlit as st  # hanya ada saat jalan di dashboard / Cloud
+            url = st.secrets.get("DATABASE_URL", "")
+        except Exception:
+            url = ""
+    return url
 
 
 def get_engine() -> Engine:
     """Engine SQLAlchemy ke Supabase. SSL dipaksa (wajib di Supabase)."""
-    if not DATABASE_URL:
+    url = _database_url()
+    if not url:
         raise RuntimeError(
-            "DATABASE_URL belum diisi di .env. "
-            "Ambil connection string (Session pooler) dari tombol 'Connect' di Supabase."
+            "DATABASE_URL belum diisi (.env lokal / Secrets Streamlit Cloud)."
         )
     # Pakai driver psycopg v3.
-    url = DATABASE_URL
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
