@@ -32,7 +32,7 @@ export default function Login() {
       <form onSubmit={submit} className="card p-7 w-full max-w-[360px]">
         <div className="flex flex-col items-center text-center mb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/syntra-logo.png" alt="SYNTRA — System Centralized" className="h-20 w-auto mix-blend-multiply" />
+          <img src="/syntra-logo.png" alt="SYNTRA — System Centralized" className="h-20 w-auto" />
           <div className="text-[11px] text-[#9aa0b2] mt-2">System Centralized · masuk untuk lanjut</div>
         </div>
 

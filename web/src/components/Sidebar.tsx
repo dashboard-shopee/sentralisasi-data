@@ -16,7 +16,7 @@ export default function Sidebar() {
     <aside className="hidden md:flex w-[240px] shrink-0 flex-col bg-white border-r border-[#eef0f6] px-4 py-6 sticky top-0 h-screen">
       <div className="flex items-center gap-2.5 px-1 mb-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/syntra-mark.png" alt="SYNTRA" className="h-9 w-auto mix-blend-multiply" />
+        <img src="/syntra-mark.png" alt="SYNTRA" className="h-9 w-auto" />
         <div>
           <div className="font-extrabold text-[17px] leading-none tracking-[0.18em] text-[#3a3f4d]">SYNTRA</div>
           <div className="text-[10px] text-[#9aa0b2] mt-1">System Centralized</div>

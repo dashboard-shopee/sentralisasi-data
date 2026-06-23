@@ -5,14 +5,20 @@ const root = new URL("../../", import.meta.url);
 const src = fileURLToPath(new URL("logo.jpeg", root));
 const pub = (n) => fileURLToPath(new URL("web/public/" + n, root));
 
-// Logo penuh (mark + teks): trim background -> ngepas
-await sharp(src).trim({ threshold: 14 }).png().toFile(pub("syntra-logo.png"));
+// 1) Key-out background near-white -> transparan
+const { data, info } = await sharp(src).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+for (let i = 0; i < info.width * info.height; i++) {
+  const o = i * 4;
+  if (data[o] > 225 && data[o + 1] > 225 && data[o + 2] > 225) data[o + 3] = 0;
+}
+const keyed = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
 
-// Mark saja: extract region atas (tanpa teks). Lalu trim di instance terpisah.
-const markBuf = await sharp(src).extract({ left: 330, top: 205, width: 375, height: 415 }).png().toBuffer();
-await sharp(markBuf).trim({ threshold: 14 }).png().toFile(pub("syntra-mark.png"));
+// 2) Logo penuh (mark + teks) -> trim transparan
+await sharp(keyed).trim().png().toFile(pub("syntra-logo.png"));
+// 3) Mark saja -> extract lalu trim
+const mk = await sharp(keyed).extract({ left: 330, top: 205, width: 375, height: 415 }).png().toBuffer();
+await sharp(mk).trim().png().toFile(pub("syntra-mark.png"));
 
 const a = await sharp(pub("syntra-mark.png")).metadata();
 const b = await sharp(pub("syntra-logo.png")).metadata();
-console.log("syntra-mark.png:", a.width + "x" + a.height);
-console.log("syntra-logo.png:", b.width + "x" + b.height);
+console.log("mark:", a.width + "x" + a.height, "| logo:", b.width + "x" + b.height, "| transparan ✓");

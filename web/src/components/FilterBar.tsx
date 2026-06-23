@@ -31,10 +31,17 @@ export default function FilterBar({ options, filter }: { options: Options; filte
   }
 
   function toggleToko(name: string) {
-    let cur = filter.toko.length ? [...filter.toko] : [...allToko];
-    cur = cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name];
-    if (cur.length === 0) cur = [...allToko];
-    go({ t: cur.length === allToko.length ? null : cur.join(",") });
+    let cur: string[];
+    if (semua) {
+      // dari "Semua" -> langsung fokus ke 1 toko ini saja
+      cur = [name];
+    } else if (filter.toko.includes(name)) {
+      cur = filter.toko.filter((x) => x !== name); // sudah aktif -> lepas
+    } else {
+      cur = [...filter.toko, name]; // tambah toko
+    }
+    // kosong atau semua terpilih -> kembali ke "Semua"
+    go({ t: cur.length === 0 || cur.length === allToko.length ? null : cur.join(",") });
   }
 
   const sel = "px-3 py-1.5 rounded-lg text-[13px] font-semibold transition";
