@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Logo from "@/components/Logo";
 
 export default function Login() {
   const [pw, setPw] = useState("");
@@ -31,12 +30,10 @@ export default function Login() {
   return (
     <div className="fixed inset-0 grid place-items-center px-4" style={{ background: "var(--bg)" }}>
       <form onSubmit={submit} className="card p-7 w-full max-w-[360px]">
-        <div className="flex items-center gap-3 mb-5">
-          <Logo size={44} />
-          <div>
-            <div className="font-extrabold text-[18px] leading-none tracking-[0.18em] text-[#3a3f4d]">SYNTRA</div>
-            <div className="text-[11px] text-[#9aa0b2] mt-1">System Centralized · masuk untuk lanjut</div>
-          </div>
+        <div className="flex flex-col items-center text-center mb-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/syntra-logo.png" alt="SYNTRA — System Centralized" className="h-20 w-auto mix-blend-multiply" />
+          <div className="text-[11px] text-[#9aa0b2] mt-2">System Centralized · masuk untuk lanjut</div>
         </div>
 
         <label className="text-[13px] font-medium text-[#6b7180]">Password</label>
