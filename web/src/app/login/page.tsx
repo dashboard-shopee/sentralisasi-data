@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function Login() {
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,13 +17,13 @@ export default function Login() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ password: pw }),
     });
-    setLoading(false);
     if (r.ok) {
-      router.replace("/");
-      router.refresh();
-    } else {
-      setErr(true);
+      // reload penuh -> cookie baru langsung kebawa, masuk seketika
+      window.location.href = "/";
+      return;
     }
+    setLoading(false);
+    setErr(true);
   }
 
   return (
