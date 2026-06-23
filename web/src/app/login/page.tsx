@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function Login() {
   const [pw, setPw] = useState("");
+  const [show, setShow] = useState(false);
   const [err, setErr] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -37,14 +38,24 @@ export default function Login() {
         </div>
 
         <label className="text-[13px] font-medium text-[#6b7180]">Password</label>
-        <input
-          type="password"
-          autoFocus
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="Masukkan password"
-          className={"mt-1.5 w-full border rounded-xl px-3 py-2.5 text-[14px] outline-none " + (err ? "border-[#ec407a]" : "border-[#e6e9f0] focus:border-[#ee4d2d]")}
-        />
+        <div className="relative mt-1.5">
+          <input
+            type={show ? "text" : "password"}
+            autoFocus
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            placeholder="Masukkan password"
+            className={"w-full border rounded-xl pl-3 pr-11 py-2.5 text-[14px] outline-none " + (err ? "border-[#ec407a]" : "border-[#e6e9f0] focus:border-[#ee4d2d]")}
+          />
+          <button
+            type="button"
+            onClick={() => setShow(!show)}
+            aria-label={show ? "Sembunyikan password" : "Lihat password"}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[18px] px-1 text-[#9aa0b2] hover:text-[#6b7180]"
+          >
+            {show ? "🙈" : "👁️"}
+          </button>
+        </div>
         {err && <div className="text-[12px] text-[#ec407a] mt-2">Password salah, coba lagi.</div>}
 
         <button

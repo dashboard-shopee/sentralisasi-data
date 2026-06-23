@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const pass = process.env.DASH_PASSWORD || "";
+  const pass = (process.env.DASH_PASSWORD || "").trim();
   const body = (await req.json().catch(() => ({}))) as { password?: string };
-  if (pass && body.password === pass) {
+  if (pass && (body.password || "").trim() === pass) {
     const res = NextResponse.json({ ok: true });
     res.cookies.set("dash_auth", pass, {
       httpOnly: true,
