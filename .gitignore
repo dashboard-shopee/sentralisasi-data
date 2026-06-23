@@ -4,6 +4,8 @@
 .streamlit/secrets.toml
 *.key
 *.json.key
+HANDOFF.md
+logo.jpeg
 
 # Folder bot referensi (punya kredensial & dikembangkan terpisah) — JANGAN upload
 01 Otomatisasi Iklan/
