@@ -11,6 +11,12 @@
         "--browser.gatherUsageStats", "false"
       ],
       "port": 8501
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["web/node_modules/next/dist/bin/next", "dev", "web"],
+      "port": 3000
     }
   ]
 }

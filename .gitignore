@@ -12,6 +12,9 @@ logo.jpeg
 02 Otomatisasi Monitoring Harga/
 03 Otomatisasi Riset Kompetitor/
 
+# Program ETL/automation SYNTRA (self-contained, ada .env + sesi login) — LOKAL, copy ke server manual
+Syntra_Iklan/
+
 # Profil Chrome (login) & data lokal
 shopee/__chrome_profile/
 **/__chrome_profile/
