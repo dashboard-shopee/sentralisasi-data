@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Logo from "@/components/Logo";
 
 export default function Login() {
   const [pw, setPw] = useState("");
@@ -31,12 +32,10 @@ export default function Login() {
     <div className="fixed inset-0 grid place-items-center px-4" style={{ background: "var(--bg)" }}>
       <form onSubmit={submit} className="card p-7 w-full max-w-[360px]">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-2xl grid place-items-center text-white text-lg" style={{ background: "linear-gradient(135deg,#ee4d2d,#ff8a65)" }}>
-            🛍️
-          </div>
+          <Logo size={44} />
           <div>
-            <div className="font-extrabold text-[16px] leading-tight">Dashboard Shopee</div>
-            <div className="text-[12px] text-[#9aa0b2]">Masuk untuk lanjut</div>
+            <div className="font-extrabold text-[18px] leading-none tracking-[0.18em] text-[#3a3f4d]">SYNTRA</div>
+            <div className="text-[11px] text-[#9aa0b2] mt-1">System Centralized · masuk untuk lanjut</div>
           </div>
         </div>
 

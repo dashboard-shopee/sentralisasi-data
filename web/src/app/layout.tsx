@@ -6,8 +6,8 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Dashboard Shopee Multi-Toko",
-  description: "Pusat data penjualan, pesanan & iklan 10 toko",
+  title: "SYNTRA — System Centralized",
+  description: "Pusat data penjualan, pesanan & iklan multi-toko Shopee",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
