@@ -387,12 +387,20 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
        (case when sum(f.dilihat)>0 then sum(f.klik)::float/sum(f.dilihat)*100 else 0 end) ctr,
        (case when sum(f.klik)>0 then sum(f.konversi)::float/sum(f.klik)*100 else 0 end) cr,
        (case when sum(f.klik)>0 then sum(f.biaya_iklan)/sum(f.klik) else 0 end) cpc,
-       (case when sum(f.biaya_iklan)>0 then sum(f.omzet_iklan)/sum(f.biaya_iklan) else 0 end) roas
+       (case when sum(f.biaya_iklan)>0 then sum(f.omzet_iklan)/sum(f.biaya_iklan) else 0 end) roas,
+       max(s.target_roas)::float "targetRoas", max(s.roas_lama)::float "roasLama",
+       max(s.rekom_roas)::float "rekomRoas", max(s.rekom_budget)::float "rekomBudget",
+       max(s.budget_manual)::float "budgetManual", max(s.rating_iklan) "ratingIklan",
+       max(s.ket_rating) "ketRating", max(s.ket_roas) "ketRoas", max(s.ket_budget) "ketBudget",
+       max(s.action) "action"
      from fact_iklan f join dim_toko t on t.toko_id=f.toko_id join dim_produk dp on dp.produk_id=f.produk_id
+     left join iklan_setting s on s.produk_id=dp.produk_id
      where ${where} group by dp.produk_id, dp.sku_induk, t.nama, dp.nama_produk
      order by ${sortExpr} ${dir} nulls last limit ${lim} offset ${off}`,
     params
   );
+  // setting bisa null (produk belum ada di iklan_setting) -> kirim "" supaya tabel tampil "—", bukan 0
+  const v = (x: unknown) => (x === null || x === undefined ? "" : x);
   return {
     total,
     rows: rows.map((r) => ({
@@ -400,6 +408,9 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
       dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi),
       omzetIklan: n(r.omzetIklan), biayaIklan: n(r.biayaIklan),
       ctr: n(r.ctr), cr: n(r.cr), cpc: n(r.cpc), roas: n(r.roas),
+      targetRoas: v(r.targetRoas), roasLama: v(r.roasLama), rekomRoas: v(r.rekomRoas),
+      rekomBudget: v(r.rekomBudget), budgetManual: v(r.budgetManual), ratingIklan: v(r.ratingIklan),
+      ketRating: v(r.ketRating), ketRoas: v(r.ketRoas), ketBudget: v(r.ketBudget), action: v(r.action),
     })),
   };
 }

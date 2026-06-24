@@ -146,7 +146,8 @@ export default function ServerTable({
                 <td className="px-3 py-2 text-[#9aa0b2]">{(page - 1) * pageSize + i + 1}</td>
                 {columns.map((c) => {
                   if (c.edit) {
-                    const val = edits[String(r.kode)]?.[c.key] ?? "";
+                    const dbv = r[c.key];
+                    const val = edits[String(r.kode)]?.[c.key] ?? (dbv === null || dbv === undefined || dbv === "" ? "" : String(dbv));
                     return (
                       <td key={c.key} className="px-2 py-1.5">
                         <input
