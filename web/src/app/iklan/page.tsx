@@ -56,6 +56,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         catalog={VARS_IKLAN}
         kpi={d.kpi}
         trend={d.trend}
+        perToko={d.perToko}
         storageKey="iklan"
         defaultKpi={["omzetIklan", "biayaIklan", "roas", "konversi"]}
         defaultChart={["omzetIklan", "biayaIklan", "roas"]}

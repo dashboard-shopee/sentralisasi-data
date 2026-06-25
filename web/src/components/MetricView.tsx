@@ -31,6 +31,7 @@ export default function MetricView({
   catalog,
   kpi,
   trend,
+  perToko,
   storageKey,
   defaultKpi,
   defaultChart,
@@ -38,6 +39,7 @@ export default function MetricView({
   catalog: VarDef[];
   kpi: Record<string, number>;
   trend: Record<string, number | string>[];
+  perToko?: Record<string, number | string>[];
   storageKey: string;
   defaultKpi: string[];
   defaultChart: string[];
@@ -45,6 +47,9 @@ export default function MetricView({
   const [kpiSel, setKpiSel] = useStored(storageKey + ":kpi", defaultKpi);
   const [chartSel, setChartSel] = useStored(storageKey + ":chart", defaultChart);
   const byKey = (k: string) => catalog.find((c) => c.key === k);
+
+  const series = chartSel.map(byKey).filter(Boolean) as VarDef[];
+  const isShopComparison = trend.length === 1 && !!perToko && perToko.length > 0;
 
   return (
     <>
@@ -62,10 +67,14 @@ export default function MetricView({
 
       <div className="card p-5">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-[15px]">Grafik Tren</h2>
+          <h2 className="font-bold text-[15px]">{isShopComparison ? "Perbandingan Antar Toko" : "Grafik Tren"}</h2>
           <VarMenu all={catalog} selected={chartSel} onChange={setChartSel} max={4} label="Atur Grafik" />
         </div>
-        <FlexChart data={trend} series={chartSel.map(byKey).filter(Boolean) as VarDef[]} />
+        <FlexChart 
+          data={isShopComparison ? (perToko as Record<string, number | string>[]) : trend} 
+          series={series} 
+          isShopComparison={isShopComparison} 
+        />
       </div>
     </>
   );

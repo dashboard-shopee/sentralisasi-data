@@ -92,8 +92,26 @@ export async function getAnalisa(f: Filter) {
     (a, r) => ({ omzet: a.omzet + n(r.omzet), biaya: a.biaya + n(r.biaya), oik: a.oik + n(r.oik) }),
     { omzet: 0, biaya: 0, oik: 0 }
   );
+  const perToko = (await q<{ toko: string; omzet: number; biaya: number; oik: number }>(
+    `select coalesce(p.toko, i.toko) toko, coalesce(p.omzet,0)::float omzet, coalesce(i.biaya,0)::float biaya, coalesce(i.oik,0)::float oik
+     from (select t.nama toko, sum(f.penjualan)::float omzet
+           from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id where ${W} group by t.nama) p
+     full outer join (select t.nama toko, sum(f.biaya_iklan)::float biaya, sum(f.omzet_iklan)::float oik
+                      from fact_iklan f join dim_toko t on t.toko_id=f.toko_id where ${W} group by t.nama) i
+       on i.toko = p.toko order by omzet desc nulls last`,
+    params
+  )).map((r) => ({
+    label: r.toko,
+    toko: r.toko,
+    omzet: n(r.omzet),
+    biaya: n(r.biaya),
+    omzetIklan: n(r.oik),
+    roas: r.biaya ? n(r.oik) / n(r.biaya) : 0,
+    acos: r.omzet ? (n(r.biaya) / n(r.omzet)) * 100 : 0,
+  }));
   return {
     trend,
+    perToko,
     total: {
       omzet: t.omzet,
       biaya: t.biaya,
@@ -239,7 +257,36 @@ export async function getCombined(f: Filter) {
     konversi: r.pengunjung ? (n(r.unit) / n(r.pengunjung)) * 100 : 0,
     aov: r.pesanan ? n(r.omzet) / n(r.pesanan) : 0,
   }));
-  return { kpi, trend, produk };
+  const tpToko = await q<{ toko: string; omzet: number; pesanan: number; unit: number; pembeli: number; pengunjung: number; keranjang: number }>(
+    `select t.nama toko, sum(penjualan)::float omzet, sum(pesanan)::float pesanan, sum(unit_pesanan)::float unit,
+            sum(pembeli)::float pembeli, sum(pengunjung)::float pengunjung, sum(keranjang)::float keranjang
+     from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id where ${W} group by t.nama`,
+    params
+  );
+  const toToko = await q<{ toko: string; op: number; batal: number }>(
+    `select t.nama toko, coalesce(sum(omzet_pesanan),0)::float op, coalesce(sum(pesanan_batal),0)::float batal
+     from fact_pesanan f join dim_toko t on t.toko_id=f.toko_id where ${W} group by t.nama`,
+    params
+  );
+  const mToko = new Map<string, Record<string, number | string>>();
+  for (const r of tpToko) {
+    mToko.set(r.toko, {
+      toko: r.toko, omzet: n(r.omzet), pesanan: n(r.pesanan), unit: n(r.unit),
+      pembeli: n(r.pembeli), pengunjung: n(r.pengunjung), keranjang: n(r.keranjang), omzetPesanan: 0, pesananBatal: 0,
+    });
+  }
+  for (const r of toToko) {
+    const k = r.toko;
+    const e = mToko.get(k) ?? { toko: r.toko, omzet: 0, pesanan: 0, unit: 0, pembeli: 0, pengunjung: 0, keranjang: 0, omzetPesanan: 0, pesananBatal: 0 };
+    e.omzetPesanan = n(r.op); e.pesananBatal = n(r.batal); mToko.set(k, e);
+  }
+  const perToko = [...mToko.values()].sort((a, b) => ((b.omzet as number) - (a.omzet as number))).map(v => {
+    v.konversi = (v.pengunjung as number) ? ((v.pesanan as number) / (v.pengunjung as number)) * 100 : 0;
+    v.aov = (v.pesanan as number) ? (v.omzet as number) / (v.pesanan as number) : 0;
+    return v;
+  });
+
+  return { kpi, trend, perToko, produk };
 }
 
 // ── IKLAN (KPI/grafik custom + tabel produk + kolom rekomendasi disiapkan) ──
@@ -289,7 +336,19 @@ export async function getIklanData(f: Filter) {
     kode: String(r.kode), sku: r.sku ?? "", toko: r.toko, produk: r.produk, targetRoas: "",
     ...deriveIklan({ dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi), omzet: n(r.omzet), biaya: n(r.biaya) }),
   }));
-  return { kpi, trend, produk };
+  const ttToko = await q<{ toko: string; dilihat: number; klik: number; konversi: number; omzet: number; biaya: number }>(
+    `select t.nama toko, coalesce(sum(dilihat),0)::float dilihat, coalesce(sum(klik),0)::float klik,
+            coalesce(sum(konversi),0)::float konversi, coalesce(sum(omzet_iklan),0)::float omzet,
+            coalesce(sum(biaya_iklan),0)::float biaya
+     from fact_iklan f join dim_toko t on t.toko_id=f.toko_id where ${W} group by t.nama order by omzet desc nulls last`,
+    params
+  );
+  const perToko = ttToko.map((r) => ({
+    toko: r.toko,
+    ...deriveIklan({ dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi), omzet: n(r.omzet), biaya: n(r.biaya) }),
+  }));
+
+  return { kpi, trend, perToko, produk };
 }
 
 // ── TABEL PRODUK server-side: pagination + sort + search (skala 20rb+) ──

@@ -71,16 +71,28 @@ export function DonutToko({ data }: { data: { toko: string; omzet: number }[] })
 
 // Grafik custom: tiap variabel = 1 garis dengan sumbu-Y sendiri (tersembunyi),
 // jadi 4 variabel beda skala (Rp, jumlah, %) bisa dibandingkan bentuk trennya.
-export function FlexChart({ data, series }: { data: Record<string, number | string>[]; series: VarDef[] }) {
+export function FlexChart({ data, series, isShopComparison }: { data: Record<string, number | string>[]; series: VarDef[]; isShopComparison?: boolean }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <ComposedChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9aa0b2" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+        <XAxis 
+          dataKey={isShopComparison ? "toko" : "label"} 
+          tick={{ fontSize: 11, fill: "#9aa0b2" }} 
+          axisLine={false} 
+          tickLine={false} 
+          interval={isShopComparison ? 0 : "preserveStartEnd"} 
+          angle={isShopComparison ? -35 : 0} 
+          textAnchor={isShopComparison ? "end" : "middle"} 
+          height={isShopComparison ? 104 : 30} 
+          tickMargin={isShopComparison ? 6 : 0} 
+          tickFormatter={isShopComparison ? potong : undefined} 
+        />
         {series.map((s) => (
           <YAxis key={s.key} yAxisId={s.key} hide domain={["auto", "auto"]} />
         ))}
         <Tooltip
           contentStyle={tip}
+          cursor={{ fill: "#f6f7fb" }}
           formatter={(v, name) => {
             const s = series.find((x) => x.label === name);
             return s ? fmtVal(Number(v), s.fmt) : String(v);
@@ -88,7 +100,11 @@ export function FlexChart({ data, series }: { data: Record<string, number | stri
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {series.map((s, i) => (
-          <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={CHART[i % CHART.length]} strokeWidth={2.5} dot={false} />
+          isShopComparison && i === 0 ? (
+            <Bar key={s.key} yAxisId={s.key} dataKey={s.key} name={s.label} fill={CHART[i % CHART.length]} radius={[6, 6, 0, 0]} barSize={24} />
+          ) : (
+            <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={CHART[i % CHART.length]} strokeWidth={2.5} dot={isShopComparison ? true : false} />
+          )
         ))}
       </ComposedChart>
     </ResponsiveContainer>
@@ -115,20 +131,34 @@ export function BarTokoDuo({ data }: { data: { toko: string; pesanan: number; om
 
 export function ComboAnalisa({
   data,
+  isShopComparison,
 }: {
   data: { label: string; omzet: number; biaya: number; omzetIklan: number; roas: number; acos: number }[];
+  isShopComparison?: boolean;
 }) {
   return (
     <ResponsiveContainer width="100%" height={340}>
       <ComposedChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9aa0b2" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+        <XAxis 
+          dataKey="label" 
+          tick={{ fontSize: 11, fill: "#9aa0b2" }} 
+          axisLine={false} 
+          tickLine={false} 
+          interval={isShopComparison ? 0 : "preserveStartEnd"} 
+          angle={isShopComparison ? -35 : 0} 
+          textAnchor={isShopComparison ? "end" : "middle"} 
+          height={isShopComparison ? 104 : 30} 
+          tickMargin={isShopComparison ? 6 : 0} 
+          tickFormatter={isShopComparison ? potong : undefined} 
+        />
         <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "#9aa0b2" }} axisLine={false} tickLine={false} tickFormatter={(v) => rpShort(v)} width={58} />
-        <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "#16b8a6" }} axisLine={false} tickLine={false} domain={[0, "auto"]} width={32} />
+        <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "#16b8a6" }} axisLine={false} tickLine={false} domain={[0, (max: number) => max * 1.5]} width={32} />
+        <YAxis yAxisId="biaya" hide domain={[0, (max: number) => max * 4]} />
         <YAxis yAxisId="acos" hide domain={[0, "auto"]} />
-        <Tooltip contentStyle={tip} formatter={(v, name) => (name === "ROAS" ? Number(v).toFixed(2) : name === "ACOS" ? Number(v).toFixed(1) + "%" : rpShort(v))} />
+        <Tooltip contentStyle={tip} cursor={{ fill: "#f6f7fb" }} formatter={(v, name) => (name === "ROAS" ? Number(v).toFixed(2) : name === "ACOS" ? Number(v).toFixed(1) + "%" : rpShort(v))} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar yAxisId="l" dataKey="omzet" name="Omzet" fill="#ee4d2d" radius={[6, 6, 0, 0]} barSize={11} />
-        <Bar yAxisId="l" dataKey="biaya" name="Biaya Iklan" fill="#42a5f5" radius={[6, 6, 0, 0]} barSize={11} />
+        <Bar yAxisId="biaya" dataKey="biaya" name="Biaya Iklan" fill="#42a5f5" radius={[6, 6, 0, 0]} barSize={11} />
         <Line yAxisId="l" type="monotone" dataKey="omzetIklan" name="Omzet Iklan" stroke="#7e57c2" strokeWidth={2.5} dot={false} />
         <Line yAxisId="r" type="monotone" dataKey="roas" name="ROAS" stroke="#16b8a6" strokeWidth={3} dot={false} />
         <Line yAxisId="acos" type="monotone" dataKey="acos" name="ACOS" stroke="#f59e0b" strokeWidth={2.5} strokeDasharray="4 3" dot={false} />

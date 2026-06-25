@@ -56,7 +56,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
           <h2 className="font-bold text-[15px]">Omzet vs Biaya · ROAS · ACOS</h2>
           <span className="text-[12px] text-[#8a90a2]">batang = Rp · garis = ROAS/ACOS</span>
         </div>
-        <ComboAnalisa data={d.trend} />
+        <ComboAnalisa data={d.trend.length === 1 ? d.perToko : d.trend} isShopComparison={d.trend.length === 1} />
       </div>
 
       <h2 className="text-[14px] font-bold mb-1">📋 Daftar Produk Diiklankan</h2>
