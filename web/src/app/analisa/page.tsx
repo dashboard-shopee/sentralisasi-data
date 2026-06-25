@@ -19,7 +19,7 @@ const COLS: SCol[] = [
   // kolom disiapkan untuk fitur otomasi ROAS/budget (diisi menyusul)
   { key: "targetRoas", label: "Target ROAS", w: 100 },
   { key: "roasLama", label: "ROAS Lama", w: 100 },
-  { key: "rekomRoas", label: "Rekomendasi ROAS", w: 140 },
+  { key: "rekomRoas", label: "Rekomendasi ROAS", w: 140, edit: true },
   { key: "ratingIklan", label: "Rating Iklan", w: 110 },
   { key: "rekomBudget", label: "Rekomendasi Budget", fmt: "rp", w: 150 },
   { key: "budgetManual", label: "Budget Manual", w: 130, edit: true },
@@ -63,7 +63,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       <p className="text-[12px] text-[#9aa0b2] mb-3">
         Klik judul kolom untuk urutkan · kolom Target/Rekomendasi/Budget disiapkan untuk fitur otomasi (diisi menyusul).
       </p>
-      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} editKey="analisa-budget" />
+      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} editKey="analisa-setting" />
     </div>
   );
 }
