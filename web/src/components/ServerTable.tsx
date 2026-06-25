@@ -60,6 +60,8 @@ export default function ServerTable({
     return Number.isFinite(v) ? v : 0;
   }
 
+  const [modal, setModal] = useState<{ title: string; message: string; success: boolean } | null>(null);
+
   async function handleSave() {
     if (numEdits === 0) return;
     setSaving(true);
@@ -79,13 +81,25 @@ export default function ServerTable({
         const r = await fetch(`/api/produk?${params({ page: "1", size: String(pageSize) })}`);
         const j = await r.json();
         setRows(j.rows || []);
-        alert("Perubahan berhasil disimpan!");
+        setModal({
+          title: "Perubahan Disimpan",
+          message: "Data setting iklan manual dan rekomendasi baru telah berhasil disinkronkan ke database Supabase.",
+          success: true
+        });
       } else {
-        alert("Gagal menyimpan perubahan.");
+        setModal({
+          title: "Penyimpanan Gagal",
+          message: "Server menolak permintaan penyimpanan. Silakan periksa koneksi Anda dan coba lagi.",
+          success: false
+        });
       }
     } catch (e) {
       console.error(e);
-      alert("Error menyimpan perubahan.");
+      setModal({
+        title: "Sistem Error",
+        message: "Gagal terhubung ke server API. Pastikan server lokal/Vercel berjalan dengan benar.",
+        success: false
+      });
     } finally {
       setSaving(false);
     }
@@ -323,6 +337,56 @@ export default function ServerTable({
           <button onClick={() => setPage(pages)} disabled={page >= pages} className="px-2.5 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40">⏭</button>
         </div>
       </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleUp {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.18s ease-out forwards;
+        }
+        .animate-scale-up {
+          animation: scaleUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+      `}} />
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-7 max-w-sm w-full mx-4 flex flex-col items-center text-center border border-slate-100 animate-scale-up">
+            <div className="mb-4">
+              <img src="/syntra-logo.png" alt="SYNTRA" className="h-9 object-contain" />
+            </div>
+            
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${modal.success ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : 'bg-rose-50 text-rose-500 border border-rose-100'}`}>
+              {modal.success ? (
+                <svg className="w-7 h-7 stroke-current" fill="none" strokeWidth="3.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              ) : (
+                <svg className="w-7 h-7 stroke-current" fill="none" strokeWidth="3.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+            </div>
+
+            <h3 className="text-[15px] font-bold text-slate-800 mb-1">{modal.title}</h3>
+            <p className="text-[12.5px] text-slate-500 mb-5 leading-relaxed px-1">{modal.message}</p>
+
+            <button
+              onClick={() => setModal(null)}
+              className="w-full py-2.5 px-4 rounded-xl text-white font-semibold text-[13px] transition-all duration-150 active:scale-97 shadow-md hover:brightness-105 cursor-pointer outline-none"
+              style={{ background: modal.success ? "linear-gradient(135deg,#16b8a6,#0ea596)" : "linear-gradient(135deg,#f43f5e,#e11d48)" }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
