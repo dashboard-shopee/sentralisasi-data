@@ -55,14 +55,15 @@ export default async function Home() {
           <DonutToko data={d.perToko} />
           <div className="mt-2 space-y-1.5">
             {d.perToko.slice(0, 5).map((t, i) => (
-              <div key={t.toko} className="flex items-center justify-between text-[12px]">
-                <span className="flex items-center gap-2 text-[#6b7180] truncate">
+              <div key={t.toko} className="flex items-center justify-between text-[12px] min-w-0">
+                <span className="flex items-center gap-2 text-[#6b7180] truncate min-w-0">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
-                  <span className="truncate">{t.toko}</span>
+                  <span className="truncate" title={t.toko}>{t.toko}</span>
                 </span>
-                <span className="font-semibold">{((t.omzet / totalToko) * 100).toFixed(0)}%</span>
+                <span className="font-semibold shrink-0">{((t.omzet / totalToko) * 100).toFixed(0)}%</span>
               </div>
             ))}
+
           </div>
         </div>
       </div>
@@ -71,17 +72,20 @@ export default async function Home() {
         <h2 className="font-bold text-[15px] mb-3">Produk Terlaris</h2>
         <div className="grid md:grid-cols-2 gap-x-8 gap-y-2.5">
           {d.top.map((p, i) => (
-            <div key={i} className="flex items-center gap-3">
+            <div key={i} className="flex items-center gap-3 min-w-0 w-full">
               <div className="w-7 h-7 rounded-lg grid place-items-center text-[12px] font-bold shrink-0" style={{ background: "#fff1ed", color: "#ee4d2d" }}>{i + 1}</div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-medium truncate">{p.produk}</div>
-                <div className="text-[11px] text-[#9aa0b2] truncate">{p.toko} · {num(p.pesanan)} pesanan · {num(p.unit)} pcs</div>
+                <div className="text-[13px] font-medium truncate" title={p.produk}>{p.produk}</div>
+                <div className="text-[11px] text-[#9aa0b2] truncate" title={`${p.toko} · ${num(p.pesanan)} pesanan · ${num(p.unit)} pcs`}>
+                  {p.toko} · {num(p.pesanan)} pesanan · {num(p.unit)} pcs
+                </div>
               </div>
               <div className="text-[13px] font-bold shrink-0">{rpShort(p.omzet)}</div>
             </div>
           ))}
         </div>
       </div>
+
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import LayoutWrapper from "@/components/LayoutWrapper";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -17,11 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-full"
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 min-w-0 px-5 py-6 lg:px-8">{children}</main>
-        </div>
+        <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>
   );
 }
+

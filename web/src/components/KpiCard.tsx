@@ -14,22 +14,32 @@ export default function KpiCard({
   color?: string;
 }) {
   return (
-    <div className="card p-5">
+    <div className="card p-4 sm:p-5 min-w-0" title={label}>
       <div
-        className="w-11 h-11 rounded-2xl grid place-items-center text-[18px] mb-3"
+        className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl grid place-items-center text-[16px] sm:text-[18px] mb-2.5 sm:mb-3"
         style={{ background: tint }}
       >
         {ikon}
       </div>
-      <div className="text-[13px] text-[#8a90a2] font-medium">{label}</div>
-      <div className="text-[26px] font-extrabold tracking-tight mt-0.5 leading-none">
+      <div className="text-[12px] sm:text-[13px] text-[#8a90a2] font-medium truncate" title={label}>
+        {label}
+      </div>
+      <div 
+        className="text-[19px] min-[360px]:text-[21px] min-[400px]:text-[23px] sm:text-[26px] font-extrabold tracking-tight mt-1 leading-none truncate" 
+        title={value}
+      >
         {value}
       </div>
       {sub ? (
-        <div className="text-[12px] mt-1.5 font-semibold" style={{ color }}>
+        <div 
+          className="text-[10px] sm:text-[12px] mt-1.5 font-semibold truncate" 
+          style={{ color }}
+          title={sub}
+        >
           {sub}
         </div>
       ) : null}
     </div>
   );
 }
+
