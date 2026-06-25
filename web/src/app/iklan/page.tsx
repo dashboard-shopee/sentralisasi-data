@@ -42,7 +42,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const ft = { g: filter.periode, d: filter.a, s: filter.b, t: filter.toko.join(",") };
 
   return (
-    <div className="max-w-[1180px] mx-auto">
+    <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto">
       <div className="mb-5">
         <h1 className="text-[22px] font-extrabold tracking-tight">📢 Performa Iklan</h1>
         <p className="text-[13px] text-[#8a90a2] mt-0.5">

@@ -17,7 +17,7 @@ export default async function Home() {
   const totalToko = d.perToko.reduce((a, b) => a + b.omzet, 0) || 1;
 
   return (
-    <div className="max-w-[1180px] mx-auto">
+    <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto">
       <div className="mb-5">
         <h1 className="text-[22px] font-extrabold tracking-tight">Ringkasan Toko 👋</h1>
         <p className="text-[13px] text-[#8a90a2] mt-0.5">7 hari terakhir ({caption(filter)}) · semua toko</p>

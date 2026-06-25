@@ -53,14 +53,14 @@ export default function MobileNav() {
       {/* Floating Restore Button when Minimized */}
       <button
         onClick={handleRestore}
-        className={`fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all duration-300 md:hidden ${
+        className={`fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-white border border-[#eef0f6] shadow-xl flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all duration-300 md:hidden ${
           minimized ? "translate-y-0 opacity-100 scale-100" : "translate-y-10 opacity-0 scale-90 pointer-events-none"
         }`}
-        style={{ background: "linear-gradient(135deg, #ee4d2d, #ff7043)" }}
         aria-label="Tampilkan Menu"
         title="Tampilkan Menu"
       >
-        <span className="text-[20px]">🧭</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/syntra-mark.png" alt="SYNTRA" className="w-7 h-7 object-contain animate-pulse" />
       </button>
 
       {/* Mobile Bottom Navigation Bar */}
@@ -69,21 +69,31 @@ export default function MobileNav() {
           minimized ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
         }`}
       >
-        <div className="flex items-center justify-between max-w-md mx-auto">
+        {/* Minimize Button overlapping the top border */}
+        <button
+          onClick={handleMinimize}
+          className="absolute -top-[13px] right-6 z-50 w-[26px] h-[26px] bg-white text-[#ee4d2d] rounded-full border border-[#eef0f6] shadow-md flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all"
+          title="Minimize Menu"
+          aria-label="Minimize Menu"
+        >
+          <span className="text-[10px] font-bold">▼</span>
+        </button>
+
+        <div className="flex items-center justify-center max-w-md mx-auto">
           {/* Emojis navigation */}
-          <div className="flex-1 flex justify-around items-center gap-1">
+          <div className="flex-1 flex justify-around items-center gap-1 py-1">
             {NAV.map((n) => {
               const active = path === n.href;
               return (
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 ${
+                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all duration-200 ${
                     active ? "bg-[#fff1ed] text-[#ee4d2d] scale-105" : "text-[#6b7180] hover:bg-[#f6f7fb]"
                   }`}
-                  style={{ minWidth: "50px" }}
+                  style={{ minWidth: "60px" }}
                 >
-                  <span className="text-[22px]">{n.ikon}</span>
+                  <span className="text-[20px]">{n.ikon}</span>
                   <span className={`text-[9px] mt-0.5 font-bold ${active ? "text-[#ee4d2d]" : "text-[#9aa0b2]"}`}>
                     {n.label.split(" ")[0]}
                   </span>
@@ -91,20 +101,9 @@ export default function MobileNav() {
               );
             })}
           </div>
-
-          {/* Minimize / Close Button */}
-          <div className="pl-2 border-l border-[#eef0f6] ml-2">
-            <button
-              onClick={handleMinimize}
-              className="w-10 h-10 rounded-xl bg-[#f4f6fb] text-[#8a90a2] hover:text-[#ee4d2d] hover:bg-[#fff1ed] transition flex items-center justify-center cursor-pointer"
-              title="Minimize Menu"
-              aria-label="Minimize Menu"
-            >
-              <span className="text-[14px]">▼</span>
-            </button>
-          </div>
         </div>
       </div>
     </>
   );
 }
+

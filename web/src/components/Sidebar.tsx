@@ -21,10 +21,21 @@ export default function Sidebar({
   return (
     <aside
       className={
-        "hidden md:flex shrink-0 flex-col bg-white border-r border-[#eef0f6] py-6 sticky top-0 h-screen transition-all duration-300 ease-in-out " +
+        "relative hidden md:flex shrink-0 flex-col bg-white border-r border-[#eef0f6] py-6 sticky top-0 h-screen transition-all duration-300 ease-in-out " +
         (minimized ? "w-[76px] px-2.5" : "w-[240px] px-4")
       }
     >
+      {/* Toggle button overlapping right border */}
+      <button
+        onClick={onToggle}
+        className="absolute top-[32px] -right-[13px] z-50 w-[26px] h-[26px] bg-white text-[#ee4d2d] rounded-full border border-[#eef0f6] shadow-md flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all"
+        title={minimized ? "Expand Menu" : "Minimize Menu"}
+      >
+        <span className="text-[10px] font-bold">
+          {minimized ? "▶" : "◀"}
+        </span>
+      </button>
+
       <div className={"flex items-center gap-2.5 px-1 mb-8 overflow-hidden " + (minimized ? "justify-center" : "")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/syntra-mark.png" alt="SYNTRA" className="h-9 w-auto shrink-0" />
@@ -75,20 +86,8 @@ export default function Sidebar({
           </div>
         </div>
       )}
-
-      {/* Toggle button */}
-      <div className={"mt-auto pt-6 flex justify-center"}>
-        <button
-          onClick={onToggle}
-          className="w-10 h-10 rounded-xl bg-[#f4f6fb] text-[#8a90a2] hover:text-[#ee4d2d] hover:bg-[#fff1ed] transition-all flex items-center justify-center cursor-pointer shadow-sm border border-[#eef0f6]/50"
-          title={minimized ? "Expand Menu" : "Minimize Menu"}
-        >
-          <span className="text-[14px]">
-            {minimized ? "▶" : "◀"}
-          </span>
-        </button>
-      </div>
     </aside>
   );
 }
+
 
