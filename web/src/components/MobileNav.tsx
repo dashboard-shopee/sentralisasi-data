@@ -7,7 +7,8 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { ikon: "🏠", label: "Ringkasan", href: "/" },
   { ikon: "📊", label: "Analisa", href: "/analisa" },
-  { ikon: "📦", label: "Penjualan", href: "/penjualan" },
+  { ikon: "🏷️", label: "Harga", href: "/produk/harga" },
+  { ikon: "📦", label: "Stok", href: "/produk/stok" },
   { ikon: "📢", label: "Iklan", href: "/iklan" },
 ];
 

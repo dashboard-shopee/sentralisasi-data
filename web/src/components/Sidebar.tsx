@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +9,14 @@ const NAV = [
   { ikon: "📊", label: "Analisa", href: "/analisa" },
   { ikon: "📦", label: "Penjualan & Pesanan", href: "/penjualan" },
   { ikon: "📢", label: "Iklan", href: "/iklan" },
+  {
+    ikon: "🏷️",
+    label: "Produk",
+    sub: [
+      { label: "Harga & Komisi", href: "/produk/harga" },
+      { label: "Stok Katalog", href: "/produk/stok" },
+    ],
+  },
 ];
 
 export default function Sidebar({
@@ -18,6 +27,12 @@ export default function Sidebar({
   onToggle: () => void;
 }) {
   const path = usePathname();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Produk": true });
+
+  const toggleExpand = (label: string) => {
+    setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
   return (
     <aside
       className={
@@ -49,11 +64,75 @@ export default function Sidebar({
 
       <nav className="flex flex-col gap-1.5">
         {NAV.map((n) => {
+          if (n.sub) {
+            const isExpanded = expanded[n.label];
+            const isSubActive = n.sub.some((s) => path === s.href);
+            
+            return (
+              <div key={n.label} className="flex flex-col gap-1">
+                {minimized ? (
+                  // Minimized representation of nested menu
+                  <Link
+                    href={n.sub[0].href}
+                    className={
+                      "flex items-center rounded-xl transition-all duration-200 relative group justify-center p-3 text-[18px] " +
+                      (isSubActive ? "bg-[#fff1ed] text-[#ee4d2d]" : "text-[#6b7180] hover:bg-[#f6f7fb]")
+                    }
+                  >
+                    <span className="text-[16px] shrink-0">{n.ikon}</span>
+                    <div className="absolute left-14 z-50 bg-[#161a27] text-white text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap flex flex-col gap-1">
+                      <div className="font-bold text-[#ee4d2d] border-b border-white/20 pb-0.5 mb-0.5">{n.label}</div>
+                      {n.sub.map((s) => (
+                        <div key={s.href} className={path === s.href ? "text-[#ff7043]" : "text-white/80"}>{s.label}</div>
+                      ))}
+                    </div>
+                  </Link>
+                ) : (
+                  // Expanded / Normal nested menu representation
+                  <>
+                    <button
+                      onClick={() => toggleExpand(n.label)}
+                      className={
+                        "flex items-center rounded-xl transition-all duration-200 w-full text-left gap-3 px-3 py-2.5 text-[14px] font-medium cursor-pointer " +
+                        (isSubActive ? "text-[#ee4d2d] bg-[#fff1ed]/20" : "text-[#6b7180] hover:bg-[#f6f7fb]")
+                      }
+                    >
+                      <span className="text-[16px] shrink-0">{n.ikon}</span>
+                      <span className="flex-1 truncate whitespace-nowrap">{n.label}</span>
+                      <span className="text-[9px] text-[#9aa0b2] mr-0.5 select-none font-bold">
+                        {isExpanded ? "▼" : "▶"}
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="pl-8 flex flex-col gap-1 transition-all duration-300">
+                        {n.sub.map((s) => {
+                          const active = path === s.href;
+                          return (
+                            <Link
+                              key={s.href}
+                              href={s.href}
+                              className={
+                                "px-3 py-2 text-[12.5px] rounded-lg font-medium transition-all duration-150 " +
+                                (active ? "text-[#ee4d2d] bg-[#fff1ed]" : "text-[#6b7180] hover:bg-[#f6f7fb]")
+                              }
+                            >
+                              {s.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          }
+
           const active = path === n.href;
           return (
             <Link
               key={n.href}
-              href={n.href}
+              href={n.href!}
               className={
                 "flex items-center rounded-xl transition-all duration-200 relative group " +
                 (minimized ? "justify-center p-3 text-[18px]" : "gap-3 px-3 py-2.5 text-[14px] font-medium") +
