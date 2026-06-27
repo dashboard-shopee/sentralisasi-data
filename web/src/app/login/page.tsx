@@ -1,4 +1,5 @@
 "use client";
+// Trigger redeploy to apply Vercel SMTP variables
 
 import { useState } from "react";
 
