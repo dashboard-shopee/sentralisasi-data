@@ -36,3 +36,8 @@ env/
 # OS
 Thumbs.db
 .DS_Store
+
+# WhatsApp Gateway
+whatsapp-gateway/auth_info_baileys/
+whatsapp-gateway/.env
+

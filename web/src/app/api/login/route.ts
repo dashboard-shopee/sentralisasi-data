@@ -3,16 +3,14 @@ import { q } from "@/lib/db";
 import { signSession } from "@/lib/auth";
 
 async function sendWhatsapp(target: string, message: string) {
-  const token = (process.env.WA_API_TOKEN || "").trim();
-  if (!token) {
-    console.warn(`\n==================================================\n[WA OTP BYPASS] No WA_API_TOKEN configured.\nOTP Message: "${message}"\n==================================================\n`);
-    return false;
-  }
+  const gatewayUrl = (process.env.WA_GATEWAY_URL || "http://localhost:5001/send-otp").trim();
+  const gatewaySecret = (process.env.WA_GATEWAY_SECRET || "syntra_gateway_secret_2026").trim();
+  
   try {
-    const res = await fetch("https://api.fonnte.com/send", {
+    const res = await fetch(gatewayUrl, {
       method: "POST",
       headers: {
-        "Authorization": token,
+        "Authorization": `Bearer ${gatewaySecret}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -20,11 +18,11 @@ async function sendWhatsapp(target: string, message: string) {
         message
       })
     });
-    const data = await res.json();
-    console.log("[WA OTP SENT] Fonnte Response:", data);
+    const data = await res.json().catch(() => ({}));
+    console.log("[WA OTP SENT] Local Gateway Response:", data);
     return res.ok;
-  } catch (err) {
-    console.error("[WA OTP ERROR] Failed to send WA:", err);
+  } catch (err: any) {
+    console.warn(`\n==================================================\n[WA OTP GATEWAY OFFLINE] Could not connect to gateway.\nOTP Message: "${message}"\nError: ${err.message}\n==================================================\n`);
     return false;
   }
 }
