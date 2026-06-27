@@ -74,13 +74,17 @@ export default function PeriodePicker({ options, filter }: { options: Options; f
       const idx = Math.max(0, vals.length - 2);
       apply(vals[idx], vals[idx]);
     } else if (typeof val === "number") {
-      const hasToday = isSameDayWib(vals[vals.length - 1], new Date());
-      if (g === "harian" && hasToday && vals.length > 1) {
-        const endIdx = Math.max(0, vals.length - 2);
-        const startIdx = Math.max(0, vals.length - 1 - val);
-        apply(vals[startIdx], vals[endIdx]);
+      if (val === 1) {
+        apply(vals[vals.length - 1], vals[vals.length - 1]);
       } else {
-        apply(vals[Math.max(0, vals.length - val)], vals[vals.length - 1]);
+        const hasToday = isSameDayWib(vals[vals.length - 1], new Date());
+        if (g === "harian" && hasToday && vals.length > 1) {
+          const endIdx = Math.max(0, vals.length - 2);
+          const startIdx = Math.max(0, vals.length - 1 - val);
+          apply(vals[startIdx], vals[endIdx]);
+        } else {
+          apply(vals[Math.max(0, vals.length - val)], vals[vals.length - 1]);
+        }
       }
     }
   }
