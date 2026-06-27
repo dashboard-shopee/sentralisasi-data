@@ -1,0 +1,114 @@
+import { NextResponse } from "next/server";
+import { q } from "@/lib/db";
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    // 1. Fetch acuan product details
+    const acuan = await q<any>(
+      `select * from riset_produk_acuan where id = $1`,
+      [id]
+    );
+    if (!acuan || acuan.length === 0) {
+      return NextResponse.json({ success: false, error: "Produk acuan tidak ditemukan" }, { status: 404 });
+    }
+
+    const prod = acuan[0];
+
+    // 2. Fetch competitor details
+    const competitors = await q<any>(
+      `select id, produk_acuan_id, tipe, rank, url, nama_toko, harga, terjual, gambar, diambil_pada
+       from riset_kompetitor_detail
+       where produk_acuan_id = $1
+       order by tipe, rank`,
+      [id]
+    );
+
+    // 3. Fetch SKU database link matching this product's SKU
+    let dbLink = null;
+    if (prod.sku) {
+      const dbLinkRes = await q<any>(
+        `select sku, status, total_sales_parent_sku, links, diperbarui_pada
+         from sku_database_link
+         where sku = $1`,
+        [prod.sku]
+      );
+      if (dbLinkRes.length > 0) {
+        dbLink = dbLinkRes[0];
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        product: prod,
+        competitors,
+        databaseLink: dbLink
+      }
+    });
+  } catch (err: any) {
+    console.error("API Riset Detail Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const body = await request.json();
+    const { manualUrls } = body; // Array of strings (URLs)
+
+    if (!Array.isArray(manualUrls)) {
+      return NextResponse.json({ success: false, error: "manualUrls harus berupa array string" }, { status: 400 });
+    }
+
+    // 1. Check if product acuan exists
+    const acuan = await q(
+      `select id, sku from riset_produk_acuan where id = $1`,
+      [id]
+    );
+    if (acuan.length === 0) {
+      return NextResponse.json({ success: false, error: "Produk acuan tidak ditemukan" }, { status: 404 });
+    }
+
+    // 2. Truncate existing manual competitors for this acuan
+    await q(
+      `delete from riset_kompetitor_detail where produk_acuan_id = $1 and tipe = 'manual'`,
+      [id]
+    );
+
+    // 3. Insert new manual competitor slots
+    for (let i = 0; i < Math.min(manualUrls.length, 10); i++) {
+      const url = String(manualUrls[i] || "").trim();
+      if (url) {
+        await q(
+          `insert into riset_kompetitor_detail (produk_acuan_id, tipe, rank, url, nama_toko, harga, terjual, gambar, diambil_pada)
+           values ($1, 'manual', $2, $3, $4, $5, $6, $7, null)`,
+          [id, i + 1, url, url, "Menunggu Scrape...", "Rp0", 0, ""]
+        );
+      }
+    }
+
+    // Reset tanggal_update to null so that the scraper will pick it up on the next run!
+    await q(
+      `update riset_produk_acuan set tanggal_update = null where id = $1`,
+      [id]
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Daftar link manual berhasil diperbarui. Antrean riset telah di-reset agar segera di-scrape."
+    });
+  } catch (err: any) {
+    console.error("API Riset Detail POST Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

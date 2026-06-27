@@ -10,6 +10,7 @@ const NAV = [
   { ikon: "🏷️", label: "Harga", href: "/produk/harga" },
   { ikon: "📦", label: "Stok", href: "/produk/stok" },
   { ikon: "📢", label: "Iklan", href: "/iklan" },
+  { ikon: "🔍", label: "Riset", href: "/riset-kompetitor" },
 ];
 
 export default function MobileNav() {

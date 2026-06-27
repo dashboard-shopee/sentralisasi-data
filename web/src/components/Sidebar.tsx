@@ -17,6 +17,7 @@ const NAV = [
       { label: "Stok Katalog", href: "/produk/stok" },
     ],
   },
+  { ikon: "🔍", label: "Riset Kompetitor", href: "/riset-kompetitor" },
 ];
 
 export default function Sidebar({
