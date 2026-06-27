@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const express = require("express");
 const cors = require("cors");
@@ -28,7 +28,18 @@ async function connectToWhatsApp() {
   console.log("Menghubungkan ke WhatsApp...");
   const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
   
+  // Ambil versi WA Web terbaru secara dinamis untuk menghindari error 405 (Method Not Allowed)
+  let version = [2, 3000, 1015901307]; // Fallback default
+  try {
+    const { version: latestVersion } = await fetchLatestBaileysVersion();
+    version = latestVersion;
+    console.log(`[+] WhatsApp Web Version: ${version.join(".")}`);
+  } catch (err) {
+    console.warn("[-] Gagal mengambil versi WA Web terbaru, menggunakan fallback version.");
+  }
+
   sock = makeWASocket({
+    version,
     auth: state,
     printQRInTerminal: true,
     browser: ["SYNTRA Gateway", "Chrome", "1.0.0"]
