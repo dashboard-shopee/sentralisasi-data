@@ -46,12 +46,32 @@ export default function ServerTable({
 
   function setEdit(kode: string, key: string, val: string) {
     setEdits((prev) => {
-      const next = { ...prev, [kode]: { ...(prev[kode] || {}), [key]: val } };
+      // Bandingkan dgn nilai asli dari DB. Kalau diubah balik ke angka semula
+      // (mis. 50 -> 49 -> 50), edit-nya dibuang biar tombol Simpan ikut hilang.
+      const origRaw = rows.find((r) => String(r.kode) === kode)?.[key];
+      const origStr = origRaw === null || origRaw === undefined || origRaw === "" ? "" : String(origRaw);
+      const isRevert = val === origStr || (val !== "" && origStr !== "" && Number(val) === Number(origStr));
+
+      const rowEdits = { ...(prev[kode] || {}) };
+      if (isRevert) delete rowEdits[key];
+      else rowEdits[key] = val;
+
+      const next = { ...prev };
+      if (Object.keys(rowEdits).length === 0) delete next[kode];
+      else next[kode] = rowEdits;
+
       if (editKey) {
         try { localStorage.setItem("edits:" + editKey, JSON.stringify(next)); } catch {}
       }
       return next;
     });
+  }
+
+  function discardEdits() {
+    setEdits({});
+    if (editKey) {
+      try { localStorage.removeItem("edits:" + editKey); } catch {}
+    }
   }
 
   function cellNum(r: Record<string, unknown>, key: string): number {
@@ -165,14 +185,24 @@ export default function ServerTable({
           </a>
         )}
         {editKey && numEdits > 0 && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="text-[13px] font-semibold text-white px-3 py-2 rounded-lg disabled:opacity-50 transition-all duration-150 shadow-md flex items-center gap-1.5 hover:brightness-105"
-            style={{ background: "linear-gradient(135deg,#f43f5e,#e11d48)" }}
-          >
-            {saving ? "⏳ Menyimpan..." : `💾 Simpan ${numEdits} Perubahan`}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="text-[13px] font-semibold text-white px-3 py-2 rounded-lg disabled:opacity-50 transition-all duration-150 shadow-md flex items-center gap-1.5 hover:brightness-105"
+              style={{ background: "linear-gradient(135deg,#f43f5e,#e11d48)" }}
+            >
+              {saving ? "⏳ Menyimpan..." : `💾 Simpan ${numEdits} Perubahan`}
+            </button>
+            <button
+              onClick={discardEdits}
+              disabled={saving}
+              title="Batalkan semua perubahan"
+              className="text-[13px] font-semibold text-slate-500 w-9 h-9 grid place-items-center rounded-lg border border-[#e6e9f0] bg-white disabled:opacity-50 transition-all duration-150 hover:bg-slate-50 hover:text-rose-500 hover:border-rose-200"
+            >
+              ✕
+            </button>
+          </div>
         )}
         <span className="text-[12px] text-[#9aa0b2] ml-auto">{total.toLocaleString("id-ID")} produk</span>
       </div>

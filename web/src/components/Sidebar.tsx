@@ -34,7 +34,7 @@ export default function Sidebar({
   useEffect(() => {
     async function getProfile() {
       try {
-        const r = await fetch("/api/me");
+        const r = await fetch("/api/me", { cache: "no-store" });
         if (r.ok) {
           const data = await r.json();
           setProfile(data.user);
