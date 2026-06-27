@@ -41,6 +41,16 @@ export const getOptions = unstable_cache(
   { revalidate: 300 }
 );
 
+const isSameDayWib = (d1: string | Date, d2: string | Date) => {
+  const w1 = new Date(new Date(d1).getTime() + 7 * 3600 * 1000);
+  const w2 = new Date(new Date(d2).getTime() + 7 * 3600 * 1000);
+  return (
+    w1.getUTCFullYear() === w2.getUTCFullYear() &&
+    w1.getUTCMonth() === w2.getUTCMonth() &&
+    w1.getUTCDate() === w2.getUTCDate()
+  );
+};
+
 function pick(v: string | undefined): string | undefined {
   return v && v.length ? v : undefined;
 }
@@ -65,11 +75,23 @@ export function resolveFilter(
   // pakai default window hanya bila granularitas tidak di-override via URL
   const win = !gParam && def?.win ? def.win : WIN[periode] ?? 12;
 
-  let b = sParam && vals.includes(sParam) ? sParam : vals[0];
-  let a =
-    dParam && vals.includes(dParam)
-      ? dParam
-      : vals[Math.min(win - 1, Math.max(0, vals.length - 1))];
+  const hasToday = vals.length > 0 && isSameDayWib(vals[0], new Date());
+
+  let b: string;
+  let a: string;
+
+  if (sParam && vals.includes(sParam)) {
+    b = sParam;
+  } else {
+    b = (periode === "harian" && hasToday && vals.length > 1) ? vals[1] : vals[0];
+  }
+
+  if (dParam && vals.includes(dParam)) {
+    a = dParam;
+  } else {
+    const offset = (periode === "harian" && hasToday && vals.length > 1) ? 1 : 0;
+    a = vals[Math.min(offset + win - 1, Math.max(0, vals.length - 1))];
+  }
 
   // a = lebih lama, b = lebih baru. Tukar bila perlu.
   if (a && b && new Date(a) > new Date(b)) [a, b] = [b, a];

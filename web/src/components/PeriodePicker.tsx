@@ -58,9 +58,31 @@ export default function PeriodePicker({ options, filter }: { options: Options; f
     if (!pending) setPending(v);
     else apply(pending, v);
   }
-  function preset(n: number) {
+  const isSameDayWib = (d1: string | Date, d2: string | Date) => {
+    const w1 = new Date(new Date(d1).getTime() + 7 * 3600 * 1000);
+    const w2 = new Date(new Date(d2).getTime() + 7 * 3600 * 1000);
+    return (
+      w1.getUTCFullYear() === w2.getUTCFullYear() &&
+      w1.getUTCMonth() === w2.getUTCMonth() &&
+      w1.getUTCDate() === w2.getUTCDate()
+    );
+  };
+
+  function preset(val: number | string) {
     if (!vals.length) return;
-    apply(vals[Math.max(0, vals.length - n)], vals[vals.length - 1]);
+    if (val === "kemarin") {
+      const idx = Math.max(0, vals.length - 2);
+      apply(vals[idx], vals[idx]);
+    } else if (typeof val === "number") {
+      const hasToday = isSameDayWib(vals[vals.length - 1], new Date());
+      if (g === "harian" && hasToday && vals.length > 1) {
+        const endIdx = Math.max(0, vals.length - 2);
+        const startIdx = Math.max(0, vals.length - 1 - val);
+        apply(vals[startIdx], vals[endIdx]);
+      } else {
+        apply(vals[Math.max(0, vals.length - val)], vals[vals.length - 1]);
+      }
+    }
   }
   const cls = (v?: string) => {
     if (!v) return "text-[#c4c8d4] cursor-default";
@@ -148,9 +170,9 @@ export default function PeriodePicker({ options, filter }: { options: Options; f
     );
   }
 
-  const presets =
+  const presets: [string, number | string][] =
     g === "harian"
-      ? [["Hari ini", 1], ["7 hari", 7], ["30 hari", 30]]
+      ? [["Hari ini", 1], ["Kemarin", "kemarin"], ["7 hari", 7], ["30 hari", 30]]
       : g === "mingguan"
       ? [["Minggu ini", 1], ["4 minggu", 4], ["12 minggu", 12]]
       : g === "bulanan"
@@ -173,8 +195,8 @@ export default function PeriodePicker({ options, filter }: { options: Options; f
           <div className="fixed inset-0 z-20" onClick={() => { setOpen(false); setPending(null); }} />
           <div className="absolute z-30 mt-2 left-0 w-[300px] card p-4 shadow-xl">
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {presets.map(([lbl, n]) => (
-                <button key={lbl as string} onClick={() => preset(n as number)} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#f4f6fb] text-[#6b7180] hover:bg-[#fff1ed] hover:text-[#ee4d2d]">{lbl}</button>
+              {presets.map(([lbl, val]) => (
+                <button key={lbl} onClick={() => preset(val)} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#f4f6fb] text-[#6b7180] hover:bg-[#fff1ed] hover:text-[#ee4d2d]">{lbl}</button>
               ))}
             </div>
             {pending && (
