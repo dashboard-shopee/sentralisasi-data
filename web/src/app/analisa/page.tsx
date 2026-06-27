@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { verifySession } from "@/lib/auth";
 import { getAnalisa } from "@/lib/data";
 import { getOptions, resolveFilter } from "@/lib/filters";
 import { rp, rpShort, caption } from "@/lib/format";
@@ -33,6 +35,13 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const t = d.total;
   const ft = { g: filter.periode, d: filter.a, s: filter.b, t: filter.toko.join(",") };
 
+  // Verifikasi izin edit dari session cookie
+  const cookieStore = await cookies();
+  const token = cookieStore.get("dash_auth")?.value;
+  const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
+  const user = token ? await verifySession(token, secret) : null;
+  const canEdit = !!(user?.can_edit_ads || user?.role === "owner");
+
   return (
     <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto">
       <div className="mb-5">
@@ -63,7 +72,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       <p className="text-[12px] text-[#9aa0b2] mb-3">
         Klik judul kolom untuk urutkan · kolom Target/Rekomendasi/Budget disiapkan untuk fitur otomasi (diisi menyusul).
       </p>
-      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} editKey="analisa-setting" />
+      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} editKey={canEdit ? "analisa-setting" : undefined} />
     </div>
   );
 }

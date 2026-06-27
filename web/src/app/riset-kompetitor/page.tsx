@@ -45,6 +45,24 @@ interface DatabaseLink {
 export default function RisetKompetitorPage() {
   const router = useRouter();
   
+  // User Profile permissions
+  const [profile, setProfile] = useState<{ role: string; canEditCompetitor: boolean } | null>(null);
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const r = await fetch("/api/me");
+        if (r.ok) {
+          const data = await r.json();
+          setProfile(data.user);
+        }
+      } catch (e) {
+        console.error("Failed to load profile in competitor page:", e);
+      }
+    }
+    loadProfile();
+  }, []);
+
   // State lists
   const [products, setProducts] = useState<ProductAcuan[]>([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 15, pages: 1 });
@@ -541,7 +559,7 @@ export default function RisetKompetitorPage() {
                         </button>
                       </div>
                       
-                      {activeDetailTab === "manual" && (
+                      {activeDetailTab === "manual" && !!(profile?.canEditCompetitor || profile?.role === "owner") && (
                         <button
                           onClick={() => setShowEditModal(true)}
                           className="text-[12px] bg-[#ee4d2d]/10 hover:bg-[#ee4d2d]/25 text-[#ee4d2d] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"

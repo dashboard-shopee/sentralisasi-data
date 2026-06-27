@@ -17,6 +17,7 @@ export default function MobileNav() {
   const path = usePathname();
   const [minimized, setMinimized] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [profile, setProfile] = useState<{ role: string; allowedMenus: string[] } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -28,6 +29,19 @@ export default function MobileNav() {
     } catch (e) {
       console.error(e);
     }
+
+    async function getProfile() {
+      try {
+        const r = await fetch("/api/me");
+        if (r.ok) {
+          const data = await r.json();
+          setProfile(data.user);
+        }
+      } catch (e) {
+        console.error("Failed to load mobile nav user profile:", e);
+      }
+    }
+    getProfile();
   }, []);
 
   const handleMinimize = () => {
@@ -49,6 +63,39 @@ export default function MobileNav() {
   };
 
   if (!mounted) return null;
+
+  const allowedMenus = profile?.allowedMenus || [];
+  const role = profile?.role || "";
+
+  // Filter Navigasi Dinamis
+  const filteredNav = NAV.filter((n) => role === "owner" || allowedMenus.includes(n.href));
+
+  // Tambahkan menu Akses jika Owner
+  if (role === "owner") {
+    filteredNav.push({
+      ikon: "⚙️",
+      label: "Akses",
+      href: "/pengaturan-akses"
+    });
+  }
+
+  // Tambahkan Logout di Mobile Nav
+  filteredNav.push({
+    ikon: "🚪",
+    label: "Keluar",
+    href: "#logout"
+  });
+
+  async function handleLogout() {
+    try {
+      const r = await fetch("/api/logout", { method: "POST" });
+      if (r.ok) {
+        window.location.href = "/login";
+      }
+    } catch (e) {
+      console.error("Failed to logout on mobile:", e);
+    }
+  }
 
   return (
     <>
@@ -84,8 +131,26 @@ export default function MobileNav() {
         <div className="flex items-center justify-center max-w-md mx-auto">
           {/* Emojis navigation */}
           <div className="flex-1 flex justify-around items-center gap-1 py-1">
-            {NAV.map((n) => {
+            {filteredNav.map((n) => {
               const active = path === n.href;
+              const isLogout = n.href === "#logout";
+
+              if (isLogout) {
+                return (
+                  <button
+                    key={n.href}
+                    onClick={handleLogout}
+                    className="flex flex-col items-center justify-center p-1.5 rounded-xl transition-all duration-200 text-[#9aa0b2] hover:bg-[#fff1ed]/20 hover:text-[#ee4d2d] cursor-pointer"
+                    style={{ minWidth: "42px" }}
+                  >
+                    <span className="text-[20px]">{n.ikon}</span>
+                    <span className="text-[9px] mt-0.5 font-bold text-[#9aa0b2]">
+                      {n.label}
+                    </span>
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={n.href}
@@ -93,7 +158,7 @@ export default function MobileNav() {
                   className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all duration-200 ${
                     active ? "bg-[#fff1ed] text-[#ee4d2d] scale-105" : "text-[#6b7180] hover:bg-[#f6f7fb]"
                   }`}
-                  style={{ minWidth: "60px" }}
+                  style={{ minWidth: "42px" }}
                 >
                   <span className="text-[20px]">{n.ikon}</span>
                   <span className={`text-[9px] mt-0.5 font-bold ${active ? "text-[#ee4d2d]" : "text-[#9aa0b2]"}`}>
@@ -108,4 +173,3 @@ export default function MobileNav() {
     </>
   );
 }
-

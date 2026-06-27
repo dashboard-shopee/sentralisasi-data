@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -29,10 +29,61 @@ export default function Sidebar({
 }) {
   const path = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Produk": true });
+  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[] } | null>(null);
+
+  useEffect(() => {
+    async function getProfile() {
+      try {
+        const r = await fetch("/api/me");
+        if (r.ok) {
+          const data = await r.json();
+          setProfile(data.user);
+        }
+      } catch (e) {
+        console.error("Failed to load user profile:", e);
+      }
+    }
+    getProfile();
+  }, []);
 
   const toggleExpand = (label: string) => {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
   };
+
+  const allowedMenus = profile?.allowedMenus || [];
+  const role = profile?.role || "";
+
+  // Filter Navigasi Dinamis
+  const filteredNav = NAV.map((n) => {
+    if (n.sub) {
+      const allowedSub = n.sub.filter((s) => role === "owner" || allowedMenus.includes(s.href));
+      if (allowedSub.length === 0) return null;
+      return { ...n, sub: allowedSub };
+    }
+    const hasAccess = role === "owner" || allowedMenus.includes(n.href || "");
+    if (!hasAccess) return null;
+    return n;
+  }).filter((n): n is Exclude<typeof n, null> => n !== null);
+
+  // Jika owner, tambahkan menu Akses Kontrol
+  if (role === "owner") {
+    filteredNav.push({
+      ikon: "⚙️",
+      label: "Akses Kontrol",
+      href: "/pengaturan-akses"
+    });
+  }
+
+  async function handleLogout() {
+    try {
+      const r = await fetch("/api/logout", { method: "POST" });
+      if (r.ok) {
+        window.location.href = "/login";
+      }
+    } catch (e) {
+      console.error("Failed to logout:", e);
+    }
+  }
 
   return (
     <aside
@@ -58,13 +109,15 @@ export default function Sidebar({
         {!minimized && (
           <div className="transition-opacity duration-300 opacity-100 whitespace-nowrap">
             <div className="font-extrabold text-[17px] leading-none tracking-[0.18em] text-[#3a3f4d]">SYNTRA</div>
-            <div className="text-[10px] text-[#9aa0b2] mt-1">System Centralized</div>
+            <div className="text-[10px] text-[#9aa0b2] mt-1">
+              {profile ? `${profile.username} (${role})` : "System Centralized"}
+            </div>
           </div>
         )}
       </div>
 
       <nav className="flex flex-col gap-1.5">
-        {NAV.map((n) => {
+        {filteredNav.map((n) => {
           if (n.sub) {
             const isExpanded = expanded[n.label];
             const isSubActive = n.sub.some((s) => path === s.href);
@@ -154,6 +207,22 @@ export default function Sidebar({
         })}
       </nav>
 
+      {/* Logout Button */}
+      <div className="mt-4 border-t border-[#eef0f6] pt-4">
+        <button
+          onClick={handleLogout}
+          className={
+            "flex items-center rounded-xl transition-all duration-200 cursor-pointer w-full " +
+            (minimized ? "justify-center p-3 text-[18px]" : "gap-3 px-3 py-2.5 text-[14px] font-medium") +
+            " text-[#9aa0b2] hover:bg-[#fff1ed]/20 hover:text-[#ee4d2d]"
+          }
+          title="Log Out dari Sistem"
+        >
+          <span className="text-[16px] shrink-0">🚪</span>
+          {!minimized && <span>Log Out</span>}
+        </button>
+      </div>
+
       {/* Real-time Info Card */}
       {!minimized && (
         <div className="mt-auto px-3 pt-6 transition-opacity duration-300">
@@ -169,5 +238,3 @@ export default function Sidebar({
     </aside>
   );
 }
-
-
