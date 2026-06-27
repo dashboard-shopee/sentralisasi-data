@@ -111,12 +111,12 @@ export default function Login() {
             </button>
           </form>
         ) : (
-          // FORM OTP 2FA (WhatsApp)
+          // FORM OTP 2FA (Email)
           <form onSubmit={submitOtp}>
             <div className="text-center mb-4">
               <div className="text-[14px] font-semibold text-[#3a3f4d]">Verifikasi Dua Langkah</div>
               <div className="text-[11.5px] text-[#6b7180] mt-1">
-                Masukkan 6 digit kode OTP yang telah dikirim ke WhatsApp <span className="font-semibold">0821-1441-7314</span>.
+                Masukkan 6 digit kode OTP yang telah dikirim ke email <span className="font-semibold">restualamwa@gmail.com</span>.
               </div>
             </div>
 

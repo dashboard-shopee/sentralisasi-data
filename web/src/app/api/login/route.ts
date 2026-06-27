@@ -1,31 +1,7 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { signSession } from "@/lib/auth";
-
-async function sendWhatsapp(target: string, message: string) {
-  const gatewayUrl = (process.env.WA_GATEWAY_URL || "http://localhost:5001/send-otp").trim();
-  const gatewaySecret = (process.env.WA_GATEWAY_SECRET || "syntra_gateway_secret_2026").trim();
-  
-  try {
-    const res = await fetch(gatewayUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${gatewaySecret}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        target,
-        message
-      })
-    });
-    const data = await res.json().catch(() => ({}));
-    console.log("[WA OTP SENT] Local Gateway Response:", data);
-    return res.ok;
-  } catch (err: any) {
-    console.warn(`\n==================================================\n[WA OTP GATEWAY OFFLINE] Could not connect to gateway.\nOTP Message: "${message}"\nError: ${err.message}\n==================================================\n`);
-    return false;
-  }
-}
+import { sendOtpEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { password?: string };
@@ -47,16 +23,15 @@ export async function POST(req: Request) {
         [otp]
       );
 
-      // Kirim ke WhatsApp
-      const targetPhone = "082114417314";
-      const message = `[SYNTRA OTP] Kode OTP Anda untuk masuk sebagai Owner adalah: *${otp}*. Kode berlaku selama 5 menit.`;
+      // Kirim ke Email
+      const emailTarget = (process.env.EMAIL_TO || "restualamwa@gmail.com").trim();
       
-      // Kirim secara async, jika gagal token tetap tertulis di log console server
-      await sendWhatsapp(targetPhone, message);
+      // Kirim secara async
+      await sendOtpEmail(emailTarget, otp);
 
       return NextResponse.json({
         requiresOtp: true,
-        message: "Kode OTP telah dikirim ke WhatsApp Anda."
+        message: "Kode OTP telah dikirim ke Email Anda."
       });
     } catch (err: any) {
       console.error("Owner Login Error:", err);
