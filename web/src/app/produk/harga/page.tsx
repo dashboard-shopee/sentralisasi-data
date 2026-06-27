@@ -37,7 +37,7 @@ interface KomisiRow {
   diperbaruiPada: string;
   tokos: Record<string, {
     hargaSaatIni: number;
-    komisiPercent: number;
+    komisiPersen: number;
     hargaJual: number;
   }>;
 }
@@ -124,6 +124,7 @@ export default function HargaPage() {
   // Reset pagination on search / tab change
   const handleTabChange = (t: "all" | "olah" | "komisi") => {
     setTab(t);
+    setRows([]);
     setQ("");
     setPage(1);
     setSortCol("");
@@ -319,13 +320,13 @@ export default function HargaPage() {
                 <td className="p-3.5 text-right font-semibold text-[#161a27]">{formatRp(r.netPrice)}</td>
                 
                 {tokos.map((tk) => {
-                  const tkData = r.tokos[tk.username];
+                  const tkData = r.tokos?.[tk.username];
                   return (
                     <td key={tk.username} className="p-3.5 border-l border-[#eef0f6] text-center text-xs">
                       {tkData ? (
                         <div className="flex items-center justify-between gap-1 w-full font-medium">
                           <span className="text-[#6b7180]">{Math.round(tkData.hargaSaatIni / 1000)}k</span>
-                          <span className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] text-[10px] font-bold rounded">{tkData.komisiPercent}%</span>
+                          <span className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] text-[10px] font-bold rounded">{tkData.komisiPersen}%</span>
                           <span className="text-[#ee4d2d] font-bold">{Math.round(tkData.hargaJual / 1000)}k</span>
                         </div>
                       ) : (
