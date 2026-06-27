@@ -32,8 +32,20 @@ export async function middleware(req: NextRequest) {
     // Proteksi halaman manajemen akses admin (hanya Owner yang boleh)
     if (pathname.startsWith("/pengaturan-akses") || pathname.startsWith("/api/users")) {
       if (role !== "owner") {
+        // API -> 403 JSON; halaman -> redirect ke beranda
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+        }
         return NextResponse.redirect(new URL("/", req.url));
       }
+      return NextResponse.next();
+    }
+
+    // Route API lain (mis. /api/me, /api/produk) dilayani untuk semua user yang sudah
+    // login — tiap route punya logika auth sendiri. JANGAN kena gating menu di bawah,
+    // karena path "/api/..." tak cocok menu manapun -> ke-redirect -> Sidebar gagal
+    // baca profil & menu staff hilang.
+    if (pathname.startsWith("/api/")) {
       return NextResponse.next();
     }
 
