@@ -4,13 +4,17 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
+const BOTTOM_NAV_ITEMS = [
   { ikon: "🏠", label: "Ringkasan", href: "/" },
   { ikon: "📊", label: "Analisa", href: "/analisa" },
-  { ikon: "🏷️", label: "Harga", href: "/produk/harga" },
-  { ikon: "📦", label: "Stok", href: "/produk/stok" },
+  { ikon: "📦", label: "Penjualan", href: "/penjualan" },
   { ikon: "📢", label: "Iklan", href: "/iklan" },
-  { ikon: "🔍", label: "Riset", href: "/riset-kompetitor" },
+];
+
+const SHEET_NAV_ITEMS = [
+  { ikon: "🏷️", label: "Harga & Komisi", href: "/produk/harga" },
+  { ikon: "📦", label: "Stok Katalog", href: "/produk/stok" },
+  { ikon: "🔍", label: "Riset Kompetitor", href: "/riset-kompetitor" },
 ];
 
 export default function MobileNav() {
@@ -68,15 +72,25 @@ export default function MobileNav() {
   const allowedMenus = profile?.allowedMenus || [];
   const role = profile?.role || "";
 
-  // Filter Navigasi Dinamis
-  const filteredNav = NAV.filter((n) => role === "owner" || allowedMenus.includes(n.href));
+  // Filter item navigasi utama bawah berdasarkan akses
+  const filteredBottomNav = BOTTOM_NAV_ITEMS.filter(
+    (n) => role === "owner" || allowedMenus.includes(n.href)
+  );
 
-  // Tambahkan menu Setting ke Mobile Nav (untuk membuka Bottom Sheet)
-  filteredNav.push({
-    ikon: "⚙️",
-    label: "Setting",
-    href: "#setting"
-  });
+  // Filter item menu sekunder bottom sheet berdasarkan akses
+  const filteredSheetNav = SHEET_NAV_ITEMS.filter(
+    (n) => role === "owner" || allowedMenus.includes(n.href)
+  );
+
+  // Gabungkan dengan tombol Setting
+  const finalBottomNav = [
+    ...filteredBottomNav,
+    {
+      ikon: "⚙️",
+      label: "Setting",
+      href: "#setting"
+    }
+  ];
 
   async function handleLogout() {
     try {
@@ -123,7 +137,7 @@ export default function MobileNav() {
         <div className="flex items-center justify-center max-w-md mx-auto">
           {/* Emojis navigation */}
           <div className="flex-1 flex justify-around items-center gap-1 py-1">
-            {filteredNav.map((n) => {
+            {finalBottomNav.map((n) => {
               const active = path === n.href;
               const isSetting = n.href === "#setting";
 
@@ -190,15 +204,35 @@ export default function MobileNav() {
             </div>
             
             {/* Menu Options */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Secondary Navigation Options */}
+              {filteredSheetNav.map((s) => (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors font-medium text-sm ${
+                    path === s.href ? "bg-[#fff1ed] text-[#ee4d2d]" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <span className="text-[16px]">{s.ikon}</span>
+                  <span>{s.label}</span>
+                </Link>
+              ))}
+
+              <div className="border-t border-[#eef0f6] my-1" />
+
+              {/* Administrative Options */}
               {role === "owner" && (
                 <Link
                   href="/pengaturan-akses"
                   onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 text-gray-700 font-semibold hover:bg-[#fff1ed] hover:text-[#ee4d2d] transition-colors"
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors font-medium text-sm ${
+                    path === "/pengaturan-akses" ? "bg-[#fff1ed] text-[#ee4d2d]" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                  }`}
                 >
-                  <span className="text-[18px]">⚙️</span>
-                  <span>Setting</span>
+                  <span className="text-[16px]">⚙️</span>
+                  <span>Setting Akses</span>
                 </Link>
               )}
               
@@ -207,9 +241,9 @@ export default function MobileNav() {
                   setMenuOpen(false);
                   handleLogout();
                 }}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors w-full text-left cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-xl bg-red-50 text-red-600 font-medium text-sm hover:bg-red-100 transition-colors w-full text-left cursor-pointer"
               >
-                <span className="text-[18px]">🚪</span>
+                <span className="text-[16px]">🚪</span>
                 <span>Log Out</span>
               </button>
             </div>
