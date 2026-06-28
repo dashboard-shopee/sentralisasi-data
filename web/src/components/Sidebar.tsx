@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -30,6 +30,21 @@ export default function Sidebar({
   const path = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Produk": true });
   const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[] } | null>(null);
+  
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     async function getProfile() {
@@ -65,14 +80,7 @@ export default function Sidebar({
     return n;
   }).filter((n): n is Exclude<typeof n, null> => n !== null);
 
-  // Jika owner, tambahkan menu Akses Kontrol
-  if (role === "owner") {
-    filteredNav.push({
-      ikon: "⚙️",
-      label: "Akses Kontrol",
-      href: "/pengaturan-akses"
-    });
-  }
+  // Akses Kontrol lama dihapus dari filteredNav karena dipindahkan ke menu Setting di bagian profile bawah
 
   async function handleLogout() {
     try {
@@ -109,9 +117,6 @@ export default function Sidebar({
         {!minimized && (
           <div className="transition-opacity duration-300 opacity-100 whitespace-nowrap">
             <div className="font-extrabold text-[17px] leading-none tracking-[0.18em] text-[#3a3f4d]">SYNTRA</div>
-            <div className="text-[10px] text-[#9aa0b2] mt-1">
-              {profile ? `${profile.username} (${role})` : "System Centralized"}
-            </div>
           </div>
         )}
       </div>
@@ -207,34 +212,100 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* Logout Button */}
-      <div className="mt-4 border-t border-[#eef0f6] pt-4">
-        <button
-          onClick={handleLogout}
-          className={
-            "flex items-center rounded-xl transition-all duration-200 cursor-pointer w-full " +
-            (minimized ? "justify-center p-3 text-[18px]" : "gap-3 px-3 py-2.5 text-[14px] font-medium") +
-            " text-[#9aa0b2] hover:bg-[#fff1ed]/20 hover:text-[#ee4d2d]"
-          }
-          title="Log Out dari Sistem"
-        >
-          <span className="text-[16px] shrink-0">🚪</span>
-          {!minimized && <span>Log Out</span>}
-        </button>
-      </div>
-
-      {/* Real-time Info Card */}
-      {!minimized && (
-        <div className="mt-auto px-3 pt-6 transition-opacity duration-300">
-          <div
-            className="rounded-2xl p-4 text-white text-[12px] leading-relaxed"
-            style={{ background: "linear-gradient(135deg,#ee4d2d,#ff7043)" }}
-          >
-            <div className="font-bold mb-1">Data real-time</div>
-            Sumber tunggal Supabase · update harian.
+      <div className="mt-auto flex flex-col gap-4">
+        {/* Real-time Info Card */}
+        {!minimized && (
+          <div className="px-3 transition-opacity duration-300">
+            <div
+              className="rounded-2xl p-4 text-white text-[12px] leading-relaxed"
+              style={{ background: "linear-gradient(135deg,#ee4d2d,#ff7043)" }}
+            >
+              <div className="font-bold mb-1">Data real-time</div>
+              Sumber tunggal Supabase · update harian.
+            </div>
           </div>
+        )}
+
+        {/* User Profile Card (Setting & Logout) */}
+        <div className={`relative ${minimized ? 'px-1' : 'px-3'}`} ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className={
+              "flex items-center rounded-xl transition-all duration-200 cursor-pointer w-full text-left " +
+              (minimized ? "justify-center p-2 hover:bg-[#f6f7fb]" : "gap-3 p-3 bg-gray-50 hover:bg-[#fff1ed]/40 border border-[#eef0f6] hover:border-[#ee4d2d]/30")
+            }
+            title={profile ? `${profile.username} (${role})` : "Profile"}
+          >
+            {/* Avatar Circle */}
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
+              {profile ? profile.username.charAt(0).toUpperCase() : "U"}
+            </div>
+            
+            {/* User Info (Visible only when not minimized) */}
+            {!minimized && (
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-800 truncate leading-tight">
+                  {profile ? profile.username : "Loading..."}
+                </div>
+                <div className="text-[11px] text-gray-400 capitalize truncate mt-0.5">
+                  {profile ? profile.role : "Please wait"}
+                </div>
+              </div>
+            )}
+
+            {/* Chevron/Dropdown Indicator (Visible only when not minimized) */}
+            {!minimized && (
+              <span className={`text-[10px] text-gray-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}>
+                ▲
+              </span>
+            )}
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div
+              className={
+                "absolute z-50 bg-white border border-[#eef0f6] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-2 transition-all duration-200 " +
+                (minimized
+                  ? "left-14 bottom-0 w-[180px]"
+                  : "left-3 right-3 bottom-[60px]")
+              }
+            >
+              {/* Profile Header (especially for minimized where details are hidden) */}
+              {minimized && (
+                <div className="px-4 py-2 border-b border-[#eef0f6] mb-1">
+                  <div className="font-semibold text-sm text-gray-800 truncate">{profile?.username || "User"}</div>
+                  <div className="text-xs text-gray-400 capitalize truncate">{profile?.role || "Role"}</div>
+                </div>
+              )}
+
+              {/* Setting Link (for Owner) */}
+              {role === "owner" && (
+                <Link
+                  href="/pengaturan-akses"
+                  onClick={() => setDropdownOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-[#fff1ed] hover:text-[#ee4d2d] transition-colors"
+                >
+                  <span className="text-[15px]">⚙️</span>
+                  <span>Setting</span>
+                </Link>
+              )}
+
+              {/* Logout Button */}
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  handleLogout();
+                }}
+                className="flex items-center gap-2.5 w-full text-left px-4 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                <span className="text-[15px]">🚪</span>
+                <span>Log Out</span>
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </aside>
   );
 }

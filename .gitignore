@@ -10,6 +10,7 @@ logo.jpeg
 # Folder bot referensi (punya kredensial & dikembangkan terpisah) — JANGAN upload
 01 Otomatisasi Iklan/
 02 Otomatisasi Monitoring Harga/
+04 Purchase Data/
 SYNTRA_Riset_Kompetitor/
 
 # Program ETL/automation SYNTRA (self-contained, ada .env + sesi login) — LOKAL, copy ke server manual

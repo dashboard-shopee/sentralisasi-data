@@ -17,7 +17,8 @@ export default function MobileNav() {
   const path = usePathname();
   const [minimized, setMinimized] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [profile, setProfile] = useState<{ role: string; allowedMenus: string[] } | null>(null);
+  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[] } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -70,20 +71,11 @@ export default function MobileNav() {
   // Filter Navigasi Dinamis
   const filteredNav = NAV.filter((n) => role === "owner" || allowedMenus.includes(n.href));
 
-  // Tambahkan menu Akses jika Owner
-  if (role === "owner") {
-    filteredNav.push({
-      ikon: "⚙️",
-      label: "Akses",
-      href: "/pengaturan-akses"
-    });
-  }
-
-  // Tambahkan Logout di Mobile Nav
+  // Tambahkan menu Setting ke Mobile Nav (untuk membuka Bottom Sheet)
   filteredNav.push({
-    ikon: "🚪",
-    label: "Keluar",
-    href: "#logout"
+    ikon: "⚙️",
+    label: "Setting",
+    href: "#setting"
   });
 
   async function handleLogout() {
@@ -133,18 +125,20 @@ export default function MobileNav() {
           <div className="flex-1 flex justify-around items-center gap-1 py-1">
             {filteredNav.map((n) => {
               const active = path === n.href;
-              const isLogout = n.href === "#logout";
+              const isSetting = n.href === "#setting";
 
-              if (isLogout) {
+              if (isSetting) {
                 return (
                   <button
                     key={n.href}
-                    onClick={handleLogout}
-                    className="flex flex-col items-center justify-center p-1.5 rounded-xl transition-all duration-200 text-[#9aa0b2] hover:bg-[#fff1ed]/20 hover:text-[#ee4d2d] cursor-pointer"
+                    onClick={() => setMenuOpen(true)}
+                    className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      menuOpen ? "bg-[#fff1ed] text-[#ee4d2d] scale-105" : "text-[#6b7180] hover:bg-[#f6f7fb]"
+                    }`}
                     style={{ minWidth: "42px" }}
                   >
                     <span className="text-[20px]">{n.ikon}</span>
-                    <span className="text-[9px] mt-0.5 font-bold text-[#9aa0b2]">
+                    <span className={`text-[9px] mt-0.5 font-bold ${menuOpen ? "text-[#ee4d2d]" : "text-[#9aa0b2]"}`}>
                       {n.label}
                     </span>
                   </button>
@@ -170,6 +164,66 @@ export default function MobileNav() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Account Bottom Sheet */}
+      {menuOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center md:hidden"
+          onClick={() => setMenuOpen(false)}
+        >
+          <div 
+            className="bg-white w-full rounded-t-3xl p-6 pb-8 shadow-2xl flex flex-col gap-4 animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle Bar */}
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-2" />
+            
+            {/* Profile Info */}
+            <div className="flex items-center gap-3 border-b border-[#eef0f6] pb-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-lg shadow-xs">
+                {profile?.username ? profile.username.charAt(0).toUpperCase() : "U"}
+              </div>
+              <div>
+                <div className="font-bold text-gray-800 text-base">{profile?.username || "Loading..."}</div>
+                <div className="text-xs text-gray-400 capitalize mt-0.5">{role || "Please wait"}</div>
+              </div>
+            </div>
+            
+            {/* Menu Options */}
+            <div className="flex flex-col gap-2">
+              {role === "owner" && (
+                <Link
+                  href="/pengaturan-akses"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 text-gray-700 font-semibold hover:bg-[#fff1ed] hover:text-[#ee4d2d] transition-colors"
+                >
+                  <span className="text-[18px]">⚙️</span>
+                  <span>Setting</span>
+                </Link>
+              )}
+              
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleLogout();
+                }}
+                className="flex items-center gap-3 p-3.5 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors w-full text-left cursor-pointer"
+              >
+                <span className="text-[18px]">🚪</span>
+                <span>Log Out</span>
+              </button>
+            </div>
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setMenuOpen(false)}
+              className="mt-2 py-3 rounded-xl border border-gray-200 text-gray-500 font-medium text-center hover:bg-gray-50 cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
