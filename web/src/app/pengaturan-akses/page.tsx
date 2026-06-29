@@ -19,7 +19,8 @@ const MENU_LIST = [
   { path: "/iklan", label: "📢 Performa Iklan" },
   { path: "/produk/harga", label: "🏷️ Harga & Komisi" },
   { path: "/produk/stok", label: "📦 Stok Katalog" },
-  { path: "/riset-kompetitor", label: "🔍 Riset Kompetitor" }
+  { path: "/riset-kompetitor", label: "🔍 Riset Kompetitor" },
+  { path: "/log", label: "🧾 Log Otomatisasi" }
 ];
 
 export default function PengaturanAkses() {

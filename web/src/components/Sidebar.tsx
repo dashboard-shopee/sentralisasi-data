@@ -18,6 +18,7 @@ const NAV = [
     ],
   },
   { ikon: "🔍", label: "Riset Kompetitor", href: "/riset-kompetitor" },
+  { ikon: "🧾", label: "Log", href: "/log" },
 ];
 
 export default function Sidebar({
