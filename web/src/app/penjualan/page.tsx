@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
 const COLS: SCol[] = [
+  { key: "gambar", label: "Foto", w: 52 },
   { key: "kode", label: "Kode Produk", w: 110, sort: "kode" },
   { key: "skuInduk", label: "SKU Induk", w: 100, sort: "skuInduk" },
   { key: "produk", label: "Nama Produk", w: 240, sort: "produk" },

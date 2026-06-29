@@ -423,20 +423,20 @@ export async function getProdukJual(f: Filter, o: TableOpts) {
     ))[0]?.c
   );
   const rows = await q<Record<string, unknown>>(
-    `select dp.produk_id kode, dp.sku_induk "skuInduk", dp.nama_produk produk, t.nama toko,
+    `select dp.produk_id kode, dp.sku_induk "skuInduk", dp.nama_produk produk, dp.gambar, t.nama toko,
        sum(f.penjualan)::float omzet, sum(f.pesanan)::int pesanan, sum(f.unit_pesanan)::int unit,
        sum(f.pembeli)::int pembeli, sum(f.pengunjung)::int pengunjung, sum(f.keranjang)::int keranjang,
        (case when sum(f.pengunjung)>0 then sum(f.pesanan)::float/sum(f.pengunjung)*100 else 0 end) konversi,
        (case when sum(f.pesanan)>0 then sum(f.penjualan)/sum(f.pesanan) else 0 end) aov
      from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id join dim_produk dp on dp.produk_id=f.produk_id
-     where ${where} group by dp.produk_id, dp.sku_induk, dp.nama_produk, t.nama
+     where ${where} group by dp.produk_id, dp.sku_induk, dp.nama_produk, dp.gambar, t.nama
      order by ${sortExpr} ${dir} nulls last limit ${lim} offset ${off}`,
     params
   );
   return {
     total,
     rows: rows.map((r) => ({
-      kode: String(r.kode), skuInduk: r.skuInduk ?? "", produk: r.produk, toko: r.toko,
+      kode: String(r.kode), skuInduk: r.skuInduk ?? "", produk: r.produk, gambar: r.gambar ?? null, toko: r.toko,
       omzet: n(r.omzet), pesanan: n(r.pesanan), unit: n(r.unit), pembeli: n(r.pembeli),
       pengunjung: n(r.pengunjung), keranjang: n(r.keranjang), konversi: n(r.konversi), aov: n(r.aov),
     })),
@@ -464,7 +464,7 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
     ))[0]?.c
   );
   const rows = await q<Record<string, unknown>>(
-    `select dp.produk_id kode, dp.sku_induk "skuInduk", t.nama toko, dp.nama_produk produk,
+    `select dp.produk_id kode, dp.sku_induk "skuInduk", t.nama toko, dp.nama_produk produk, dp.gambar,
        sum(f.dilihat)::int dilihat, sum(f.klik)::int klik, sum(f.konversi)::int konversi,
        sum(f.omzet_iklan)::float "omzetIklan", sum(f.biaya_iklan)::float "biayaIklan",
        (case when sum(f.dilihat)>0 then sum(f.klik)::float/sum(f.dilihat)*100 else 0 end) ctr,
@@ -478,7 +478,7 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
        max(s.action) "action"
      from fact_iklan f join dim_toko t on t.toko_id=f.toko_id join dim_produk dp on dp.produk_id=f.produk_id
      left join iklan_setting s on s.produk_id=dp.produk_id
-     where ${where} group by dp.produk_id, dp.sku_induk, t.nama, dp.nama_produk
+     where ${where} group by dp.produk_id, dp.sku_induk, t.nama, dp.nama_produk, dp.gambar
      order by ${sortExpr} ${dir} nulls last limit ${lim} offset ${off}`,
     params
   );
@@ -487,7 +487,7 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
   return {
     total,
     rows: rows.map((r) => ({
-      kode: String(r.kode), skuInduk: r.skuInduk ?? "", toko: r.toko, produk: r.produk,
+      kode: String(r.kode), skuInduk: r.skuInduk ?? "", toko: r.toko, produk: r.produk, gambar: r.gambar ?? null,
       dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi),
       omzetIklan: n(r.omzetIklan), biayaIklan: n(r.biayaIklan),
       ctr: n(r.ctr), cr: n(r.cr), cpc: n(r.cpc), roas: n(r.roas),
