@@ -2,9 +2,37 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-type Entry = { status: string; keterangan: string | null; waktu: string };
+type DetailItem = { sku?: string; market?: string; serupa?: number; acuan?: number };
+type Entry = { status: string; keterangan: string | null; waktu: string; detail?: DetailItem[] | null };
 type Trigger = { key: string; label: string; last: Entry | null; history: Entry[] };
 type Program = { key: string; label: string; triggers: Trigger[] };
+
+function DetailProduk({ detail }: { detail: DetailItem[] }) {
+  return (
+    <div className="mt-2 border border-[#eef0f6] rounded-lg overflow-hidden">
+      <table className="w-full text-[11px]">
+        <thead className="bg-[#f7f8fb] text-[#8a90a2]">
+          <tr className="text-left">
+            <th className="px-2.5 py-1.5 font-semibold">SKU</th>
+            <th className="px-2.5 py-1.5 font-semibold">Market</th>
+            <th className="px-2.5 py-1.5 font-semibold text-right">Kompetitor serupa</th>
+            <th className="px-2.5 py-1.5 font-semibold text-center">Acuan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {detail.map((d, i) => (
+            <tr key={i} className="border-t border-[#f3f4f8]">
+              <td className="px-2.5 py-1.5 font-medium text-slate-700">{d.sku || "—"}</td>
+              <td className="px-2.5 py-1.5 text-[#8a90a2]">{d.market || "—"}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-slate-800">{d.serupa ?? 0}</td>
+              <td className="px-2.5 py-1.5 text-center">{d.acuan ? "✓" : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function waktuAbsolut(iso: string) {
   return new Date(iso).toLocaleString("id-ID", {
@@ -107,20 +135,51 @@ export default function LogPage() {
                           {last.keterangan && (
                             <div className="text-[11.5px] text-[#9aa0b2] mt-0.5">{last.keterangan}</div>
                           )}
-                          {t.history.length > 1 && (
-                            <button
-                              onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}
-                              className="text-[11px] text-[#ee4d2d] font-semibold mt-1.5 hover:underline"
-                            >
-                              {open[k] ? "Sembunyikan" : `Riwayat (${t.history.length})`}
-                            </button>
+
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {last.detail && last.detail.length > 0 && (
+                              <button
+                                onClick={() => setOpen((o) => ({ ...o, [`${k}:d`]: !o[`${k}:d`] }))}
+                                className="text-[11px] text-[#ee4d2d] font-semibold hover:underline"
+                              >
+                                {open[`${k}:d`] ? "Tutup detail" : `📦 Detail produk (${last.detail.length})`}
+                              </button>
+                            )}
+                            {t.history.length > 1 && (
+                              <button
+                                onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}
+                                className="text-[11px] text-[#ee4d2d] font-semibold hover:underline"
+                              >
+                                {open[k] ? "Sembunyikan" : `🕘 Riwayat (${t.history.length})`}
+                              </button>
+                            )}
+                          </div>
+
+                          {open[`${k}:d`] && last.detail && last.detail.length > 0 && (
+                            <DetailProduk detail={last.detail} />
                           )}
+
                           {open[k] && (
-                            <div className="mt-2 border-t border-[#eef0f6] pt-2 flex flex-col gap-1">
+                            <div className="mt-2 border-t border-[#eef0f6] pt-2 flex flex-col gap-1.5">
                               {t.history.map((h, i) => (
-                                <div key={i} className="flex items-center justify-between text-[11px] text-[#8a90a2]">
-                                  <span>{waktuAbsolut(h.waktu)}</span>
-                                  <StatusBadge status={h.status} />
+                                <div key={i}>
+                                  <div className="flex items-center justify-between text-[11px] text-[#8a90a2]">
+                                    <span className="flex items-center gap-1.5">
+                                      {waktuAbsolut(h.waktu)}
+                                      {h.detail && h.detail.length > 0 && (
+                                        <button
+                                          onClick={() => setOpen((o) => ({ ...o, [`${k}:h${i}`]: !o[`${k}:h${i}`] }))}
+                                          className="text-[#ee4d2d] font-semibold hover:underline"
+                                        >
+                                          {open[`${k}:h${i}`] ? "tutup" : `detail (${h.detail.length})`}
+                                        </button>
+                                      )}
+                                    </span>
+                                    <StatusBadge status={h.status} />
+                                  </div>
+                                  {open[`${k}:h${i}`] && h.detail && h.detail.length > 0 && (
+                                    <DetailProduk detail={h.detail} />
+                                  )}
                                 </div>
                               ))}
                             </div>

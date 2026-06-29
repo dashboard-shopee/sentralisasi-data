@@ -25,13 +25,13 @@ const KATALOG = [
   },
 ];
 
-type Row = { program: string; pemicu: string; status: string; keterangan: string | null; waktu: string };
+type Row = { program: string; pemicu: string; status: string; keterangan: string | null; detail: unknown; waktu: string };
 
 export async function GET() {
   let rows: Row[] = [];
   try {
     rows = await q<Row>(
-      `select program, pemicu, status, keterangan, waktu
+      `select program, pemicu, status, keterangan, detail, waktu
          from siklus_log order by waktu desc limit 1000`
     );
   } catch {
