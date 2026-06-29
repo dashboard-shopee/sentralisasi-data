@@ -15,6 +15,7 @@ const NAV = [
     sub: [
       { label: "Harga & Komisi", href: "/produk/harga" },
       { label: "Stok Katalog", href: "/produk/stok" },
+      { label: "Kalkulator", href: "/produk/kalkulator" },
     ],
   },
   { ikon: "🔍", label: "Riset Kompetitor", href: "/riset-kompetitor" },

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const [minimized, setMinimized] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
@@ -30,6 +32,16 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     }
   };
 
+  const isLoginPage = pathname === "/login";
+
+  if (isLoginPage) {
+    return (
+      <div className="min-h-screen w-full">
+        {children}
+      </div>
+    );
+  }
+
   // Prevent layout jump on mount by using smooth class bindings
   return (
     <div className="flex min-h-screen w-full relative">
@@ -43,3 +55,4 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     </div>
   );
 }
+

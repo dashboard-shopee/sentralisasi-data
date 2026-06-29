@@ -14,6 +14,7 @@ const BOTTOM_NAV_ITEMS = [
 const SHEET_NAV_ITEMS = [
   { ikon: "🏷️", label: "Harga & Komisi", href: "/produk/harga" },
   { ikon: "📦", label: "Stok Katalog", href: "/produk/stok" },
+  { ikon: "🧮", label: "Kalkulator", href: "/produk/kalkulator" },
   { ikon: "🔍", label: "Riset Kompetitor", href: "/riset-kompetitor" },
 ];
 

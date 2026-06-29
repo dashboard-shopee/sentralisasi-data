@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       id: 1,
       username: "Owner",
       role: "owner",
-      allowed_menus: ["/", "/analisa", "/penjualan", "/pesanan", "/produk/harga", "/produk/stok", "/riset-kompetitor", "/pengaturan-akses"],
+      allowed_menus: ["/", "/analisa", "/penjualan", "/pesanan", "/produk/harga", "/produk/stok", "/produk/kalkulator", "/riset-kompetitor", "/pengaturan-akses"],
       can_edit_ads: true,
       can_edit_competitor: true,
       session_duration_days: 30

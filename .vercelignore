@@ -1,0 +1,15 @@
+# Exclude large automation folders and local profiles from Vercel deploy
+/01 Otomatisasi Iklan
+/02 Otomatisasi Monitoring Harga
+/04 Purchase Data
+/SYNTRA_Riset_Kompetitor
+/99. Server
+/Syntra_Iklan
+
+# Ignore git and local environments
+.git
+.venv
+venv
+shopee/__chrome_profile/
+**/__chrome_profile/
+data/

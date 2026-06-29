@@ -19,6 +19,7 @@ const MENU_LIST = [
   { path: "/iklan", label: "📢 Performa Iklan" },
   { path: "/produk/harga", label: "🏷️ Harga & Komisi" },
   { path: "/produk/stok", label: "📦 Stok Katalog" },
+  { path: "/produk/kalkulator", label: "🧮 Kalkulator" },
   { path: "/riset-kompetitor", label: "🔍 Riset Kompetitor" },
   { path: "/log", label: "🧾 Log Otomatisasi" }
 ];
