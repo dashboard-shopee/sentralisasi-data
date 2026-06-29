@@ -498,4 +498,68 @@ export async function getProdukIklan(f: Filter, o: TableOpts) {
   };
 }
 
+export async function getProdukTrend(kode: string, kind: "jual" | "iklan" | "analisa", f: Filter) {
+  const { params, W } = build(f);
+  params.push(Number(kode));
+  const pidParam = `$${params.length}`;
+  
+  if (kind === "iklan") {
+    const rows = await q<{ w: Date; dilihat: number; klik: number; konversi: number; omzet: number; biaya: number }>(
+      `select f.periode_mulai w, coalesce(sum(f.dilihat),0)::float dilihat, coalesce(sum(f.klik),0)::float klik,
+              coalesce(sum(f.konversi),0)::float konversi, coalesce(sum(f.omzet_iklan),0)::float omzet,
+              coalesce(sum(f.biaya_iklan),0)::float biaya
+       from fact_iklan f join dim_toko t on t.toko_id=f.toko_id
+       where ${W} and f.produk_id = ${pidParam}
+       group by f.periode_mulai order by f.periode_mulai`,
+      params
+    );
+    return rows.map((r) => ({
+      label: labelPeriode(f.periode, r.w),
+      ...deriveIklan({ dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi), omzet: n(r.omzet), biaya: n(r.biaya) }),
+    }));
+  } else if (kind === "analisa") {
+    const rows = await q<{ pm: Date; omzet: number; biaya: number; oik: number }>(
+      `select p.pm, p.omzet, coalesce(i.biaya,0)::float biaya, coalesce(i.oik,0)::float oik
+       from (select f.periode_mulai pm, sum(f.penjualan)::float omzet
+             from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id
+             where ${W} and f.produk_id = ${pidParam} group by f.periode_mulai) p
+       left join (select f.periode_mulai pm, sum(f.biaya_iklan)::float biaya, sum(f.omzet_iklan)::float oik
+                  from fact_iklan f join dim_toko t on t.toko_id=f.toko_id
+                  where ${W} and f.produk_id = ${pidParam} group by f.periode_mulai) i
+         on i.pm = p.pm order by p.pm`,
+      params
+    );
+    return rows.map((r) => ({
+      label: labelPeriode(f.periode, r.pm),
+      omzet: n(r.omzet),
+      biaya: n(r.biaya),
+      omzetIklan: n(r.oik),
+      roas: r.biaya ? n(r.oik) / n(r.biaya) : 0,
+      acos: r.omzet ? (n(r.biaya) / n(r.omzet)) * 100 : 0,
+    }));
+  } else {
+    // kind === "jual"
+    const rows = await q<{ w: Date; omzet: number; pesanan: number; unit: number; pembeli: number; pengunjung: number; keranjang: number }>(
+      `select f.periode_mulai w, coalesce(sum(f.penjualan),0)::float omzet, coalesce(sum(f.pesanan),0)::float pesanan,
+              coalesce(sum(f.unit_pesanan),0)::float unit, coalesce(sum(f.pembeli),0)::float pembeli,
+              coalesce(sum(f.pengunjung),0)::float pengunjung, coalesce(sum(f.keranjang),0)::float keranjang
+       from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id
+       where ${W} and f.produk_id = ${pidParam}
+       group by f.periode_mulai order by f.periode_mulai`,
+      params
+    );
+    return rows.map((r) => ({
+      label: labelPeriode(f.periode, r.w),
+      omzet: n(r.omzet),
+      pesanan: n(r.pesanan),
+      unit: n(r.unit),
+      pembeli: n(r.pembeli),
+      pengunjung: n(r.pengunjung),
+      keranjang: n(r.keranjang),
+      konversi: r.pengunjung ? (n(r.pesanan) / n(r.pengunjung)) * 100 : 0,
+      aov: r.pesanan ? n(r.omzet) / n(r.pesanan) : 0,
+    }));
+  }
+}
+
 export { labelHari };

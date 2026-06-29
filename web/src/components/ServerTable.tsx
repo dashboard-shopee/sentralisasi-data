@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fmtVal } from "@/lib/variables";
+import { fmtVal, VARS_JUAL, VARS_IKLAN } from "@/lib/variables";
 import type { Fmt } from "@/lib/variables";
+import VarMenu from "./VarMenu";
+import { FlexChart, ComboAnalisa } from "./charts";
 
 export type SCol = {
   key: string;
@@ -22,6 +24,7 @@ export default function ServerTable({
   pageSize = 50,
   downloadName,
   editKey,
+  trendKind,
 }: {
   kind: "jual" | "iklan";
   filter: { g: string; d: string; s: string; t: string };
@@ -30,6 +33,7 @@ export default function ServerTable({
   pageSize?: number;
   downloadName?: string;
   editKey?: string;
+  trendKind?: "jual" | "iklan" | "analisa";
 }) {
   const [edits, setEdits] = useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -132,6 +136,50 @@ export default function ServerTable({
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // States for product trend chart modal
+  const [selectedProductTrend, setSelectedProductTrend] = useState<any | null>(null);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendChartSel, setTrendChartSel] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!selectedProductTrend || !trendKind) {
+      setTrendData([]);
+      return;
+    }
+    
+    // Set default chart selections on click if not already set
+    if (trendChartSel.length === 0) {
+      if (trendKind === "jual") {
+        setTrendChartSel(["omzet", "pesanan"]);
+      } else if (trendKind === "iklan") {
+        setTrendChartSel(["omzetIklan", "biayaIklan", "roas"]);
+      }
+    }
+    
+    setTrendLoading(true);
+    const params = new URLSearchParams({
+      trend_kode: selectedProductTrend.kode,
+      trend_kind: trendKind,
+      g: filter.g,
+      d: filter.d,
+      s: filter.s,
+      t: filter.t,
+    });
+    fetch(`/api/produk?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setTrendData(data || []);
+      })
+      .catch((err) => {
+        console.error("Gagal mengambil data tren produk:", err);
+        setTrendData([]);
+      })
+      .finally(() => {
+        setTrendLoading(false);
+      });
+  }, [selectedProductTrend, trendKind, filter.g, filter.d, filter.s, filter.t]);
 
   const fkey = `${filter.g}|${filter.d}|${filter.s}|${filter.t}`;
 
@@ -261,7 +309,8 @@ export default function ServerTable({
                     return (
                       <td
                         key={c.key}
-                        className="px-3 py-2 text-slate-700 font-medium"
+                        onClick={() => trendKind && setSelectedProductTrend(r)}
+                        className={"px-3 py-2 text-slate-700 font-medium " + (trendKind ? "cursor-pointer hover:text-[#ee4d2d] transition-colors" : "")}
                         style={{
                           width: c.w ? c.w : 180,
                           minWidth: c.w ? c.w : 180,
@@ -522,6 +571,91 @@ export default function ServerTable({
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+      {selectedProductTrend && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-40 animate-fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-3xl w-full mx-auto border border-slate-100 animate-scale-up flex flex-col max-h-[90vh]">
+            
+            {/* Header Modal */}
+            <div className="flex items-start justify-between border-b pb-4 mb-4 shrink-0">
+              <div className="flex items-center gap-3.5">
+                {selectedProductTrend.gambar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={selectedProductTrend.gambar}
+                    alt=""
+                    className="w-12 h-12 rounded-lg object-cover border border-[#eef0f6]"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-[#f3f4f8] grid place-items-center text-[#c4c8d4] text-[16px]">
+                    🖼️
+                  </div>
+                )}
+                <div className="max-w-[500px] text-left">
+                  <h3 className="text-[14px] font-bold text-slate-800 line-clamp-1">
+                    {selectedProductTrend.produk}
+                  </h3>
+                  <p className="text-[11px] text-[#8a90a2] mt-0.5 font-medium">
+                    SKU: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.skuInduk || "—"}</span>
+                    {"  ·  "}
+                    Toko: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.toko}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedProductTrend(null)}
+                className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-normal px-2 py-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Content & Grafik */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[13px] font-bold text-slate-700">
+                  Grafik Tren Performa Produk
+                </h4>
+                {trendKind !== "analisa" && (
+                  <VarMenu
+                    all={trendKind === "jual" ? VARS_JUAL : VARS_IKLAN}
+                    selected={trendChartSel}
+                    onChange={setTrendChartSel}
+                    max={4}
+                    label="Atur Grafik"
+                  />
+                )}
+              </div>
+
+              <div className="bg-[#fafbfd] border border-slate-100 rounded-xl p-4 min-h-[300px] flex items-center justify-center relative">
+                {trendLoading ? (
+                  <div className="text-[13px] text-slate-400 font-medium">Memuat data grafik tren...</div>
+                ) : trendData.length === 0 ? (
+                  <div className="text-[13px] text-slate-400 font-medium">Tidak ada data tren performa untuk rentang waktu ini.</div>
+                ) : trendKind === "analisa" ? (
+                  <ComboAnalisa data={trendData} isShopComparison={false} />
+                ) : (
+                  <FlexChart
+                    data={trendData}
+                    series={trendChartSel.map((k) => (trendKind === "jual" ? VARS_JUAL : VARS_IKLAN).find((x) => x.key === k)).filter(Boolean) as any[]}
+                    isShopComparison={false}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="border-t pt-4 mt-4 flex justify-end shrink-0">
+              <button
+                onClick={() => setSelectedProductTrend(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[13px] font-semibold transition"
+              >
+                Tutup
+              </button>
+            </div>
+
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProdukJual, getProdukIklan, type TableOpts } from "@/lib/data";
+import { getProdukJual, getProdukIklan, getProdukTrend, type TableOpts } from "@/lib/data";
 import type { Filter } from "@/lib/filters";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,14 @@ export async function GET(req: Request) {
     b: p.get("s") || "",
     toko: (p.get("t") || "").split(",").filter(Boolean),
   };
+  
+  const trendKode = p.get("trend_kode");
+  if (trendKode) {
+    const trendKind = (p.get("trend_kind") || "jual") as "jual" | "iklan" | "analisa";
+    const data = await getProdukTrend(trendKode, trendKind, f);
+    return NextResponse.json(data);
+  }
+
   const download = p.get("download") === "csv";
   const o: TableOpts = {
     page: parseInt(p.get("page") || "1") || 1,

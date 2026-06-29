@@ -67,7 +67,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       <p className="text-[12px] text-[#9aa0b2] mb-3">
         Klik judul kolom untuk urutkan · kolom Rating & Rekomendasi disiapkan untuk fitur otomasi (diisi menyusul).
       </p>
-      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} downloadName="iklan" />
+      <ServerTable kind="iklan" filter={ft} columns={COLS} defaultSort="omzetIklan" pageSize={50} downloadName="iklan" trendKind="iklan" />
     </div>
   );
 }

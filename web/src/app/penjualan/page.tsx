@@ -55,7 +55,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
 
       <h2 className="text-[14px] font-bold mt-7 mb-1">📋 Daftar Produk</h2>
       <p className="text-[12px] text-[#9aa0b2] mb-3">Semua produk · klik judul kolom untuk urutkan · cari & pindah halaman.</p>
-      <ServerTable kind="jual" filter={ft} columns={COLS} defaultSort="omzet" pageSize={50} downloadName="penjualan" />
+      <ServerTable kind="jual" filter={ft} columns={COLS} defaultSort="omzet" pageSize={50} downloadName="penjualan" trendKind="jual" />
     </div>
   );
 }
