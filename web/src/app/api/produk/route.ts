@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProdukJual, getProdukIklan, getProdukTrend, type TableOpts } from "@/lib/data";
+import { getProdukJual, getProdukIklan, getProdukTrend, getProdukComparisonTrend, type TableOpts } from "@/lib/data";
 import type { Filter } from "@/lib/filters";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +38,18 @@ export async function GET(req: Request) {
   const trendKode = p.get("trend_kode");
   if (trendKode) {
     const trendKind = (p.get("trend_kind") || "jual") as "jual" | "iklan" | "analisa";
-    const data = await getProdukTrend(trendKode, trendKind, f);
-    return NextResponse.json(data);
+    const compareStores = p.get("compare_stores") === "1";
+    const metric = p.get("metric") || "omzet";
+    const skuInduk = p.get("sku_induk") || "";
+    
+    if (compareStores && skuInduk) {
+      const data = await getProdukComparisonTrend(skuInduk, trendKind, metric, f);
+      const stores = Array.from(new Set(data.flatMap((d) => Object.keys(d).filter((k) => k !== "label"))));
+      return NextResponse.json({ trend: data, stores });
+    } else {
+      const data = await getProdukTrend(trendKode, trendKind, f);
+      return NextResponse.json({ trend: data, stores: [] });
+    }
   }
 
   const download = p.get("download") === "csv";

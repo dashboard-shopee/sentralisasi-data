@@ -4,7 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { fmtVal, VARS_JUAL, VARS_IKLAN } from "@/lib/variables";
 import type { Fmt } from "@/lib/variables";
 import VarMenu from "./VarMenu";
-import { FlexChart, ComboAnalisa } from "./charts";
+import { FlexChart, ComboAnalisa, PALETTE } from "./charts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+const VARS_ANALISA = [
+  { key: "omzet", label: "Omzet", fmt: "rp", ikon: "💰" },
+  { key: "biaya", label: "Biaya Iklan", fmt: "rp", ikon: "💸" },
+  { key: "omzetIklan", label: "Omzet Iklan", fmt: "rp", ikon: "💵" },
+  { key: "roas", label: "ROAS", fmt: "ratio", ikon: "📈" },
+  { key: "acos", label: "ACOS", fmt: "pct", ikon: "📊" },
+];
 
 export type SCol = {
   key: string;
@@ -142,10 +151,28 @@ export default function ServerTable({
   const [trendData, setTrendData] = useState<any[]>([]);
   const [trendLoading, setTrendLoading] = useState(false);
   const [trendChartSel, setTrendChartSel] = useState<string[]>([]);
+  
+  // Store comparison states
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedCompareMetric, setSelectedCompareMetric] = useState("omzet");
+  const [trendStores, setTrendStores] = useState<string[]>([]);
+
+  // Reset comparison state when product changes
+  useEffect(() => {
+    if (selectedProductTrend) {
+      setCompareMode(false);
+      if (trendKind === "iklan") {
+        setSelectedCompareMetric("omzetIklan");
+      } else {
+        setSelectedCompareMetric("omzet");
+      }
+    }
+  }, [selectedProductTrend, trendKind]);
 
   useEffect(() => {
     if (!selectedProductTrend || !trendKind) {
       setTrendData([]);
+      setTrendStores([]);
       return;
     }
     
@@ -167,19 +194,28 @@ export default function ServerTable({
       s: filter.s,
       t: filter.t,
     });
+    
+    if (compareMode && selectedProductTrend.skuInduk) {
+      params.append("compare_stores", "1");
+      params.append("metric", selectedCompareMetric || (trendKind === "iklan" ? "omzetIklan" : "omzet"));
+      params.append("sku_induk", selectedProductTrend.skuInduk);
+    }
+    
     fetch(`/api/produk?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
-        setTrendData(data || []);
+        setTrendData(data.trend || []);
+        setTrendStores(data.stores || []);
       })
       .catch((err) => {
         console.error("Gagal mengambil data tren produk:", err);
         setTrendData([]);
+        setTrendStores([]);
       })
       .finally(() => {
         setTrendLoading(false);
       });
-  }, [selectedProductTrend, trendKind, filter.g, filter.d, filter.s, filter.t]);
+  }, [selectedProductTrend, trendKind, filter.g, filter.d, filter.s, filter.t, compareMode, selectedCompareMetric]);
 
   const fkey = `${filter.g}|${filter.d}|${filter.s}|${filter.t}`;
 
@@ -598,7 +634,7 @@ export default function ServerTable({
                     {selectedProductTrend.produk}
                   </h3>
                   <p className="text-[11px] text-[#8a90a2] mt-0.5 font-medium">
-                    SKU: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.skuInduk || "—"}</span>
+                    SKU Induk: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.skuInduk || "—"}</span>
                     {"  ·  "}
                     Toko: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.toko}</span>
                   </p>
@@ -614,19 +650,52 @@ export default function ServerTable({
 
             {/* Content & Grafik */}
             <div className="flex-1 overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-[13px] font-bold text-slate-700">
-                  Grafik Tren Performa Produk
-                </h4>
-                {trendKind !== "analisa" && (
-                  <VarMenu
-                    all={trendKind === "jual" ? VARS_JUAL : VARS_IKLAN}
-                    selected={trendChartSel}
-                    onChange={setTrendChartSel}
-                    max={4}
-                    label="Atur Grafik"
-                  />
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-4">
+                  <h4 className="text-[13px] font-bold text-slate-700">
+                    {compareMode ? "Perbandingan Tren Produk Antar Toko" : "Grafik Tren Performa Produk"}
+                  </h4>
+                  {selectedProductTrend.skuInduk && (
+                    <label className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#ee4d2d] cursor-pointer bg-[#fff1ed] px-2 py-1 rounded-md border border-[#ffd8cd]">
+                      <input
+                        type="checkbox"
+                        checked={compareMode}
+                        onChange={(e) => setCompareMode(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-[#ee4d2d] cursor-pointer"
+                      />
+                      Bandingkan Toko
+                    </label>
+                  )}
+                </div>
+                
+                <div>
+                  {compareMode ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11.5px] text-[#8a90a2] font-semibold">Variabel:</span>
+                      <select
+                        value={selectedCompareMetric}
+                        onChange={(e) => setSelectedCompareMetric(e.target.value)}
+                        className="text-[12px] font-semibold text-[#3a3f4d] border border-[#e6e9f0] rounded-lg px-2.5 py-1.5 focus:border-[#ee4d2d] outline-none bg-white cursor-pointer"
+                      >
+                        {(trendKind === "jual" ? VARS_JUAL : trendKind === "iklan" ? VARS_IKLAN : VARS_ANALISA).map((v) => (
+                          <option key={v.key} value={v.key}>
+                            {v.ikon} {v.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    trendKind !== "analisa" && (
+                      <VarMenu
+                        all={trendKind === "jual" ? VARS_JUAL : VARS_IKLAN}
+                        selected={trendChartSel}
+                        onChange={setTrendChartSel}
+                        max={4}
+                        label="Atur Grafik"
+                      />
+                    )
+                  )}
+                </div>
               </div>
 
               <div className="bg-[#fafbfd] border border-slate-100 rounded-xl p-4 min-h-[300px] flex items-center justify-center relative">
@@ -634,6 +703,47 @@ export default function ServerTable({
                   <div className="text-[13px] text-slate-400 font-medium">Memuat data grafik tren...</div>
                 ) : trendData.length === 0 ? (
                   <div className="text-[13px] text-slate-400 font-medium">Tidak ada data tren performa untuk rentang waktu ini.</div>
+                ) : compareMode ? (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={trendData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9aa0b2" }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#9aa0b2" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => {
+                          const vdef = (trendKind === "jual" ? VARS_JUAL : trendKind === "iklan" ? VARS_IKLAN : VARS_ANALISA).find((x) => x.key === selectedCompareMetric);
+                          return fmtVal(Number(v), (vdef?.fmt || "num") as Fmt);
+                        }}
+                        width={58}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: "1px solid #eef1f6",
+                          boxShadow: "0 6px 20px rgba(20,23,40,.08)",
+                          fontSize: 12,
+                        }}
+                        cursor={{ fill: "#f6f7fb" }}
+                        formatter={(v, name) => {
+                          const vdef = (trendKind === "jual" ? VARS_JUAL : trendKind === "iklan" ? VARS_IKLAN : VARS_ANALISA).find((x) => x.key === selectedCompareMetric);
+                          return [fmtVal(Number(v), (vdef?.fmt || "num") as Fmt), name];
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      {trendStores.map((store, i) => (
+                        <Line
+                          key={store}
+                          type="monotone"
+                          dataKey={store}
+                          name={store}
+                          stroke={PALETTE[i % PALETTE.length]}
+                          strokeWidth={2.5}
+                          dot={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
                 ) : trendKind === "analisa" ? (
                   <ComboAnalisa data={trendData} isShopComparison={false} />
                 ) : (

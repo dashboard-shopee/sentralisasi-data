@@ -562,4 +562,237 @@ export async function getProdukTrend(kode: string, kind: "jual" | "iklan" | "ana
   }
 }
 
+async function getBestProductPerStore(skuInduk: string, kind: "jual" | "iklan" | "analisa", metric: string, f: Filter) {
+  const { params, W } = build(f);
+  params.push(skuInduk);
+  const skuParam = `$${params.length}`;
+  
+  let query = "";
+  if (kind === "iklan") {
+    let orderExpr = "total_omzetIklan";
+    if (metric === "biayaIklan") orderExpr = "total_biayaIklan";
+    else if (metric === "klik") orderExpr = "total_klik";
+    else if (metric === "dilihat") orderExpr = "total_dilihat";
+    else if (metric === "konversi") orderExpr = "total_konversi";
+    else if (metric === "roas") orderExpr = "case when total_biayaIklan > 0 then total_omzetIklan / total_biayaIklan else 0 end";
+    else if (metric === "ctr") orderExpr = "case when total_dilihat > 0 then total_klik / total_dilihat else 0 end";
+    else if (metric === "cr") orderExpr = "case when total_klik > 0 then total_konversi / total_klik else 0 end";
+    else if (metric === "cpc") orderExpr = "case when total_klik > 0 then total_biayaIklan / total_klik else 0 end";
+
+    query = `
+      with product_totals as (
+        select 
+          f.produk_id,
+          dp.toko_id,
+          sum(f.omzet_iklan)::float as total_omzetIklan,
+          sum(f.biaya_iklan)::float as total_biayaIklan,
+          sum(f.klik)::float as total_klik,
+          sum(f.dilihat)::float as total_dilihat,
+          sum(f.konversi)::float as total_konversi
+        from fact_iklan f
+        join dim_produk dp on dp.produk_id = f.produk_id
+        join dim_toko t on t.toko_id = dp.toko_id
+        where ${W} and dp.sku_induk = ${skuParam}
+        group by f.produk_id, dp.toko_id
+      ),
+      ranked as (
+        select 
+          produk_id,
+          toko_id,
+          row_number() over (partition by toko_id order by ${orderExpr} desc) as rn
+        from product_totals
+      )
+      select r.produk_id, t.nama as toko
+      from ranked r
+      join dim_toko t on t.toko_id = r.toko_id
+      where r.rn = 1
+    `;
+  } else if (kind === "analisa") {
+    let orderExpr = "total_omzet";
+    if (metric === "biaya") orderExpr = "total_biaya";
+    else if (metric === "omzetIklan") orderExpr = "total_oik";
+    else if (metric === "roas") orderExpr = "case when total_biaya > 0 then total_oik / total_biaya else 0 end";
+    else if (metric === "acos") orderExpr = "case when total_omzet > 0 then total_biaya / total_omzet else 0 end";
+
+    query = `
+      with product_totals as (
+        select 
+          dp.produk_id,
+          dp.toko_id,
+          coalesce(sum(f.penjualan), 0)::float as total_omzet,
+          coalesce(max(i.biaya), 0)::float as total_biaya,
+          coalesce(max(i.oik), 0)::float as total_oik
+        from dim_produk dp
+        join dim_toko t on t.toko_id = dp.toko_id
+        left join fact_penjualan f on f.produk_id = dp.produk_id and f.periode = $1 and f.periode_mulai between $2 and $3
+        left join (
+          select produk_id, sum(biaya_iklan) as biaya, sum(omzet_iklan) as oik
+          from fact_iklan
+          where periode = $1 and periode_mulai between $2 and $3
+          group by produk_id
+        ) i on i.produk_id = dp.produk_id
+        where dp.sku_induk = ${skuParam}
+        group by dp.produk_id, dp.toko_id
+      ),
+      ranked as (
+        select 
+          produk_id,
+          toko_id,
+          row_number() over (partition by toko_id order by ${orderExpr} desc) as rn
+        from product_totals
+      )
+      select r.produk_id, t.nama as toko
+      from ranked r
+      join dim_toko t on t.toko_id = r.toko_id
+      where r.rn = 1
+    `;
+  } else {
+    let orderExpr = "total_omzet";
+    if (metric === "pesanan") orderExpr = "total_pesanan";
+    else if (metric === "unit") orderExpr = "total_unit";
+    else if (metric === "pembeli") orderExpr = "total_pembeli";
+    else if (metric === "pengunjung") orderExpr = "total_pengunjung";
+    else if (metric === "keranjang") orderExpr = "total_keranjang";
+    else if (metric === "konversi") orderExpr = "case when total_pengunjung > 0 then total_pesanan / total_pengunjung else 0 end";
+    else if (metric === "aov") orderExpr = "case when total_pesanan > 0 then total_omzet / total_pesanan else 0 end";
+
+    query = `
+      with product_totals as (
+        select 
+          f.produk_id,
+          dp.toko_id,
+          sum(f.penjualan)::float as total_omzet,
+          sum(f.pesanan)::float as total_pesanan,
+          sum(f.unit_pesanan)::float as total_unit,
+          sum(f.pembeli)::float as total_pembeli,
+          sum(f.pengunjung)::float as total_pengunjung,
+          sum(f.keranjang)::float as total_keranjang
+        from fact_penjualan f
+        join dim_produk dp on dp.produk_id = f.produk_id
+        join dim_toko t on t.toko_id = dp.toko_id
+        where ${W} and dp.sku_induk = ${skuParam}
+        group by f.produk_id, dp.toko_id
+      ),
+      ranked as (
+        select 
+          produk_id,
+          toko_id,
+          row_number() over (partition by toko_id order by ${orderExpr} desc) as rn
+        from product_totals
+      )
+      select r.produk_id, t.nama as toko
+      from ranked r
+      join dim_toko t on t.toko_id = r.toko_id
+      where r.rn = 1
+    `;
+  }
+
+  return q<{ produk_id: number; toko: string }>(query, params);
+}
+
+export async function getProdukComparisonTrend(
+  skuInduk: string,
+  kind: "jual" | "iklan" | "analisa",
+  metric: string,
+  f: Filter
+) {
+  const bestProducts = await getBestProductPerStore(skuInduk, kind, metric, f);
+  if (bestProducts.length === 0) return [];
+  
+  const productIds = bestProducts.map((p) => p.produk_id);
+  const storeMap = new Map<number, string>();
+  bestProducts.forEach((p) => storeMap.set(Number(p.produk_id), p.toko));
+  
+  const { params, W } = build(f);
+  params.push(productIds);
+  const idsParam = `$${params.length}`;
+  
+  const dateMap = new Map<string, Record<string, number | string>>();
+  
+  if (kind === "iklan") {
+    const rows = await q<{ w: Date; produk_id: number; dilihat: number; klik: number; konversi: number; omzet: number; biaya: number }>(
+      `select f.periode_mulai w, f.produk_id, coalesce(sum(f.dilihat),0)::float dilihat, coalesce(sum(f.klik),0)::float klik,
+              coalesce(sum(f.konversi),0)::float konversi, coalesce(sum(f.omzet_iklan),0)::float omzet,
+              coalesce(sum(f.biaya_iklan),0)::float biaya
+       from fact_iklan f join dim_toko t on t.toko_id=f.toko_id
+       where ${W} and f.produk_id = any(${idsParam})
+       group by f.periode_mulai, f.produk_id order by f.periode_mulai`,
+      params
+    );
+    
+    rows.forEach((r) => {
+      const label = labelPeriode(f.periode, r.w);
+      const storeName = storeMap.get(Number(r.produk_id)) || "Unknown";
+      const metrics = deriveIklan({ dilihat: n(r.dilihat), klik: n(r.klik), konversi: n(r.konversi), omzet: n(r.omzet), biaya: n(r.biaya) });
+      const val = metrics[metric as keyof typeof metrics] ?? 0;
+      
+      if (!dateMap.has(label)) {
+        dateMap.set(label, { label });
+      }
+      dateMap.get(label)![storeName] = n(val);
+    });
+  } else if (kind === "analisa") {
+    const rows = await q<{ pm: Date; produk_id: number; omzet: number; biaya: number; oik: number }>(
+      `select p.pm, p.produk_id, p.omzet, coalesce(i.biaya,0)::float biaya, coalesce(i.oik,0)::float oik
+       from (select f.periode_mulai pm, f.produk_id, sum(f.penjualan)::float omzet
+             from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id
+             where ${W} and f.produk_id = any(${idsParam}) group by f.periode_mulai, f.produk_id) p
+       left join (select f.periode_mulai pm, f.produk_id, sum(f.biaya_iklan)::float biaya, sum(f.omzet_iklan)::float oik
+                  from fact_iklan f join dim_toko t on t.toko_id=f.toko_id
+                  where ${W} and f.produk_id = any(${idsParam}) group by f.periode_mulai, f.produk_id) i
+         on i.pm = p.pm and i.produk_id = p.produk_id order by p.pm`,
+      params
+    );
+    
+    rows.forEach((r) => {
+      const label = labelPeriode(f.periode, r.pm);
+      const storeName = storeMap.get(Number(r.produk_id)) || "Unknown";
+      
+      let val = 0;
+      if (metric === "omzet") val = n(r.omzet);
+      else if (metric === "biaya") val = n(r.biaya);
+      else if (metric === "omzetIklan") val = n(r.oik);
+      else if (metric === "roas") val = r.biaya ? n(r.oik) / n(r.biaya) : 0;
+      else if (metric === "acos") val = r.omzet ? (n(r.biaya) / n(r.omzet)) * 100 : 0;
+      
+      if (!dateMap.has(label)) {
+        dateMap.set(label, { label });
+      }
+      dateMap.get(label)![storeName] = val;
+    });
+  } else {
+    const rows = await q<{ w: Date; produk_id: number; omzet: number; pesanan: number; unit: number; pembeli: number; pengunjung: number; keranjang: number }>(
+      `select f.periode_mulai w, f.produk_id, coalesce(sum(f.penjualan),0)::float omzet, coalesce(sum(f.pesanan),0)::float pesanan,
+              coalesce(sum(f.unit_pesanan),0)::float unit, coalesce(sum(f.pembeli),0)::float pembeli,
+              coalesce(sum(f.pengunjung),0)::float pengunjung, coalesce(sum(f.keranjang),0)::float keranjang
+       from fact_penjualan f join dim_toko t on t.toko_id=f.toko_id
+       where ${W} and f.produk_id = any(${idsParam})
+       group by f.periode_mulai, f.produk_id order by f.periode_mulai`,
+      params
+    );
+    
+    rows.forEach((r) => {
+      const label = labelPeriode(f.periode, r.w);
+      const storeName = storeMap.get(Number(r.produk_id)) || "Unknown";
+      
+      let val = 0;
+      if (metric === "omzet") val = n(r.omzet);
+      else if (metric === "pesanan") val = n(r.pesanan);
+      else if (metric === "unit") val = n(r.unit);
+      else if (metric === "pembeli") val = n(r.pembeli);
+      else if (metric === "pengunjung") val = n(r.pengunjung);
+      else if (metric === "keranjang") val = n(r.keranjang);
+      else if (metric === "konversi") val = r.pengunjung ? (n(r.pesanan) / n(r.pengunjung)) * 100 : 0;
+      else if (metric === "aov") val = r.pesanan ? n(r.omzet) / n(r.pesanan) : 0;
+      
+      if (!dateMap.has(label)) {
+        dateMap.set(label, { label });
+      }
+      dateMap.get(label)![storeName] = val;
+    });
+  }
+  
+  return Array.from(dateMap.values());
+}
+
 export { labelHari };
