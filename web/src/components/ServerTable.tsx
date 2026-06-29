@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fmtVal, VARS_JUAL, VARS_IKLAN } from "@/lib/variables";
-import type { Fmt } from "@/lib/variables";
+import type { Fmt, VarDef } from "@/lib/variables";
+import type { Options } from "@/lib/filters";
 import VarMenu from "./VarMenu";
 import { FlexChart, ComboAnalisa, PALETTE } from "./charts";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-const VARS_ANALISA = [
+const VARS_ANALISA: VarDef[] = [
   { key: "omzet", label: "Omzet", fmt: "rp", ikon: "💰" },
   { key: "biaya", label: "Biaya Iklan", fmt: "rp", ikon: "💸" },
   { key: "omzetIklan", label: "Omzet Iklan", fmt: "rp", ikon: "💵" },
@@ -34,6 +35,7 @@ export default function ServerTable({
   downloadName,
   editKey,
   trendKind,
+  options,
 }: {
   kind: "jual" | "iklan";
   filter: { g: string; d: string; s: string; t: string };
@@ -43,6 +45,7 @@ export default function ServerTable({
   downloadName?: string;
   editKey?: string;
   trendKind?: "jual" | "iklan" | "analisa";
+  options: Options;
 }) {
   const [edits, setEdits] = useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -152,23 +155,57 @@ export default function ServerTable({
   const [trendLoading, setTrendLoading] = useState(false);
   const [trendChartSel, setTrendChartSel] = useState<string[]>([]);
   
-  // Store comparison states
-  const [compareMode, setCompareMode] = useState(false);
-  const [selectedCompareMetric, setSelectedCompareMetric] = useState("omzet");
+  // Local time & shop variables inside the modal
+  const [localG, setLocalG] = useState("harian");
+  const [localD, setLocalD] = useState("");
+  const [localS, setLocalS] = useState("");
+  const [localToko, setLocalToko] = useState<string[]>([]);
   const [trendStores, setTrendStores] = useState<string[]>([]);
 
-  // Reset comparison state when product changes
+  // Derived compareMode: automatically true if only 1 variable selected, and has skuInduk
+  const compareMode = trendChartSel.length === 1 && !!selectedProductTrend?.skuInduk;
+  const selectedCompareMetric = trendChartSel[0] || "omzet";
+
+  // Reset/Initialize modal local filters when product is selected
   useEffect(() => {
     if (selectedProductTrend) {
-      setCompareMode(false);
+      setLocalG(filter.g);
+      setLocalD(filter.d);
+      setLocalS(filter.s);
+      setLocalToko(filter.t ? filter.t.split(",") : []);
+
+      // Initialize default metrics
       if (trendKind === "iklan") {
-        setSelectedCompareMetric("omzetIklan");
+        setTrendChartSel(["omzetIklan", "biayaIklan", "roas"]);
+      } else if (trendKind === "analisa") {
+        setTrendChartSel(["omzet", "biaya", "omzetIklan", "roas", "acos"]);
       } else {
-        setSelectedCompareMetric("omzet");
+        setTrendChartSel(["omzet", "pesanan"]);
       }
     }
   }, [selectedProductTrend, trendKind]);
 
+  // Adjust date range when local granularity changes
+  useEffect(() => {
+    if (!options || !options.periodsByGran || !selectedProductTrend) return;
+    const dates = options.periodsByGran[localG] || [];
+    if (dates.length === 0) return;
+    
+    const WIN_LOCAL: Record<string, number> = { harian: 14, mingguan: 12, bulanan: 12, tahunan: 6 };
+    const dateVals = dates.map(d => d.value);
+    const win = WIN_LOCAL[localG] || 12;
+    
+    let defaultB = dateVals[0] || "";
+    let defaultA = dateVals[Math.min(win - 1, dateVals.length - 1)] || "";
+    if (defaultA && defaultB && new Date(defaultA) > new Date(defaultB)) {
+      [defaultA, defaultB] = [defaultB, defaultA];
+    }
+    
+    setLocalD(defaultA);
+    setLocalS(defaultB);
+  }, [localG, options, selectedProductTrend]);
+
+  // Fetch trend data based on local filters
   useEffect(() => {
     if (!selectedProductTrend || !trendKind) {
       setTrendData([]);
@@ -176,28 +213,19 @@ export default function ServerTable({
       return;
     }
     
-    // Set default chart selections on click if not already set
-    if (trendChartSel.length === 0) {
-      if (trendKind === "jual") {
-        setTrendChartSel(["omzet", "pesanan"]);
-      } else if (trendKind === "iklan") {
-        setTrendChartSel(["omzetIklan", "biayaIklan", "roas"]);
-      }
-    }
-    
     setTrendLoading(true);
     const params = new URLSearchParams({
       trend_kode: selectedProductTrend.kode,
       trend_kind: trendKind,
-      g: filter.g,
-      d: filter.d,
-      s: filter.s,
-      t: filter.t,
+      g: localG,
+      d: localD,
+      s: localS,
+      t: localToko.join(","),
     });
     
     if (compareMode && selectedProductTrend.skuInduk) {
       params.append("compare_stores", "1");
-      params.append("metric", selectedCompareMetric || (trendKind === "iklan" ? "omzetIklan" : "omzet"));
+      params.append("metric", selectedCompareMetric);
       params.append("sku_induk", selectedProductTrend.skuInduk);
     }
     
@@ -215,7 +243,7 @@ export default function ServerTable({
       .finally(() => {
         setTrendLoading(false);
       });
-  }, [selectedProductTrend, trendKind, filter.g, filter.d, filter.s, filter.t, compareMode, selectedCompareMetric]);
+  }, [selectedProductTrend, trendKind, localG, localD, localS, localToko, compareMode, selectedCompareMetric]);
 
   const fkey = `${filter.g}|${filter.d}|${filter.s}|${filter.t}`;
 
@@ -636,65 +664,115 @@ export default function ServerTable({
                   <p className="text-[11px] text-[#8a90a2] mt-0.5 font-medium">
                     SKU Induk: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.skuInduk || "—"}</span>
                     {"  ·  "}
-                    Toko: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.toko}</span>
+                    Toko Asal: <span className="text-[#3a3f4d] font-bold">{selectedProductTrend.toko}</span>
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedProductTrend(null)}
-                className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-normal px-2 py-1"
+                className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-normal px-2 py-1 cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
+            {/* Modal Filters (Time & Store Selection) */}
+            <div className="bg-[#f8fafc] border border-slate-100 rounded-xl p-3.5 mb-4 shrink-0 flex flex-col gap-3 text-left">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5">
+                
+                {/* Granularity */}
+                <div className="flex items-center gap-1 bg-slate-200/60 rounded-lg p-0.5">
+                  {options.grans.map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => setLocalG(g)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${g === localG ? "bg-white text-[#ee4d2d] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                    >
+                      {g === "harian" ? "Hari" : g === "mingguan" ? "Minggu" : g === "bulanan" ? "Bulan" : "Tahun"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Mulai & Selesai Selectors */}
+                <div className="flex items-center gap-2.5 text-[12px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400 font-semibold">Mulai:</span>
+                    <select
+                      value={localD}
+                      onChange={(e) => setLocalD(e.target.value)}
+                      className="text-[12px] font-semibold text-slate-700 border border-slate-200 rounded-md px-1.5 py-1 bg-white cursor-pointer focus:border-[#ee4d2d] outline-none"
+                    >
+                      {(options.periodsByGran[localG] || []).map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400 font-semibold">Selesai:</span>
+                    <select
+                      value={localS}
+                      onChange={(e) => setLocalS(e.target.value)}
+                      className="text-[12px] font-semibold text-slate-700 border border-slate-200 rounded-md px-1.5 py-1 bg-white cursor-pointer focus:border-[#ee4d2d] outline-none"
+                    >
+                      {(options.periodsByGran[localG] || []).map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Toko Selector */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-100">
+                <span className="text-[11px] text-slate-400 font-semibold mr-1">Toko dibanding:</span>
+                <button
+                  onClick={() => setLocalToko([])}
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${localToko.length === 0 ? "bg-[#ee4d2d] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                >
+                  Semua
+                </button>
+                {options.toko.map((t) => {
+                  const on = localToko.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        if (localToko.includes(t)) {
+                          setLocalToko(localToko.filter((x) => x !== t));
+                        } else {
+                          setLocalToko([...localToko, t]);
+                        }
+                      }}
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${on ? "bg-[#fff1ed] text-[#ee4d2d] ring-1 ring-[#ee4d2d]" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+
+            </div>
+
             {/* Content & Grafik */}
             <div className="flex-1 overflow-y-auto">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-4">
-                  <h4 className="text-[13px] font-bold text-slate-700">
-                    {compareMode ? "Perbandingan Tren Produk Antar Toko" : "Grafik Tren Performa Produk"}
-                  </h4>
-                  {selectedProductTrend.skuInduk && (
-                    <label className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#ee4d2d] cursor-pointer bg-[#fff1ed] px-2 py-1 rounded-md border border-[#ffd8cd]">
-                      <input
-                        type="checkbox"
-                        checked={compareMode}
-                        onChange={(e) => setCompareMode(e.target.checked)}
-                        className="w-3.5 h-3.5 accent-[#ee4d2d] cursor-pointer"
-                      />
-                      Bandingkan Toko
-                    </label>
-                  )}
-                </div>
+                <h4 className="text-[13px] font-bold text-slate-700 text-left">
+                  {compareMode ? `Perbandingan Toko (${selectedProductTrend.skuInduk})` : "Tren Performa Produk"}
+                </h4>
                 
                 <div>
-                  {compareMode ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11.5px] text-[#8a90a2] font-semibold">Variabel:</span>
-                      <select
-                        value={selectedCompareMetric}
-                        onChange={(e) => setSelectedCompareMetric(e.target.value)}
-                        className="text-[12px] font-semibold text-[#3a3f4d] border border-[#e6e9f0] rounded-lg px-2.5 py-1.5 focus:border-[#ee4d2d] outline-none bg-white cursor-pointer"
-                      >
-                        {(trendKind === "jual" ? VARS_JUAL : trendKind === "iklan" ? VARS_IKLAN : VARS_ANALISA).map((v) => (
-                          <option key={v.key} value={v.key}>
-                            {v.ikon} {v.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    trendKind !== "analisa" && (
-                      <VarMenu
-                        all={trendKind === "jual" ? VARS_JUAL : VARS_IKLAN}
-                        selected={trendChartSel}
-                        onChange={setTrendChartSel}
-                        max={4}
-                        label="Atur Grafik"
-                      />
-                    )
-                  )}
+                  <VarMenu
+                    all={trendKind === "jual" ? VARS_JUAL : trendKind === "iklan" ? VARS_IKLAN : VARS_ANALISA}
+                    selected={trendChartSel}
+                    onChange={setTrendChartSel}
+                    max={trendKind === "analisa" ? 5 : 4}
+                    label="Atur Grafik"
+                  />
                 </div>
               </div>
 
@@ -718,6 +796,7 @@ export default function ServerTable({
                         width={58}
                       />
                       <Tooltip
+                        itemSorter={(item) => -Number(item.value)}
                         contentStyle={{
                           borderRadius: 12,
                           border: "1px solid #eef1f6",
@@ -760,7 +839,7 @@ export default function ServerTable({
             <div className="border-t pt-4 mt-4 flex justify-end shrink-0">
               <button
                 onClick={() => setSelectedProductTrend(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[13px] font-semibold transition"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[13px] font-semibold transition cursor-pointer"
               >
                 Tutup
               </button>
