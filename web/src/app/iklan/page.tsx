@@ -12,8 +12,8 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 
 const COLS: SCol[] = [
   { key: "toko", label: "Nama Toko", w: 120, sort: "toko" },
-  { key: "gambar", label: "Foto", w: 52 },
-  { key: "produk", label: "Nama Produk", w: 240, sort: "produk" },
+  { key: "gambar", label: "Foto", w: 64 },
+  { key: "produk", label: "Nama Produk", w: 180, sort: "produk" },
   { key: "kode", label: "Kode Produk", w: 110, sort: "kode" },
   { key: "skuInduk", label: "SKU", w: 90, sort: "skuInduk" },
   { key: "targetRoas", label: "Target ROAS", w: 100 },
@@ -30,10 +30,10 @@ const COLS: SCol[] = [
   { key: "ratingIklan", label: "Rating Iklan", w: 110 },
   { key: "rekomRoas", label: "Rekomendasi ROAS", w: 140 },
   { key: "rekomBudget", label: "Rekomendasi Budget", w: 150 },
-  { key: "ketRating", label: "Keterangan Rating", w: 150 },
-  { key: "ketRoas", label: "Keterangan ROAS", w: 150 },
-  { key: "ketBudget", label: "Keterangan Budget", w: 150 },
-  { key: "action", label: "Action", w: 110 },
+  { key: "ketRating", label: "Keterangan Rating", w: 130 },
+  { key: "ketRoas", label: "Keterangan ROAS", w: 130 },
+  { key: "ketBudget", label: "Keterangan Budget", w: 130 },
+  { key: "action", label: "Action", w: 150 },
 ];
 
 export default async function Page({ searchParams }: { searchParams: SP }) {

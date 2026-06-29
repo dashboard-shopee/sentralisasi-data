@@ -217,15 +217,20 @@ export default function ServerTable({
               <th className="px-3 py-2.5 font-semibold border-b border-[#eef0f6]">No</th>
               {columns.map((c) => {
                 const active = c.sort && sort === c.sort;
+                const canWrap = ["produk", "ketRating", "ketRoas", "ketBudget", "action"].includes(c.key);
                 return (
                   <th
                     key={c.key}
                     onClick={() => clickSort(c)}
-                    className={"px-3 py-2.5 font-semibold whitespace-nowrap border-b border-[#eef0f6] " + (c.sort ? "cursor-pointer select-none hover:text-[#ee4d2d]" : "")}
-                    style={c.w ? { minWidth: c.w } : undefined}
+                    className={"px-3 py-2.5 font-semibold border-b border-[#eef0f6] " + 
+                      (canWrap ? "" : "whitespace-nowrap ") + 
+                      (c.sort ? "cursor-pointer select-none hover:text-[#ee4d2d]" : "")}
+                    style={c.w ? { minWidth: c.w, maxWidth: c.w } : undefined}
                   >
-                    {c.label}
-                    {c.sort ? <span className={"ml-1 " + (active ? "text-[#ee4d2d]" : "text-[#cfd3de]")}>{active ? (dir === "asc" ? "▲" : "▼") : "↕"}</span> : null}
+                    <div style={canWrap ? { whiteSpace: "normal", wordBreak: "break-word", lineHeight: "1.2" } : undefined}>
+                      {c.label}
+                      {c.sort ? <span className={"ml-1 " + (active ? "text-[#ee4d2d]" : "text-[#cfd3de]")}>{active ? (dir === "asc" ? "▲" : "▼") : "↕"}</span> : null}
+                    </div>
                   </th>
                 );
               })}
@@ -243,10 +248,99 @@ export default function ServerTable({
                         {url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer"
-                            className="w-9 h-9 rounded-md object-cover border border-[#eef0f6] bg-[#fafbfd]" />
+                            className="w-12 h-12 rounded-md object-cover border border-[#eef0f6] bg-[#fafbfd]" />
                         ) : (
-                          <div className="w-9 h-9 rounded-md bg-[#f3f4f8] grid place-items-center text-[#c4c8d4] text-[14px]">🖼️</div>
+                          <div className="w-12 h-12 rounded-md bg-[#f3f4f8] grid place-items-center text-[#c4c8d4] text-[14px]">🖼️</div>
                         )}
+                      </td>
+                    );
+                  }
+                  if (c.key === "produk") {
+                    const raw = r[c.key];
+                    const empty = raw === undefined || raw === null || raw === "";
+                    return (
+                      <td
+                        key={c.key}
+                        className="px-3 py-2 text-slate-700 font-medium"
+                        style={{
+                          width: c.w ? c.w : 180,
+                          minWidth: c.w ? c.w : 180,
+                          maxWidth: c.w ? c.w : 180,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: "2",
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            lineHeight: "1.35",
+                          }}
+                          title={String(raw)}
+                        >
+                          {empty ? <span className="text-[#c4c8d4]">—</span> : String(raw)}
+                        </div>
+                      </td>
+                    );
+                  }
+                  if (c.key.startsWith("ket")) {
+                    const raw = r[c.key];
+                    const text = String(raw || "");
+                    const parts = text.split("|");
+                    let line1 = text;
+                    let line2 = "";
+                    
+                    if (parts.length >= 3) {
+                      line1 = parts[0].trim() + " | " + parts[1].trim();
+                      line2 = parts.slice(2).join(" | ").trim();
+                    } else if (parts.length === 2) {
+                      line1 = parts[0].trim();
+                      line2 = parts[1].trim();
+                    }
+
+                    return (
+                      <td
+                        key={c.key}
+                        className="px-3 py-2 text-slate-500 text-[11px]"
+                        style={{
+                          width: c.w ? c.w : 130,
+                          minWidth: c.w ? c.w : 130,
+                          maxWidth: c.w ? c.w : 130,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                          lineHeight: "1.35",
+                        }}
+                      >
+                        <div className="font-semibold text-slate-600">{line1}</div>
+                        {line2 && <div className="text-slate-400 font-normal mt-0.5">{line2}</div>}
+                      </td>
+                    );
+                  }
+                  if (c.key === "action") {
+                    const raw = r[c.key];
+                    const text = String(raw || "");
+                    const parts = text.split("&");
+                    
+                    return (
+                      <td
+                        key={c.key}
+                        className="px-3 py-2 text-slate-700 font-medium text-[11px]"
+                        style={{
+                          width: c.w ? c.w : 150,
+                          minWidth: c.w ? c.w : 150,
+                          maxWidth: c.w ? c.w : 150,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                          lineHeight: "1.35",
+                        }}
+                      >
+                        {parts.map((p, idx) => (
+                          <div key={idx} className={idx > 0 ? "mt-1.5" : ""}>
+                            {p.trim()}
+                          </div>
+                        ))}
                       </td>
                     );
                   }
