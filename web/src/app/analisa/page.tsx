@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
-import { getAnalisa } from "@/lib/data";
+import { getAnalisa, getJejakUpdate } from "@/lib/data";
 import { getOptions, resolveFilter } from "@/lib/filters";
-import { rp, rpShort, caption } from "@/lib/format";
+import { rp, rpShort, caption, tsWIB } from "@/lib/format";
 import KpiCard from "@/components/KpiCard";
 import FilterBar from "@/components/FilterBar";
 import { ComboAnalisa } from "@/components/charts";
@@ -32,6 +32,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const options = await getOptions();
   const filter = resolveFilter(await searchParams, options, { g: "harian", win: 7 });
   const d = await getAnalisa(filter);
+  const jejak = await getJejakUpdate();
   const t = d.total;
   const ft = { g: filter.periode, d: filter.a, s: filter.b, t: filter.toko.join(",") };
 
@@ -48,6 +49,10 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         <h1 className="text-[22px] font-extrabold tracking-tight">📊 Analisa Penjualan vs Iklan</h1>
         <p className="text-[13px] text-[#8a90a2] mt-0.5">
           {caption(filter)} · {filter.toko.length ? `${filter.toko.length} toko` : "semua toko"}
+        </p>
+        <p className="text-[11px] text-[#b4b9c6] mt-1">
+          🔄 Laporan terakhir: <span className="text-[#8a90a2] font-medium">{tsWIB(jejak.laporan)}</span>
+          {"  ·  "}Analisa terakhir: <span className="text-[#8a90a2] font-medium">{tsWIB(jejak.analisa)}</span>
         </p>
       </div>
 

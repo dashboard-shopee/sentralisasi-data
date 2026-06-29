@@ -32,6 +32,15 @@ export const labelHari = (d: Date | string) => {
   return `${w.getUTCDate()} ${BULAN[w.getUTCMonth()]} ${w.getUTCFullYear()}`;
 };
 export const labelTahun = (d: Date | string) => String(wib(d).getUTCFullYear());
+
+// Timestamp ringkas "29 Jun 06.17 WIB" buat penanda "terakhir diperbarui".
+export const tsWIB = (d: Date | string | null | undefined) => {
+  if (!d) return "belum pernah";
+  const w = wib(d);
+  const jj = String(w.getUTCHours()).padStart(2, "0");
+  const mm = String(w.getUTCMinutes()).padStart(2, "0");
+  return `${w.getUTCDate()} ${BULAN[w.getUTCMonth()]} ${jj}.${mm} WIB`;
+};
 export const labelPeriode = (g: string, d: Date | string) =>
   g === "harian"
     ? labelHari(d)

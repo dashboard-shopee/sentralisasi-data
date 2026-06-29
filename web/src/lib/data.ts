@@ -2,6 +2,30 @@ import { q } from "./db";
 import type { Filter } from "./filters";
 import { labelPeriode, labelHari, n } from "./format";
 
+// Jejak "terakhir diperbarui": laporan & analisa dari siklus_log (kapan trigger jalan),
+// purchase data dari erp_sku_list.diperbarui_pada (data real). Aman-gagal -> null.
+export async function getJejakUpdate() {
+  const out: { laporan: string | null; analisa: string | null; purchase: string | null } = {
+    laporan: null, analisa: null, purchase: null,
+  };
+  try {
+    const rows = await q<{ pemicu: string; waktu: string }>(
+      `select distinct on (pemicu) pemicu, waktu
+         from siklus_log where program='iklan' and pemicu in ('laporan','analisa')
+        order by pemicu, waktu desc`
+    );
+    for (const r of rows) {
+      if (r.pemicu === "laporan") out.laporan = r.waktu;
+      else if (r.pemicu === "analisa") out.analisa = r.waktu;
+    }
+  } catch {}
+  try {
+    const e = await q<{ mx: string | null }>(`select max(diperbarui_pada) as mx from erp_sku_list`);
+    out.purchase = e[0]?.mx ?? null;
+  } catch {}
+  return out;
+}
+
 // Bangun kondisi WHERE bersama (periode + rentang + toko). params di-isi sekali, dipakai semua query.
 function build(f: Filter) {
   const params: unknown[] = [f.periode, f.a, f.b];

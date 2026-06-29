@@ -1,6 +1,6 @@
-import { getOverview, getAnalisa } from "@/lib/data";
+import { getOverview, getAnalisa, getJejakUpdate } from "@/lib/data";
 import { getOptions, resolveFilter } from "@/lib/filters";
-import { rp, rpShort, num, numShort, caption } from "@/lib/format";
+import { rp, rpShort, num, numShort, caption, tsWIB } from "@/lib/format";
 import KpiCard from "@/components/KpiCard";
 import { FlexChart, DonutToko, BarTokoDuo, PALETTE } from "@/components/charts";
 
@@ -13,6 +13,7 @@ export default async function Home() {
   filter.toko = [];
   const d = await getOverview(filter);
   const an = await getAnalisa(filter);
+  const jejak = await getJejakUpdate();
   const k = d.kpi;
   const totalToko = d.perToko.reduce((a, b) => a + b.omzet, 0) || 1;
 
@@ -21,6 +22,9 @@ export default async function Home() {
       <div className="mb-5">
         <h1 className="text-[22px] font-extrabold tracking-tight">Ringkasan Toko 👋</h1>
         <p className="text-[13px] text-[#8a90a2] mt-0.5">7 hari terakhir ({caption(filter)}) · semua toko</p>
+        <p className="text-[11px] text-[#b4b9c6] mt-1">
+          🔄 Purchase data terakhir: <span className="text-[#8a90a2] font-medium">{tsWIB(jejak.purchase)}</span>
+        </p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
