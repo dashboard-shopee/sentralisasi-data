@@ -87,7 +87,7 @@ export async function GET(req: Request) {
           e.product_name as nama_produk,
           coalesce(e.hpp, 0)::float as hpp,
           coalesce(e.override_net, 0)::float as override_net,
-          (coalesce(e.hpp, 0) + $1 + (case when coalesce(e.hpp, 0) >= $2 then $3 else 0 end))::float as biaya_tetap,
+          ($1 + (case when coalesce(e.hpp, 0) >= $2 then $3 else 0 end))::float as biaya_tetap,
           (case 
             when coalesce(e.hpp, 0) < 500 then 0.25 
             when coalesce(e.hpp, 0) < 1000 then 0.20 
