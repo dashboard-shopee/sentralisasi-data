@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { q } from "@/lib/db";
+import { verifySession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +161,23 @@ export async function GET(req: Request) {
         return { ...pr, tokos };
       });
       return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
+    } else if (tab === "riwayat") {
+      let W = "1=1";
+      const params: unknown[] = [];
+      if (search) { 
+        params.push(`%${search}%`); 
+        W += ` and (sku ilike $1 or username ilike $1 or aksi ilike $1)`; 
+      }
+      let order = "waktu_update desc";
+      if (sortCol) {
+        const allowed = ["waktu_update", "sku", "aksi", "nilai_lama", "nilai_baru", "username"];
+        if (allowed.includes(sortCol)) order = `${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
+      }
+      params.push(size, offset);
+      const rows = await q<any>(`select id, waktu_update, sku, aksi, nilai_lama, nilai_baru, username from harga_riwayat_update where ${W} order by ${order} limit $${params.length - 1} offset $${params.length}`, params);
+      const countParams = search ? [`%${search}%`] : [];
+      const total = await q<{ count: string }>(`select count(*) from harga_riwayat_update where ${W}`, countParams);
+      return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0") });
     }
     return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
   } catch (err: any) {
@@ -172,38 +191,86 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { action, sku, custom_harga_diskon, custom_harga_pancing, skus } = body;
 
+    // Ambil info user yang mengubah
+    const cookieStore = await cookies();
+    const token = cookieStore.get("dash_auth")?.value;
+    const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
+    const user = token ? await verifySession(token, secret) : null;
+    const username = user?.username || "System";
+
     if (action === "update-custom-diskon") {
       if (!sku) return NextResponse.json({ ok: false, error: "SKU wajib diisi" }, { status: 400 });
       const val = custom_harga_diskon !== "" && custom_harga_diskon !== null ? parseFloat(custom_harga_diskon) : null;
+      
+      const oldData = await q<any>(`select custom_harga_diskon from harga_all_produk where sku = $1`, [sku]);
+      const oldVal = oldData.length > 0 ? oldData[0].custom_harga_diskon : null;
+
       await q(`update harga_all_produk set custom_harga_diskon = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ($1, $2, $3, $4, $5)`, [sku, 'Edit Harga Diskon', oldVal, val, username]);
+
       return NextResponse.json({ ok: true, message: `Harga diskon kustom SKU ${sku} diperbarui.` });
     }
     
     if (action === "update-custom-pancing") {
       if (!sku) return NextResponse.json({ ok: false, error: "SKU wajib diisi" }, { status: 400 });
       const val = custom_harga_pancing !== "" && custom_harga_pancing !== null ? parseFloat(custom_harga_pancing) : null;
+      
+      const oldData = await q<any>(`select custom_harga_pancing from harga_all_produk where sku = $1`, [sku]);
+      const oldVal = oldData.length > 0 ? oldData[0].custom_harga_pancing : null;
+
       await q(`update harga_all_produk set custom_harga_pancing = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ($1, $2, $3, $4, $5)`, [sku, 'Edit Harga Pancing', oldVal, val, username]);
+
       return NextResponse.json({ ok: true, message: `Harga pancing kustom SKU ${sku} diperbarui.` });
     }
     
     if (action === "mass-update-harga") {
       if (!skus || !Array.isArray(skus) || skus.length === 0) return NextResponse.json({ ok: false, error: "Daftar SKU tidak valid" }, { status: 400 });
+      
+      const oldData = await q<any>(`select sku, custom_harga_diskon, custom_harga_pancing from harga_all_produk where sku = any($1)`, [skus]);
+      
       let params: any[] = [skus];
       let queryStr = `update harga_all_produk set diperbarui_pada = now()`;
       
-      if (custom_harga_diskon !== undefined) {
-        const valD = custom_harga_diskon !== "" && custom_harga_diskon !== null ? parseFloat(custom_harga_diskon) : null;
+      const hasDiskon = custom_harga_diskon !== undefined;
+      const hasPancing = custom_harga_pancing !== undefined;
+      const valD = hasDiskon && custom_harga_diskon !== "" && custom_harga_diskon !== null ? parseFloat(custom_harga_diskon) : null;
+      const valP = hasPancing && custom_harga_pancing !== "" && custom_harga_pancing !== null ? parseFloat(custom_harga_pancing) : null;
+
+      if (hasDiskon) {
         params.push(valD);
         queryStr += `, custom_harga_diskon = $${params.length}`;
       }
-      if (custom_harga_pancing !== undefined) {
-        const valP = custom_harga_pancing !== "" && custom_harga_pancing !== null ? parseFloat(custom_harga_pancing) : null;
+      if (hasPancing) {
         params.push(valP);
         queryStr += `, custom_harga_pancing = $${params.length}`;
       }
       
       queryStr += ` where sku = any($1)`;
       await q(queryStr, params);
+
+      if (hasDiskon && oldData.length > 0) {
+        const values: any[] = [];
+        let i = 1;
+        const placeholders = oldData.map((od: any) => {
+          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
+          values.push(od.sku, 'Mass Update Diskon', od.custom_harga_diskon, valD, username);
+          return chunk;
+        });
+        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ${placeholders.join(',')}`, values);
+      }
+
+      if (hasPancing && oldData.length > 0) {
+        const values: any[] = [];
+        let i = 1;
+        const placeholders = oldData.map((od: any) => {
+          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
+          values.push(od.sku, 'Mass Update Pancing', od.custom_harga_pancing, valP, username);
+          return chunk;
+        });
+        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ${placeholders.join(',')}`, values);
+      }
+
       return NextResponse.json({ ok: true, message: `Update massal pada ${skus.length} SKU berhasil.` });
     }
 

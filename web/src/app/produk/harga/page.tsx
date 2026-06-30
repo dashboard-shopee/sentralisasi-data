@@ -57,8 +57,18 @@ interface TokoInfo {
   nama: string;
 }
 
+interface RiwayatRow {
+  id: number;
+  waktu_update: string;
+  sku: string;
+  aksi: string;
+  nilai_lama: number | null;
+  nilai_baru: number | null;
+  username: string;
+}
+
 export default function HargaPage() {
-  const [tab, setTab] = useState<"all" | "olah" | "komisi">("all");
+  const [tab, setTab] = useState<"all" | "olah" | "komisi" | "riwayat">("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [size] = useState(50);
@@ -261,7 +271,7 @@ export default function HargaPage() {
   };
 
   // Reset pagination on search / tab change
-  const handleTabChange = (t: "all" | "olah" | "komisi") => {
+  const handleTabChange = (t: "all" | "olah" | "komisi" | "riwayat") => {
     setTab(t);
     setRows([]);
     setQ("");
@@ -619,6 +629,65 @@ export default function HargaPage() {
     );
   };
 
+  const renderRiwayatTable = () => {
+    const list = rows as RiwayatRow[];
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse" style={{ minWidth: "1000px" }}>
+          <thead>
+            <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
+              <th onClick={() => handleSort("waktu_update")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[180px]">
+                Waktu {sortCol === "waktu_update" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("username")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px]">
+                Pengguna {sortCol === "username" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("aksi")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[180px]">
+                Aksi {sortCol === "aksi" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("sku")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px]">
+                SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("nilai_lama")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px] text-right">
+                Nilai Lama {sortCol === "nilai_lama" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("nilai_baru")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px] text-right">
+                Nilai Baru {sortCol === "nilai_baru" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#eef0f6] text-[13px]">
+            {list.map((r, i) => (
+              <tr key={r.id || i} className="hover:bg-[#fcfdfe] transition-colors">
+                <td className="px-4 py-3 text-[#8a90a2] font-medium align-middle">{formatDate(r.waktu_update)}</td>
+                <td className="px-4 py-3 align-middle">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-[#f3e8ff] flex items-center justify-center text-[10px] font-bold text-[#6b21a8]">
+                      {r.username.substring(0, 1).toUpperCase()}
+                    </span>
+                    <span className="font-bold text-[#4b5563]">{r.username}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[#4b5563] font-semibold align-middle">
+                  <span className={`px-2 py-1 rounded-md text-[11px] ${r.aksi.includes('Diskon') ? 'bg-[#fff1ed] text-[#ee4d2d]' : 'bg-[#f0f9ff] text-[#0ea5e9]'}`}>
+                    {r.aksi}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-bold text-[#161a27] align-middle">{r.sku}</td>
+                <td className="px-4 py-3 text-right text-[#9aa0b2] line-through align-middle">
+                  {r.nilai_lama !== null && r.nilai_lama !== undefined ? formatRp(r.nilai_lama) : "-"}
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-[#047857] align-middle bg-[#ecfdf5]/20">
+                  {r.nilai_baru !== null && r.nilai_baru !== undefined ? formatRp(r.nilai_baru) : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-[1400px] xl:max-w-[1650px] w-full mx-auto">
       {/* Header */}
@@ -655,10 +724,12 @@ export default function HargaPage() {
               type="text"
               placeholder={
                 tab === "all"
-                  ? "Cari SKU, SKU induk..."
-                  : tab === "olah"
-                  ? "Cari SKU, nama produk, ID..."
-                  : "Cari SKU, category..."
+                ? "Cari SKU, SKU induk..."
+                : tab === "olah"
+                ? "Cari SKU, nama produk, ID..."
+                : tab === "komisi"
+                ? "Cari SKU, category..."
+                : "Cari SKU, pengguna, aksi..."
               }
               value={q}
               onChange={handleSearchChange}
@@ -694,6 +765,14 @@ export default function HargaPage() {
           }`}
         >
           🤝 Komisi Affiliate
+        </button>
+        <button
+          onClick={() => handleTabChange("riwayat")}
+          className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
+            tab === "riwayat" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
+          }`}
+        >
+          📜 Riwayat Update
         </button>
       </div>
 
@@ -752,6 +831,7 @@ export default function HargaPage() {
             {tab === "all" && renderAllProdukTable()}
             {tab === "olah" && renderOlahDataTable()}
             {tab === "komisi" && renderKomisiTable()}
+            {tab === "riwayat" && renderRiwayatTable()}
             
             {/* Pagination Row */}
             <div className="flex items-center justify-between p-4 border-t border-[#eef0f6] bg-[#fafbfc]">
