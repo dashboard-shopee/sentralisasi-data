@@ -446,7 +446,7 @@ export default function HargaPage() {
                 {/* Margin Persen */}
                 <td className="px-2 py-2 text-right font-bold align-middle">
                   {r.margin_persen !== null && r.margin_persen !== undefined ? (
-                    <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]": ""}>
+                    <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
                       {(r.margin_persen * 100).toFixed(1)}%
                     </span>
                   ) : "-"}
