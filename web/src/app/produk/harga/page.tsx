@@ -858,6 +858,7 @@ export default function HargaPage() {
             <p className="text-[11px] text-[#b4b9c6] mt-1 leading-relaxed">
               🔄 Data terakhir: <span className="text-[#8a90a2] font-medium">{tsWIB(jejakHarga.dataTerakhir)}</span>
               {"  ·  "}Grab: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.grab)}</span>
+              {"  ·  "}HPP: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.hpp)}</span>
               {"  ·  "}Rubah Harga: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.rubah_harga)}</span>
               {"  ·  "}Verifikasi: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.verifikasi)}</span>
               {"  ·  "}Duplikat Promo: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.duplikat_promo)}</span>
