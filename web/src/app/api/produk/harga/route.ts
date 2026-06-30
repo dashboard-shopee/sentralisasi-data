@@ -268,6 +268,42 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const sqlBase = `
+    with base as (
+      select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
+      from harga_all_produk h
+      left join erp_sku_list e on h.sku = e.sku
+      left join erp_shopee_metrics sm on h.sku = sm.sku
+    ),
+    kalkulator_settings as (
+      select 
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_packing_fee'), 400) as packing_fee,
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_service_fee_min_hpp'), 600) as min_hpp,
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_service_fee'), 1250) as service_fee,
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_admin_fee_pct'), 0.16) +
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_discount_ads_pct'), 0.06) +
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_salary_pct'), 0.08) +
+        coalesce((select value::numeric from kalkulator_settings where key = 'batch_commission_pct'), 0.0) as total_pct_biaya
+    ),
+    calc1 as (
+      select b.*, ks.packing_fee, ks.min_hpp, ks.service_fee, ks.total_pct_biaya,
+        (ks.packing_fee + (case when b.hpp >= ks.min_hpp then ks.service_fee else 0 end))::numeric as biaya_tetap,
+        (case when b.hpp < 500 then 0.25 when b.hpp < 1000 then 0.20 when b.hpp < 3000 then 0.15 else 0.12 end)::numeric as target_margin
+      from base b cross join kalkulator_settings ks
+    ),
+    calc2 as (
+      select c1.*,
+        (case when c1.override_net > 0 then c1.override_net else (c1.hpp + c1.biaya_tetap) / nullif((1.0 - c1.total_pct_biaya - c1.target_margin), 0) end)::numeric as net_price_awal
+      from calc1 c1
+    ),
+    calc3 as (
+      select c2.*,
+        (case when c2.total_qty > 0 then c2.net_price_awal - ((greatest(0, c2.total_qty - c2.total_orders) / c2.total_qty) * c2.service_fee) else c2.net_price_awal end)::numeric as net_price_detail,
+        (c2.packing_fee + (case when c2.total_qty > 0 then c2.service_fee * c2.total_orders / c2.total_qty else c2.service_fee end))::numeric as biaya_tetap_adjusted
+      from calc2 c2
+    )
+  `;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { action, sku, custom_harga_diskon, custom_harga_pancing, skus } = body;
@@ -387,6 +423,44 @@ export async function POST(req: Request) {
         ['ALL', `Mass Update Komisi (${toko})`, komisi_persen, username]);
 
       return NextResponse.json({ ok: true, message: `Komisi massal toko ${toko} diperbarui menjadi ${komisi_persen}%.` });
+    }
+
+    if (action === "add-komisi-produk") {
+      const { parent_sku } = body;
+      if (!parent_sku) return NextResponse.json({ ok: false, error: "Parent SKU wajib diisi" }, { status: 400 });
+
+      const qInsert = `
+        ${sqlBase}
+        insert into harga_komisi_produk (sku, parent_sku, category, net_price, diperbarui_pada)
+        select c3.sku, c3.sku_induk, c3.category, c3.net_price_detail, now()
+        from calc3 c3
+        where c3.sku_induk ilike $1
+        on conflict (sku) do nothing
+      `;
+      await q(qInsert, [parent_sku]);
+      return NextResponse.json({ ok: true, message: `Produk dengan Parent SKU ${parent_sku} ditambahkan ke Komisi.` });
+    }
+
+    if (action === "batch-update-jual") {
+      const { toko, updates } = body;
+      if (!toko || !updates || !Array.isArray(updates)) return NextResponse.json({ ok: false, error: "Data tidak valid" }, { status: 400 });
+
+      let count = 0;
+      for (const u of updates) {
+        if (!u.sku) continue;
+        await q(`
+          insert into harga_komisi_toko (sku, username_toko, harga_jual, diperbarui_pada)
+          values ($1, $2, $3, now())
+          on conflict (sku, username_toko) do update 
+          set harga_jual = excluded.harga_jual, diperbarui_pada = now()
+        `, [u.sku, toko, u.harga_jual]);
+        count++;
+      }
+      
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
+        ['ALL', `Batch Update Jual (${toko})`, null, username]);
+
+      return NextResponse.json({ ok: true, message: `${count} SKU pada toko ${toko} berhasil diperbarui.` });
     }
 
     return NextResponse.json({ ok: false, error: "Action tidak dikenal" }, { status: 400 });
