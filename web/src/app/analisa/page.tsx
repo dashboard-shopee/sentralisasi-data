@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
+import { q } from "@/lib/db";
 import { getAnalisa, getJejakUpdate } from "@/lib/data";
 import { getOptions, resolveFilter } from "@/lib/filters";
 import { rp, rpShort, caption, tsWIB } from "@/lib/format";
@@ -42,7 +43,20 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const token = cookieStore.get("dash_auth")?.value;
   const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
   const user = token ? await verifySession(token, secret) : null;
-  const canEdit = !!(user?.can_edit_ads || user?.role === "owner");
+  let canEdit = false;
+  if (user) {
+    if (user.role === "owner") {
+      canEdit = true;
+    } else if (user.id) {
+      const dbUser = await q<any>(
+        "select can_edit_ads from dashboard_user where id = $1",
+        [user.id]
+      );
+      if (dbUser.length > 0 && dbUser[0].can_edit_ads) {
+        canEdit = true;
+      }
+    }
+  }
 
   return (
     <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto">

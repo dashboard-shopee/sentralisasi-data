@@ -317,15 +317,25 @@ export async function POST(req: Request) {
     const role = user?.role || "staff";
 
     // Validasi izin edit berdasarkan role dan permission
+    // Ambil langsung dari DB agar perubahan hak akses langsung berlaku tanpa re-login
     if (role !== "owner") {
       const isCatalogEdit = ["update-custom-diskon", "update-custom-pancing", "mass-update-harga"].includes(action);
       const isKomisiEdit = ["update-komisi-toko", "update-harga-jual-toko", "mass-update-komisi-toko", "add-komisi-produk", "delete-komisi-produk", "batch-update-jual"].includes(action);
       
-      if (isCatalogEdit && !user?.can_edit_harga) {
-        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit harga katalog." }, { status: 403 });
-      }
-      if (isKomisiEdit && !user?.can_edit_komisi) {
-        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit komisi affiliate." }, { status: 403 });
+      if (isCatalogEdit || isKomisiEdit) {
+        // Cek langsung dari database untuk memastikan data selalu up-to-date
+        const dbUser = user?.id ? await q<any>(
+          "select can_edit_harga, can_edit_komisi from dashboard_user where id = $1",
+          [user.id]
+        ) : [];
+        const perms = dbUser.length > 0 ? dbUser[0] : { can_edit_harga: false, can_edit_komisi: false };
+        
+        if (isCatalogEdit && !perms.can_edit_harga) {
+          return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit harga katalog." }, { status: 403 });
+        }
+        if (isKomisiEdit && !perms.can_edit_komisi) {
+          return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit komisi affiliate." }, { status: 403 });
+        }
       }
     }
 

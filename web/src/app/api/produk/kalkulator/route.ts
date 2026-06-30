@@ -206,8 +206,16 @@ export async function POST(req: Request) {
     const role = user?.role || "staff";
 
     // Validasi izin edit berdasarkan role dan permission
-    if (role !== "owner" && !user?.can_edit_kalkulator) {
-      return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit kalkulator." }, { status: 403 });
+    if (role !== "owner") {
+      const dbUser = user?.id ? await q<any>(
+        "select can_edit_kalkulator from dashboard_user where id = $1",
+        [user.id]
+      ) : [];
+      const perms = dbUser.length > 0 ? dbUser[0] : { can_edit_kalkulator: false };
+
+      if (!perms.can_edit_kalkulator) {
+        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit kalkulator." }, { status: 403 });
+      }
     }
 
     if (action === "update-settings") {

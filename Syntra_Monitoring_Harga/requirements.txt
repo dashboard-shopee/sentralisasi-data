@@ -1,0 +1,6 @@
+DrissionPage==4.1.1.2
+requests==2.32.5
+colorama==0.4.6
+python-dotenv==1.0.1
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3

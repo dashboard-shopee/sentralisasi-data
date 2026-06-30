@@ -67,11 +67,19 @@ export async function POST(request: Request) {
     const user = token ? await verifySession(token, secret) : null;
     const role = user?.role || "staff";
 
-    if (role !== "owner" && !user?.can_edit_competitor) {
-      return NextResponse.json(
-        { success: false, error: "Akses ditolak: Anda tidak memiliki izin untuk mengedit riset kompetitor." },
-        { status: 403 }
-      );
+    if (role !== "owner") {
+      const dbUser = user?.id ? await q<any>(
+        "select can_edit_competitor from dashboard_user where id = $1",
+        [user.id]
+      ) : [];
+      const perms = dbUser.length > 0 ? dbUser[0] : { can_edit_competitor: false };
+
+      if (!perms.can_edit_competitor) {
+        return NextResponse.json(
+          { success: false, error: "Akses ditolak: Anda tidak memiliki izin untuk mengedit riset kompetitor." },
+          { status: 403 }
+        );
+      }
     }
 
     const body = await request.json();
