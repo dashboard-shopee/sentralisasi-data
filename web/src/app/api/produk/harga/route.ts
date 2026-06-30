@@ -148,16 +148,97 @@ export async function GET(req: Request) {
         if (allowed.includes(sortCol)) order = `p.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
       }
       params.push(size, offset);
-      const prods = await q<any>(`select p.sku, p.parent_sku "parentSku", p.category, p.total_sales "totalSales", p.net_price "netPrice", p.diperbarui_pada "diperbaruiPada" from harga_komisi_produk p where ${W} order by ${order} limit $${params.length - 1} offset $${params.length}`, params);
+      // CTE for harga_diskon
+      const sqlBase = `
+        with base as (
+          select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.net_price_detail, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
+          from harga_all_produk h
+          left join erp_sku_list e on h.sku = e.sku
+          left join erp_shopee_metrics sm on h.sku = sm.sku
+        ),
+        kalkulator_settings as (
+          select 
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_packing_fee'), 400) as packing_fee,
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_service_fee_min_hpp'), 600) as min_hpp,
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_service_fee'), 1250) as service_fee,
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_admin_fee_pct'), 0.16) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_discount_ads_pct'), 0.06) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_salary_pct'), 0.08) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_commission_pct'), 0.0) as total_pct_biaya
+        ),
+        calc1 as (
+          select b.*, ks.packing_fee, ks.min_hpp, ks.service_fee, ks.total_pct_biaya,
+            (ks.packing_fee + (case when b.hpp >= ks.min_hpp then ks.service_fee else 0 end))::numeric as biaya_tetap,
+            (case when b.hpp < 500 then 0.25 when b.hpp < 1000 then 0.20 when b.hpp < 3000 then 0.15 else 0.12 end)::numeric as target_margin
+          from base b cross join kalkulator_settings ks
+        ),
+        calc2 as (
+          select c1.*,
+            (case when c1.override_net > 0 then c1.override_net else (c1.hpp + c1.biaya_tetap) / nullif((1.0 - c1.total_pct_biaya - c1.target_margin), 0) end)::numeric as net_price_awal
+          from calc1 c1
+        ),
+        calc3 as (
+          select c2.*,
+            (case when c2.total_qty > 0 then c2.net_price_awal - ((greatest(0, c2.total_qty - c2.total_orders) / c2.total_qty) * c2.service_fee) else c2.net_price_awal end)::numeric as net_price_detail,
+            (c2.packing_fee + (case when c2.total_qty > 0 then c2.service_fee * c2.total_orders / c2.total_qty else c2.service_fee end))::numeric as biaya_tetap_adjusted
+          from calc2 c2
+        ),
+        mode_diskon as (
+          select sku, mode() within group (order by harga_tampil) as mode_harga_tampil from harga_olah_data where harga_tampil > 0 group by sku
+        ),
+        final_diskon as (
+          select c3.sku, (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end)::numeric as harga_diskon
+          from calc3 c3 left join mode_diskon md on c3.sku = md.sku
+        )
+      `;
+
+      const prodsSql = `
+        ${sqlBase}
+        select p.sku, p.parent_sku "parentSku", p.category, p.total_sales "totalSales", p.net_price "netPrice", p.diperbarui_pada "diperbaruiPada", coalesce(fd.harga_diskon, 0) "hargaDiskon" 
+        from harga_komisi_produk p 
+        left join final_diskon fd on p.sku = fd.sku
+        where ${W} 
+        order by ${order} 
+        limit $${params.length - 1} offset $${params.length}
+      `;
+      const prods = await q<any>(prodsSql, params);
       const countParams = search ? [`%${search}%`] : [];
       const total = await q<{ count: string }>(`select count(*) from harga_komisi_produk p where ${W}`, countParams);
       if (prods.length === 0) return NextResponse.json({ rows: [], total: 0, tokos: activeTokos });
       const skus = prods.map((pr: any) => pr.sku);
-      const tokoDetails = await q<any>(`select sku, username_toko "toko", harga_saat_ini "hargaSaatIni", komisi_persen "komisiPersen", harga_jual "hargaJual" from harga_komisi_toko where sku = any($1)`, [skus]);
+      
+      const tokoDetails = await q<any>(`select sku, username_toko "toko", komisi_persen "komisiPersen", harga_jual "hargaJual" from harga_komisi_toko where sku = any($1)`, [skus]);
+      
+      const olahTokoPrices = await q<any>(`
+        select sku, toko, max(harga_tampil) as harga_tampil 
+        from harga_olah_data 
+        where sku = any($1) 
+        group by sku, toko
+      `, [skus]);
+
       const rows = prods.map((pr: any) => {
         const details = tokoDetails.filter((t: any) => t.sku === pr.sku);
         const tokos: Record<string, any> = {};
-        details.forEach((d: any) => { tokos[d.toko] = { hargaSaatIni: Number(d.hargaSaatIni), komisiPersen: Number(d.komisiPersen), hargaJual: Number(d.hargaJual) }; });
+        
+        activeTokos.forEach((tk: any) => {
+          const dt = details.find((d: any) => d.toko === tk.username);
+          const realPriceRow = olahTokoPrices.find((ot: any) => ot.sku === pr.sku && ot.toko === tk.nama);
+          
+          const hargaSaatIni = realPriceRow ? Number(realPriceRow.harga_tampil) : 0;
+          const komisiPersen = dt ? Number(dt.komisiPersen) : 10;
+          
+          // Recommended harga jual: Net Price / (1 - komisi_persen / 100)
+          const recHargaJual = Math.ceil(pr.netPrice / (1 - komisiPersen / 100));
+          const manualHargaJual = dt ? Number(dt.hargaJual) : 0;
+          const hargaJual = manualHargaJual > 0 ? manualHargaJual : recHargaJual;
+          
+          tokos[tk.username] = { 
+            hargaSaatIni, 
+            komisiPersen, 
+            hargaJual,
+            manualHargaJual 
+          };
+        });
         return { ...pr, tokos };
       });
       return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
@@ -272,6 +353,40 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ ok: true, message: `Update massal pada ${skus.length} SKU berhasil.` });
+    }
+
+    if (action === "update-komisi-toko") {
+      const { sku, toko, komisi_persen, harga_jual } = body;
+      await q(`
+        insert into harga_komisi_toko (sku, username_toko, komisi_persen, harga_jual, diperbarui_pada)
+        values ($1, $2, $3, $4, now())
+        on conflict (sku, username_toko) do update 
+        set komisi_persen = coalesce(excluded.komisi_persen, harga_komisi_toko.komisi_persen), 
+            harga_jual = coalesce(excluded.harga_jual, harga_komisi_toko.harga_jual), 
+            diperbarui_pada = now()
+      `, [sku, toko, komisi_persen !== undefined ? komisi_persen : null, harga_jual !== undefined ? harga_jual : null]);
+      
+      const aksiName = komisi_persen !== undefined ? 'Edit Komisi Persen' : 'Edit Harga Jual Manual';
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
+        [sku, `${aksiName} (${toko})`, komisi_persen !== undefined ? komisi_persen : harga_jual, username]);
+
+      return NextResponse.json({ ok: true, message: `Komisi toko ${toko} SKU ${sku} diperbarui.` });
+    }
+
+    if (action === "mass-update-komisi-toko") {
+      const { toko, komisi_persen } = body;
+      await q(`
+        insert into harga_komisi_toko (sku, username_toko, komisi_persen, harga_jual, diperbarui_pada)
+        select sku, $1, $2, 0, now() from harga_komisi_produk
+        on conflict (sku, username_toko) do update
+        set komisi_persen = excluded.komisi_persen,
+            diperbarui_pada = now()
+      `, [toko, komisi_persen]);
+      
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
+        ['ALL', `Mass Update Komisi (${toko})`, komisi_persen, username]);
+
+      return NextResponse.json({ ok: true, message: `Komisi massal toko ${toko} diperbarui menjadi ${komisi_persen}%.` });
     }
 
     return NextResponse.json({ ok: false, error: "Action tidak dikenal" }, { status: 400 });

@@ -42,13 +42,14 @@ interface KomisiRow {
   sku: string;
   parentSku: string | null;
   category: string | null;
-  totalSales: number;
   netPrice: number;
+  hargaDiskon: number;
   diperbaruiPada: string;
   tokos: Record<string, {
     hargaSaatIni: number;
     komisiPersen: number;
     hargaJual: number;
+    manualHargaJual: number;
   }>;
 }
 
@@ -92,6 +93,10 @@ export default function HargaPage() {
   const [editingPancingSku, setEditingPancingSku] = useState<string | null>(null);
   const [editPancingVal, setEditPancingVal] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Inline edit state for Komisi
+  const [editingKomisi, setEditingKomisi] = useState<{sku: string, toko: string, field: 'persen'|'jual'} | null>(null);
+  const [editKomisiVal, setEditKomisiVal] = useState("");
 
   // Mass Update State
   const [showMassModal, setShowMassModal] = useState(false);
@@ -202,6 +207,58 @@ export default function HargaPage() {
         fetchData();
       } else {
         alert("Gagal menyimpan harga pancing");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Terjadi kesalahan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveKomisiUpdate = async (sku: string, toko: string, field: 'persen'|'jual') => {
+    try {
+      setIsSaving(true);
+      const payload: any = { action: "update-komisi-toko", sku, toko };
+      if (field === 'persen') payload.komisi_persen = parseFloat(editKomisiVal);
+      if (field === 'jual') payload.harga_jual = parseFloat(editKomisiVal);
+
+      const res = await fetch("/api/produk/harga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setEditingKomisi(null);
+        fetchData();
+      } else {
+        alert("Gagal menyimpan data komisi");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Terjadi kesalahan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const handleMassKomisi = async (toko: string) => {
+    const val = prompt(`Masukkan komisi massal (%) untuk toko ${toko}:`);
+    if (val === null) return;
+    const pct = parseFloat(val);
+    if (isNaN(pct)) return alert("Masukkan angka valid");
+    
+    try {
+      setIsSaving(true);
+      const res = await fetch("/api/produk/harga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mass-update-komisi-toko", toko, komisi_persen: pct })
+      });
+      if (res.ok) {
+        fetchData();
+      } else {
+        alert("Gagal update massal komisi");
       }
     } catch (e) {
       console.error(e);
@@ -580,18 +637,22 @@ export default function HargaPage() {
               <th onClick={() => handleSort("category")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
                 Category {sortCol === "category" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("total_sales")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
-                Total Sales {sortCol === "total_sales" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-              </th>
               <th onClick={() => handleSort("net_price")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
                 Net Price {sortCol === "net_price" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("harga_diskon")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
+                Harga Diskon {sortCol === "harga_diskon" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               
               {/* Dynamic headers for Active Tokos */}
               {tokos.map((tk) => (
-                <th key={tk.username} className="p-3.5 text-[11px] text-[#4b5563] border-l border-[#eef0f6] text-center w-[160px] bg-[#fdfdfd]">
+                <th key={tk.username} className="p-3.5 text-[11px] text-[#4b5563] border-l border-[#eef0f6] text-center w-[160px] bg-[#fdfdfd] relative group">
                   <div className="font-bold text-[#ee4d2d] truncate max-w-[140px] mx-auto">{tk.nama}</div>
-                  <div className="text-[9px] text-[#8a90a2] mt-0.5">Saat ini | % | Jual</div>
+                  <div className="text-[9px] text-[#8a90a2] mt-0.5 flex justify-center gap-1.5 items-center">
+                     <span>Saat ini</span> 
+                     <span className="cursor-pointer hover:text-[#6b21a8] text-[#6b21a8] font-bold transition-colors" onClick={() => handleMassKomisi(tk.username)} title={`Set Komisi Massal ${tk.nama}`}>⚙️ %</span> 
+                     <span>Jual</span>
+                  </div>
                 </th>
               ))}
             </tr>
@@ -602,18 +663,56 @@ export default function HargaPage() {
                 <td className="p-3.5 font-bold text-[#161a27]">{r.sku}</td>
                 <td className="p-3.5"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
                 <td className="p-3.5 text-[#6b7180]">{r.category || "-"}</td>
-                <td className="p-3.5 text-right font-medium text-[#4b5563]">{formatRp(r.totalSales)}</td>
                 <td className="p-3.5 text-right font-semibold text-[#161a27]">{formatRp(r.netPrice)}</td>
+                <td className="p-3.5 text-right font-semibold text-[#ee4d2d]">{formatRp(r.hargaDiskon)}</td>
                 
                 {tokos.map((tk) => {
                   const tkData = r.tokos?.[tk.username];
                   return (
-                    <td key={tk.username} className="p-3.5 border-l border-[#eef0f6] text-center text-xs">
+                    <td key={tk.username} className="p-3.5 border-l border-[#eef0f6] text-center text-xs align-middle">
                       {tkData ? (
                         <div className="flex items-center justify-between gap-1 w-full font-medium">
                           <span className="text-[#6b7180]">{Math.round(tkData.hargaSaatIni / 1000)}k</span>
-                          <span className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] text-[10px] font-bold rounded">{tkData.komisiPersen}%</span>
-                          <span className="text-[#ee4d2d] font-bold">{Math.round(tkData.hargaJual / 1000)}k</span>
+                          
+                          {/* Komisi % Inline Edit */}
+                          {editingKomisi?.sku === r.sku && editingKomisi?.toko === tk.username && editingKomisi?.field === 'persen' ? (
+                            <div className="flex items-center gap-0.5">
+                              <input 
+                                autoFocus type="number" value={editKomisiVal} 
+                                onChange={(e) => setEditKomisiVal(e.target.value)}
+                                onKeyDown={(e) => { if(e.key==='Enter') saveKomisiUpdate(r.sku, tk.username, 'persen'); if(e.key==='Escape') setEditingKomisi(null); }}
+                                className="w-[30px] border border-[#6b21a8] rounded px-0.5 py-0.5 text-[9px] text-center outline-none bg-white"
+                              />
+                            </div>
+                          ) : (
+                            <span 
+                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'persen'}); setEditKomisiVal(String(tkData.komisiPersen)); }}
+                              className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] hover:bg-[#e9d5ff] cursor-pointer transition-colors text-[10px] font-bold rounded"
+                              title="Edit Komisi Persen"
+                            >
+                              {tkData.komisiPersen}%
+                            </span>
+                          )}
+
+                          {/* Harga Jual Inline Edit */}
+                          {editingKomisi?.sku === r.sku && editingKomisi?.toko === tk.username && editingKomisi?.field === 'jual' ? (
+                            <div className="flex items-center gap-0.5">
+                              <input 
+                                autoFocus type="number" value={editKomisiVal} 
+                                onChange={(e) => setEditKomisiVal(e.target.value)}
+                                onKeyDown={(e) => { if(e.key==='Enter') saveKomisiUpdate(r.sku, tk.username, 'jual'); if(e.key==='Escape') setEditingKomisi(null); }}
+                                className="w-[45px] border border-[#ee4d2d] rounded px-0.5 py-0.5 text-[10px] text-right outline-none bg-white"
+                              />
+                            </div>
+                          ) : (
+                            <span 
+                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : String(tkData.hargaJual)); }}
+                              className={`font-bold cursor-pointer hover:underline ${tkData.manualHargaJual > 0 ? 'text-[#0ea5e9]' : 'text-[#ee4d2d]'}`}
+                              title={tkData.manualHargaJual > 0 ? "Harga manual. Klik untuk edit" : "Rekomendasi. Klik untuk edit manual"}
+                            >
+                              {Math.round(tkData.hargaJual / 1000)}k
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-[#c3c6d1]">-</span>
