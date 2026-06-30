@@ -31,7 +31,7 @@ export default function Sidebar({
 }) {
   const path = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Produk": true });
-  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[] } | null>(null);
+  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[]; avatarEmoji?: string | null } | null>(null);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -239,8 +239,8 @@ export default function Sidebar({
             title={profile ? `${profile.username} (${role})` : "Profile"}
           >
             {/* Avatar Circle */}
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
-              {profile ? profile.username.charAt(0).toUpperCase() : "U"}
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-xs">
+              {profile?.avatarEmoji ? profile.avatarEmoji : (profile ? profile.username.charAt(0).toUpperCase() : "U")}
             </div>
             
             {/* User Info (Visible only when not minimized) */}

@@ -314,6 +314,20 @@ export async function POST(req: Request) {
     const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
     const user = token ? await verifySession(token, secret) : null;
     const username = user?.username || "System";
+    const role = user?.role || "staff";
+
+    // Validasi izin edit berdasarkan role dan permission
+    if (role !== "owner") {
+      const isCatalogEdit = ["update-custom-diskon", "update-custom-pancing", "mass-update-harga"].includes(action);
+      const isKomisiEdit = ["update-komisi-toko", "update-harga-jual-toko", "mass-update-komisi-toko", "add-komisi-produk", "delete-komisi-produk", "batch-update-jual"].includes(action);
+      
+      if (isCatalogEdit && !user?.can_edit_harga) {
+        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit harga katalog." }, { status: 403 });
+      }
+      if (isKomisiEdit && !user?.can_edit_komisi) {
+        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit komisi affiliate." }, { status: 403 });
+      }
+    }
 
     if (action === "update-custom-diskon") {
       if (!sku) return NextResponse.json({ ok: false, error: "SKU wajib diisi" }, { status: 400 });

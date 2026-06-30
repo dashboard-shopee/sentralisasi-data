@@ -9,6 +9,10 @@ interface UserAccount {
   allowed_menus: string[];
   can_edit_ads: boolean;
   can_edit_competitor: boolean;
+  can_edit_harga: boolean;
+  can_edit_komisi: boolean;
+  can_edit_kalkulator: boolean;
+  avatar_emoji: string | null;
   session_duration_days: number;
 }
 
@@ -40,6 +44,10 @@ export default function PengaturanAkses() {
   const [selectedMenus, setSelectedMenus] = useState<string[]>([]);
   const [canEditAdsInput, setCanEditAdsInput] = useState(false);
   const [canEditCompInput, setCanEditCompInput] = useState(false);
+  const [canEditHargaInput, setCanEditHargaInput] = useState(false);
+  const [canEditKomisiInput, setCanEditKomisiInput] = useState(false);
+  const [canEditKalkulatorInput, setCanEditKalkulatorInput] = useState(false);
+  const [avatarEmojiInput, setAvatarEmojiInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Load user list
@@ -74,6 +82,10 @@ export default function PengaturanAkses() {
     setSelectedMenus(["/"]); // default view Ringkasan
     setCanEditAdsInput(false);
     setCanEditCompInput(false);
+    setCanEditHargaInput(false);
+    setCanEditKomisiInput(false);
+    setCanEditKalkulatorInput(false);
+    setAvatarEmojiInput("");
     setShowModal(true);
   }
 
@@ -86,6 +98,10 @@ export default function PengaturanAkses() {
     setSelectedMenus(u.allowed_menus || []);
     setCanEditAdsInput(u.can_edit_ads);
     setCanEditCompInput(u.can_edit_competitor);
+    setCanEditHargaInput(u.can_edit_harga || false);
+    setCanEditKomisiInput(u.can_edit_komisi || false);
+    setCanEditKalkulatorInput(u.can_edit_kalkulator || false);
+    setAvatarEmojiInput(u.avatar_emoji || "");
     setShowModal(true);
   }
 
@@ -102,6 +118,10 @@ export default function PengaturanAkses() {
       allowed_menus: selectedMenus,
       can_edit_ads: canEditAdsInput,
       can_edit_competitor: canEditCompInput,
+      can_edit_harga: canEditHargaInput,
+      can_edit_komisi: canEditKomisiInput,
+      can_edit_kalkulator: canEditKalkulatorInput,
+      avatar_emoji: avatarEmojiInput,
       session_duration_days: Number(durationInput)
     };
 
@@ -210,12 +230,17 @@ export default function PengaturanAkses() {
                   <tr key={u.id} className="border-t border-[#f3f4f8] hover:bg-[#fafbfd] transition-all">
                     <td className="px-4 py-3.5 text-[#9aa0b2]">{index + 1}</td>
                     <td className="px-4 py-3.5 font-bold text-[#161a27]">
-                      {u.username}
-                      {isOwner && (
-                        <span className="ml-1.5 px-2 py-0.5 text-[9px] font-extrabold bg-[#fff1ed] text-[#ee4d2d] rounded-md border border-[#ffccbc]">
-                          Owner
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-[11px] shrink-0">
+                          {u.avatar_emoji ? u.avatar_emoji : u.username.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{u.username}</span>
+                        {isOwner && (
+                          <span className="ml-1.5 px-2 py-0.5 text-[9px] font-extrabold bg-[#fff1ed] text-[#ee4d2d] rounded-md border border-[#ffccbc]">
+                            Owner
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5 font-mono text-[#6b7180] tracking-wider select-all">
                       {isOwner ? "Restu_99 (Masked)" : u.password}
@@ -243,7 +268,7 @@ export default function PengaturanAkses() {
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-1 text-[11px] font-medium">
                         {isOwner ? (
-                          <span className="text-emerald-700 font-semibold flex items-center gap-1">✅ Edit Iklan & Riset</span>
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">✅ Semua Akses Edit</span>
                         ) : (
                           <>
                             <span className={u.can_edit_ads ? "text-emerald-700" : "text-gray-400"}>
@@ -251,6 +276,15 @@ export default function PengaturanAkses() {
                             </span>
                             <span className={u.can_edit_competitor ? "text-emerald-700" : "text-gray-400"}>
                               {u.can_edit_competitor ? "✅ Edit Riset" : "❌ Edit Riset"}
+                            </span>
+                            <span className={u.can_edit_harga ? "text-emerald-700" : "text-gray-400"}>
+                              {u.can_edit_harga ? "✅ Edit Katalog" : "❌ Edit Katalog"}
+                            </span>
+                            <span className={u.can_edit_komisi ? "text-emerald-700" : "text-gray-400"}>
+                              {u.can_edit_komisi ? "✅ Edit Komisi" : "❌ Edit Komisi"}
+                            </span>
+                            <span className={u.can_edit_kalkulator ? "text-emerald-700" : "text-gray-400"}>
+                              {u.can_edit_kalkulator ? "✅ Edit Kalkulator" : "❌ Edit Kalkulator"}
                             </span>
                           </>
                         )}
@@ -309,8 +343,43 @@ export default function PengaturanAkses() {
                   onChange={(e) => setUsernameInput(e.target.value)}
                   disabled={editingUser?.username === "Owner"}
                   placeholder="Contoh: Staff Iklan, Staff Riset"
-                  className="w-full border border-[#e6e9f0] rounded-xl px-3 py-2 text-[13px] focus:border-[#ee4d2d] outline-none mt-1 mt-1.5"
+                  className="w-full border border-[#e6e9f0] rounded-xl px-3 py-2 text-[13px] focus:border-[#ee4d2d] outline-none mt-1.5"
                 />
+              </div>
+
+              {/* Avatar Emoticon / Character */}
+              <div>
+                <label className="text-[12.5px] font-bold text-[#6b7180] block mb-1.5">Karakter / Emoticon Logo (Avatar)</label>
+                <div className="flex gap-2 items-center flex-wrap">
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={avatarEmojiInput}
+                    onChange={(e) => setAvatarEmojiInput(e.target.value)}
+                    placeholder="Inisial / Emoji (cth: 🦊)"
+                    className="w-[140px] border border-[#e6e9f0] rounded-xl px-3 py-2 text-[13px] focus:border-[#ee4d2d] outline-none bg-white"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {["🦊", "🦁", "🐨", "🐼", "🤖", "💻", "📈", "🚀", "🔥"].map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setAvatarEmojiInput(emoji)}
+                        className={`w-8 h-8 rounded-lg border text-sm flex items-center justify-center cursor-pointer transition-colors ${avatarEmojiInput === emoji ? 'border-[#ee4d2d] bg-[#fff1ed]' : 'border-[#e6e9f0] hover:bg-gray-50'}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setAvatarEmojiInput("")}
+                      className="px-2 h-8 rounded-lg border text-[11px] font-bold text-gray-500 cursor-pointer border-[#e6e9f0] hover:bg-gray-50"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#8a90a2] mt-1">Kosongkan untuk menggunakan inisial huruf pertama nama akun.</p>
               </div>
 
               {/* Password */}
@@ -384,7 +453,7 @@ export default function PengaturanAkses() {
                         onChange={(e) => setCanEditAdsInput(e.target.checked)}
                         className="rounded accent-[#ee4d2d]"
                       />
-                      <span>Bisa Edit Target ROAS & Budget Harian Iklan</span>
+                      <span>📢 Bisa Edit Target ROAS & Budget Harian Iklan</span>
                     </label>
                     <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
                       <input
@@ -393,7 +462,34 @@ export default function PengaturanAkses() {
                         onChange={(e) => setCanEditCompInput(e.target.checked)}
                         className="rounded accent-[#ee4d2d]"
                       />
-                      <span>Bisa Edit Link Manual Kompetitor Riset</span>
+                      <span>🔍 Bisa Edit Link Manual Kompetitor Riset</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={canEditHargaInput}
+                        onChange={(e) => setCanEditHargaInput(e.target.checked)}
+                        className="rounded accent-[#ee4d2d]"
+                      />
+                      <span>🏷️ Bisa Edit Custom Harga Diskon & Pancingan (Katalog)</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={canEditKomisiInput}
+                        onChange={(e) => setCanEditKomisiInput(e.target.checked)}
+                        className="rounded accent-[#ee4d2d]"
+                      />
+                      <span>🤝 Bisa Edit Rate Komisi & Harga Jual Toko (Komisi)</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={canEditKalkulatorInput}
+                        onChange={(e) => setCanEditKalkulatorInput(e.target.checked)}
+                        className="rounded accent-[#ee4d2d]"
+                      />
+                      <span>🧮 Bisa Edit Pengaturan Batch Kalkulator</span>
                     </label>
                   </div>
                 )}

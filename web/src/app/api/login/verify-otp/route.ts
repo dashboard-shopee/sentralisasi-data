@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
     // Ambil data Owner dari database untuk mendapatkan konfigurasi terupdate
     const ownerRes = await q<any>(
-      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, session_duration_days from dashboard_user where username = 'Owner' limit 1"
+      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days from dashboard_user where username = 'Owner' limit 1"
     );
 
     let ownerInfo = {
@@ -54,8 +54,12 @@ export async function POST(req: Request) {
         allowed_menus: typeof dbOwner.allowed_menus === "string" ? JSON.parse(dbOwner.allowed_menus) : dbOwner.allowed_menus,
         can_edit_ads: !!dbOwner.can_edit_ads,
         can_edit_competitor: !!dbOwner.can_edit_competitor,
+        can_edit_harga: !!dbOwner.can_edit_harga,
+        can_edit_komisi: !!dbOwner.can_edit_komisi,
+        can_edit_kalkulator: !!dbOwner.can_edit_kalkulator,
+        avatar_emoji: dbOwner.avatar_emoji || null,
         session_duration_days: dbOwner.session_duration_days || 30
-      };
+      } as any;
     }
 
     const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
@@ -68,7 +72,11 @@ export async function POST(req: Request) {
       role: "owner",
       allowed_menus: ownerInfo.allowed_menus,
       can_edit_ads: ownerInfo.can_edit_ads,
-      can_edit_competitor: ownerInfo.can_edit_competitor
+      can_edit_competitor: ownerInfo.can_edit_competitor,
+      can_edit_harga: (ownerInfo as any).can_edit_harga ?? true,
+      can_edit_komisi: (ownerInfo as any).can_edit_komisi ?? true,
+      can_edit_kalkulator: (ownerInfo as any).can_edit_kalkulator ?? true,
+      avatar_emoji: (ownerInfo as any).avatar_emoji || null
     };
 
     const sessionToken = await signSession(tokenPayload, secret, durationSeconds);

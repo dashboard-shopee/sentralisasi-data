@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   // 2. Cek Skenario Staf biasa (password dicocokkan ke database_user)
   try {
     const userRes = await q<any>(
-      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, session_duration_days from dashboard_user where password = $1",
+      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days from dashboard_user where password = $1",
       [inputPassword]
     );
 
@@ -58,7 +58,11 @@ export async function POST(req: Request) {
         role: user.username === "Owner" ? "owner" : "staff",
         allowed_menus: typeof user.allowed_menus === "string" ? JSON.parse(user.allowed_menus) : user.allowed_menus,
         can_edit_ads: !!user.can_edit_ads,
-        can_edit_competitor: !!user.can_edit_competitor
+        can_edit_competitor: !!user.can_edit_competitor,
+        can_edit_harga: !!user.can_edit_harga,
+        can_edit_komisi: !!user.can_edit_komisi,
+        can_edit_kalkulator: !!user.can_edit_kalkulator,
+        avatar_emoji: user.avatar_emoji || null
       };
 
       const sessionToken = await signSession(tokenPayload, secret, durationSeconds);

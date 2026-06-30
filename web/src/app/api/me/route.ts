@@ -25,7 +25,11 @@ export async function GET() {
       role: payload.role,
       allowedMenus: payload.allowed_menus || [],
       canEditAds: !!payload.can_edit_ads,
-      canEditCompetitor: !!payload.can_edit_competitor
+      canEditCompetitor: !!payload.can_edit_competitor,
+      canEditHarga: !!payload.can_edit_harga,
+      canEditKomisi: !!payload.can_edit_komisi,
+      canEditKalkulator: !!payload.can_edit_kalkulator,
+      avatarEmoji: payload.avatar_emoji || null
     }
   });
 }

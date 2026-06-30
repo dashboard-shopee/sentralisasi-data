@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
+import { cookies } from "next/headers";
+import { verifySession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +197,18 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const { action } = body;
+
+    // Ambil info user yang mengubah
+    const cookieStore = await cookies();
+    const token = cookieStore.get("dash_auth")?.value;
+    const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
+    const user = token ? await verifySession(token, secret) : null;
+    const role = user?.role || "staff";
+
+    // Validasi izin edit berdasarkan role dan permission
+    if (role !== "owner" && !user?.can_edit_kalkulator) {
+      return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin mengedit kalkulator." }, { status: 403 });
+    }
 
     if (action === "update-settings") {
       const { settings, type } = body;

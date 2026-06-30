@@ -22,7 +22,7 @@ export default function MobileNav() {
   const path = usePathname();
   const [minimized, setMinimized] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[] } | null>(null);
+  const [profile, setProfile] = useState<{ role: string; username: string; allowedMenus: string[]; avatarEmoji?: string | null } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -196,7 +196,7 @@ export default function MobileNav() {
             {/* Profile Info */}
             <div className="flex items-center gap-3 border-b border-[#eef0f6] pb-4">
               <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#ee4d2d] to-[#ff7043] flex items-center justify-center text-white font-bold text-lg shadow-xs">
-                {profile?.username ? profile.username.charAt(0).toUpperCase() : "U"}
+                {profile?.avatarEmoji ? profile.avatarEmoji : (profile?.username ? profile.username.charAt(0).toUpperCase() : "U")}
               </div>
               <div>
                 <div className="font-bold text-gray-800 text-base">{profile?.username || "Loading..."}</div>
