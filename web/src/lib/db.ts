@@ -7,7 +7,9 @@ export const pool: Pool =
   new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 3,
+    max: 1, // Batasi 1 koneksi per container serverless
+    idleTimeoutMillis: 1000, // Tutup koneksi idle dalam 1 detik untuk menghemat limit DB
+    connectionTimeoutMillis: 5000, // Fail fast jika koneksi penuh
   });
 if (!g._pool) g._pool = pool;
 
