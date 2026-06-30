@@ -296,6 +296,20 @@ export default function HargaPage() {
     } catch (err: any) { alert(err.message); }
   };
 
+  const handleDeleteParentSku = async () => {
+    const parentSku = prompt("Masukkan Parent SKU yang ingin dihapus dari Komisi:");
+    if (!parentSku) return;
+    try {
+      const res = await fetch("/api/produk/harga", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete-komisi-produk", parent_sku: parentSku })
+      });
+      const d = await res.json();
+      if (res.ok) { alert(d.message); fetchData(); }
+      else alert(d.error);
+    } catch (err: any) { alert(err.message); }
+  };
+
   const fetchMassSkus = useCallback(async (induk: string) => {
     if (!induk) return;
     setIsMassLoading(true);
@@ -656,19 +670,19 @@ export default function HargaPage() {
         <table className="w-full text-left border-collapse" style={{ minWidth: "1400px" }}>
           <thead>
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
-              <th onClick={() => handleSort("sku")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
+              <th onClick={() => handleSort("sku")} style={{ left: 0, width: 170, minWidth: 170 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
                 SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("parent_sku")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
-                Parent SKU {sortCol === "parent_sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              <th onClick={() => handleSort("parent_sku")} style={{ left: 170, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
+                Parent {sortCol === "parent_sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("category")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
+              <th onClick={() => handleSort("category")} style={{ left: 280, width: 90, minWidth: 90 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
                 Category {sortCol === "category" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("net_price")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
+              <th onClick={() => handleSort("net_price")} style={{ left: 370, width: 100, minWidth: 100 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right">
                 Net Price {sortCol === "net_price" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_diskon")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
+              <th onClick={() => handleSort("harga_diskon")} style={{ left: 470, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right shadow-[inset_-2px_0_0_#eef0f6]">
                 Harga Diskon {sortCol === "harga_diskon" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               
@@ -690,11 +704,11 @@ export default function HargaPage() {
           <tbody className="divide-y divide-[#eef0f6] text-[13px]">
             {list.map((r, i) => (
               <tr key={r.sku} className="hover:bg-[#fcfdfe] transition-colors">
-                <td className="p-3.5 font-bold text-[#161a27]">{r.sku}</td>
-                <td className="p-3.5"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
-                <td className="p-3.5 text-[#6b7180]">{r.category || "-"}</td>
-                <td className="p-3.5 text-right font-semibold text-[#161a27]">{formatRp(r.netPrice)}</td>
-                <td className="p-3.5 text-right font-semibold text-[#ee4d2d]">{formatRp(r.hargaDiskon)}</td>
+                <td style={{ left: 0 }} className="p-3.5 font-bold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.sku}</td>
+                <td style={{ left: 170 }} className="p-3.5 sticky z-10 bg-white group-hover:bg-[#fcfdfe]"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
+                <td style={{ left: 280 }} className="p-3.5 text-[#6b7180] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.category || "-"}</td>
+                <td style={{ left: 370 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{formatRp(r.netPrice)}</td>
+                <td style={{ left: 470 }} className="p-3.5 text-right font-semibold text-[#ee4d2d] sticky z-10 bg-white group-hover:bg-[#fcfdfe] shadow-[inset_-2px_0_0_#eef0f6]">{formatRp(r.hargaDiskon)}</td>
                 
                 {tokos.map((tk) => {
                   const tkData = r.tokos?.[tk.username];
@@ -830,12 +844,20 @@ export default function HargaPage() {
               Kelola data master SKU, performa diskon promo shopee, dan rate komisi affiliate.
             </p>
             {tab === "komisi" && (
-            <button
-              onClick={handleAddParentSku}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-[#8b5cf6] text-white rounded hover:bg-[#7c3aed] transition-colors shadow-sm flex items-center gap-1.5"
-            >
-              <span>➕ Tambah by Parent SKU</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddParentSku}
+                className="px-3.5 py-1.5 text-xs font-semibold bg-[#8b5cf6] text-white rounded hover:bg-[#7c3aed] transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <span>➕ Tambah by Parent SKU</span>
+              </button>
+              <button
+                onClick={handleDeleteParentSku}
+                className="px-3.5 py-1.5 text-xs font-semibold bg-white border border-[#e11d48] text-[#e11d48] rounded hover:bg-[#fff1f2] transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <span>🗑️ Hapus by Parent SKU</span>
+              </button>
+            </div>
           )}
           
           {tab === "all" && rows.length > 0 && (

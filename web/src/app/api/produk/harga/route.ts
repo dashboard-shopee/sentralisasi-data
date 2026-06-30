@@ -441,6 +441,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, message: `Produk dengan Parent SKU ${parent_sku} ditambahkan ke Komisi.` });
     }
 
+    if (action === "delete-komisi-produk") {
+      const { parent_sku } = body;
+      if (!parent_sku) return NextResponse.json({ ok: false, error: "Parent SKU wajib diisi" }, { status: 400 });
+
+      await q(`delete from harga_komisi_produk where parent_sku ilike $1`, [parent_sku]);
+      return NextResponse.json({ ok: true, message: `Produk dengan Parent SKU ${parent_sku} dihapus dari Komisi.` });
+    }
+
     if (action === "batch-update-jual") {
       const { toko, updates } = body;
       if (!toko || !updates || !Array.isArray(updates)) return NextResponse.json({ ok: false, error: "Data tidak valid" }, { status: 400 });
