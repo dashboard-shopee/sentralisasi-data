@@ -11,8 +11,10 @@ interface AllProdukRow {
   net_price_detail: number | null;
   harga_awal: number | null;
   harga_diskon: number | null;
+  custom_harga_diskon: number | null;
+  margin_persen: number | null;
   harga_pancing: number | null;
-  harga_toko: Record<string, number | null> | string | null;
+  catalogs: any[];
   diperbarui_pada: string;
 }
 
@@ -72,6 +74,11 @@ export default function HargaPage() {
   const [tokos, setTokos] = useState<TokoInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Inline edit state for Custom Harga Diskon
+  const [editingDiskonSku, setEditingDiskonSku] = useState<string | null>(null);
+  const [editDiskonVal, setEditDiskonVal] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
   const formatRp = (n: number | null | undefined) => {
     if (n === null || n === undefined) return "-";
     return "Rp" + Math.round(n).toLocaleString("id-ID");
@@ -128,6 +135,32 @@ export default function HargaPage() {
     fetchData();
   }, [fetchData]);
 
+  const saveCustomDiskon = async (sku: string) => {
+    try {
+      setIsSaving(true);
+      const res = await fetch("/api/produk/harga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-custom-diskon",
+          sku,
+          custom_harga_diskon: editDiskonVal
+        })
+      });
+      if (res.ok) {
+        setEditingDiskonSku(null);
+        fetchData();
+      } else {
+        alert("Gagal menyimpan harga diskon");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Terjadi kesalahan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Reset pagination on search / tab change
   const handleTabChange = (t: "all" | "olah" | "komisi") => {
     setTab(t);
@@ -159,87 +192,136 @@ export default function HargaPage() {
     const list = rows as AllProdukRow[];
     return (
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse" style={{ minWidth: "2000px" }}>
+        <table className="w-full text-left border-collapse" style={{ minWidth: "1900px" }}>
           <thead>
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
-              <th onClick={() => handleSort("sku")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[120px]">
+              <th onClick={() => handleSort("sku")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
                 SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("sku_induk")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[120px]">
+              <th onClick={() => handleSort("sku_induk")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px]">
                 SKU Induk {sortCol === "sku_induk" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("nama_produk")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[250px]">
+              <th onClick={() => handleSort("nama_produk")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[230px]">
                 Nama Produk {sortCol === "nama_produk" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("category")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px]">
+              <th onClick={() => handleSort("category")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[90px]">
                 Category {sortCol === "category" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("net_price_awal")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[120px] text-right">
+              <th onClick={() => handleSort("net_price_awal")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right">
                 Net Price Awal {sortCol === "net_price_awal" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("net_price_detail")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[120px] text-right">
-                Net Price Detail {sortCol === "net_price_detail" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              <th onClick={() => handleSort("net_price_detail")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right text-[#0369a1] bg-[#e0f2fe]/40">
+                Net Detail {sortCol === "net_price_detail" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_awal")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right">
+              <th onClick={() => handleSort("margin_persen")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[80px] text-right">
+                Margin {sortCol === "margin_persen" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => handleSort("harga_awal")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
                 Harga Awal {sortCol === "harga_awal" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_diskon")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right">
+              <th onClick={() => handleSort("harga_diskon")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right text-[#ee4d2d] bg-[#fff1ed]/40">
                 Harga Diskon {sortCol === "harga_diskon" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_pancing")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right">
+              <th onClick={() => handleSort("harga_pancing")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
                 Harga Pancing {sortCol === "harga_pancing" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               {/* Dynamic Store Headers */}
               {tokos.map((tk) => (
-                <th key={tk.username} className="p-3.5 text-[11px] text-[#4b5563] border-l border-[#eef0f6] text-center w-[120px] bg-[#fdfdfd] font-bold">
-                  <div className="truncate max-w-[110px] mx-auto text-[#ee4d2d]" title={tk.nama}>{tk.nama.replace(" Store", "").replace(" OFFICIAL STORE", "")}</div>
+                <th key={tk.username} className="px-2 py-2 text-[10px] text-[#4b5563] border-l border-[#eef0f6] text-center w-[100px] bg-[#fdfdfd] font-bold">
+                  <div className="truncate max-w-[90px] mx-auto text-[#ee4d2d]" title={tk.nama}>{tk.nama.replace(" Store", "").replace(" OFFICIAL STORE", "")}</div>
                 </th>
               ))}
-              <th onClick={() => handleSort("diperbarui_pada")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px] border-l border-[#eef0f6] text-center">
-                Terakhir Sinkron {sortCol === "diperbarui_pada" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#eef0f6] text-[13px]">
+          <tbody className="divide-y divide-[#eef0f6] text-[12px]">
             {list.map((r, i) => (
               <tr key={r.sku} className="hover:bg-[#fcfdfe] transition-colors">
-                <td className="p-3.5 font-bold text-[#161a27]">{r.sku}</td>
-                <td className="p-3.5">
-                  <span className="px-2 py-1 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-semibold rounded-md">
+                <td className="px-2 py-2 font-bold text-[#161a27] align-middle">{r.sku}</td>
+                <td className="px-2 py-2 align-middle">
+                  <span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[10px] font-semibold rounded">
                     {r.sku_induk || "-"}
                   </span>
                 </td>
-                <td className="p-3.5 text-[#4b5563] truncate max-w-[250px]" title={r.nama_produk || ""}>
+                <td className="px-2 py-2 text-[#4b5563] truncate max-w-[230px] align-middle" title={r.nama_produk || ""}>
                   {r.nama_produk || "-"}
                 </td>
-                <td className="p-3.5 text-[#6b7180]">{r.category || "-"}</td>
-                <td className="p-3.5 text-right text-[#4b5563]">{r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
-                <td className="p-3.5 text-right text-[#4b5563]">{r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
-                <td className="p-3.5 text-right text-[#6b7180]">{r.harga_awal !== null && r.harga_awal !== undefined ? formatRp(r.harga_awal) : "-"}</td>
-                <td className="p-3.5 text-right text-[#6b7180]">{r.harga_diskon !== null && r.harga_diskon !== undefined ? formatRp(r.harga_diskon) : "-"}</td>
-                <td className="p-3.5 text-right text-[#6b7180]">{r.harga_pancing !== null && r.harga_pancing !== undefined ? formatRp(r.harga_pancing) : "-"}</td>
+                <td className="px-2 py-2 text-[#6b7180] align-middle">{r.category || "-"}</td>
+                <td className="px-2 py-2 text-right text-[#4b5563] align-middle">{r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
+                <td className="px-2 py-2 text-right font-medium text-[#0369a1] bg-[#e0f2fe]/10 align-middle">{r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
                 
-                {/* Dynamic Store Cells */}
+                {/* Margin Persen */}
+                <td className="px-2 py-2 text-right font-bold align-middle">
+                  {r.margin_persen !== null && r.margin_persen !== undefined ? (
+                    <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
+                      {(r.margin_persen * 100).toFixed(1)}%
+                    </span>
+                  ) : "-"}
+                </td>
+
+                <td className="px-2 py-2 text-right text-[#6b7180] align-middle">{r.harga_awal !== null && r.harga_awal !== undefined ? formatRp(r.harga_awal) : "-"}</td>
+                
+                {/* Editable Harga Diskon */}
+                <td className="px-2 py-2 text-right align-middle bg-[#fff1ed]/10">
+                  {editingDiskonSku === r.sku ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <input 
+                        autoFocus
+                        type="number" 
+                        value={editDiskonVal}
+                        onChange={(e) => setEditDiskonVal(e.target.value)}
+                        className="w-[70px] border border-[#ee4d2d] rounded px-1 py-0.5 text-[11px] text-right outline-none bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveCustomDiskon(r.sku);
+                          if (e.key === "Escape") setEditingDiskonSku(null);
+                        }}
+                      />
+                      <button onClick={() => saveCustomDiskon(r.sku)} disabled={isSaving} className="text-[#ee4d2d] hover:text-[#c4361e] cursor-pointer" title="Simpan">
+                        {isSaving ? "⏳" : "✔️"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="cursor-pointer group flex items-center justify-end gap-1 hover:bg-[#fff1ed] hover:text-[#ee4d2d] rounded px-1 -mx-1 transition-colors"
+                      onClick={() => { setEditingDiskonSku(r.sku); setEditDiskonVal(r.custom_harga_diskon !== null ? String(r.custom_harga_diskon) : ""); }}
+                      title={r.custom_harga_diskon !== null ? "Harga kustom aktif. Klik untuk mengubah" : "Harga default. Klik untuk menimpa"}
+                    >
+                      <span className={r.custom_harga_diskon !== null ? "text-[#ee4d2d] font-bold" : "text-[#161a27] font-semibold"}>
+                        {r.harga_diskon !== null && r.harga_diskon !== undefined ? formatRp(r.harga_diskon) : "-"}
+                      </span>
+                      <span className="text-[9px] opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                    </div>
+                  )}
+                </td>
+
+                <td className="px-2 py-2 text-right text-[#6b7180] align-middle">{r.harga_pancing !== null && r.harga_pancing !== undefined ? formatRp(r.harga_pancing) : "-"}</td>
+                
+                {/* Dynamic Store Cells (Multiple Catalogs per Store) */}
                 {tokos.map((tk) => {
-                  let priceToko: Record<string, number | null> = {};
-                  try {
-                    if (typeof r.harga_toko === "string") {
-                      priceToko = JSON.parse(r.harga_toko);
-                    } else if (r.harga_toko && typeof r.harga_toko === "object") {
-                      priceToko = r.harga_toko;
-                    }
-                  } catch (e) {
-                    console.error("Parse error:", e);
-                  }
-                  const price = priceToko?.[tk.username];
+                  const storeCats = (r.catalogs || []).filter((c: any) => c.toko === tk.nama);
                   return (
-                    <td key={tk.username} className="p-3.5 border-l border-[#eef0f6] text-center font-semibold text-xs">
-                      {price !== undefined && price !== null ? formatRp(price) : "-"}
+                    <td key={tk.username} className="px-2 py-1.5 border-l border-[#eef0f6] text-center text-[11px] align-middle">
+                      {storeCats.length > 0 ? (
+                        <div className="flex flex-col gap-1 items-center justify-center">
+                          {storeCats.map((c: any, idx: number) => {
+                            const price = c.harga;
+                            const isRugi = r.harga_diskon !== null && r.harga_diskon > 0 && price > 0 && price < r.harga_diskon;
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`px-1.5 py-0.5 rounded font-bold w-max ${isRugi ? 'bg-[#fff1ed] text-[#ee4d2d]' : 'bg-[#f8f9fa] text-[#4b5563]'} border ${isRugi ? 'border-[#ffddcc]' : 'border-transparent'}`}
+                                title={`Item ID: ${c.itemId}`}
+                              >
+                                {formatRp(price)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-[#e2e4ea]">-</span>
+                      )}
                     </td>
                   );
                 })}
-                
-                <td className="p-3.5 text-[#8a90a2] border-l border-[#eef0f6] text-center">{formatDate(r.diperbarui_pada)}</td>
               </tr>
             ))}
           </tbody>
@@ -415,9 +497,16 @@ export default function HargaPage() {
           <h1 className="text-[22px] font-extrabold tracking-tight flex items-center gap-2 text-[#3a3f4d]">
             <span>🏷️</span> Monitoring Harga & Komisi
           </h1>
-          <p className="text-[13px] text-[#8a90a2] mt-0.5">
-            Kelola data master SKU, performa diskon promo shopee, dan rate komisi affiliate secara terintegrasi.
-          </p>
+          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 mt-0.5">
+            <p className="text-[13px] text-[#8a90a2]">
+              Kelola data master SKU, performa diskon promo shopee, dan rate komisi affiliate.
+            </p>
+            {tab === "all" && rows.length > 0 && (
+              <span className="text-[11px] px-2 py-0.5 bg-[#f0f2f5] text-[#6b7180] rounded-md font-medium whitespace-nowrap">
+                Terakhir Sinkron: {formatDate(rows[0]?.diperbarui_pada)}
+              </span>
+            )}
+          </div>
         </div>
         
         {/* Search */}
