@@ -19,6 +19,17 @@ const KATALOG = [
     ],
   },
   {
+    key: "harga",
+    label: "Syntra Monitoring Harga",
+    pemicu: [
+      { key: "grab", label: "Log Ambil Produk (Grab)" },
+      { key: "rubah_harga", label: "Log Rubah Harga" },
+      { key: "verifikasi", label: "Log Verifikasi" },
+      { key: "duplikat_promo", label: "Log Duplikat Promo" },
+      { key: "kampanye", label: "Log Kampanye Bulanan" },
+    ],
+  },
+  {
     key: "riset",
     label: "Syntra Riset Kompetitor",
     pemicu: [{ key: "siklus", label: "Log Setiap Siklus" }],

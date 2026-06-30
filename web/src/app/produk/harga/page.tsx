@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { tsWIB } from "@/lib/format";
 
 interface AllProdukRow {
   sku: string;
@@ -71,6 +72,13 @@ interface RiwayatRow {
 
 export default function HargaPage() {
   const [tab, setTab] = useState<"all" | "olah" | "komisi" | "riwayat">("all");
+  const [jejakHarga, setJejakHarga] = useState<{ dataTerakhir: string | null; fase: Record<string, string | null> } | null>(null);
+  useEffect(() => {
+    fetch("/api/produk/harga/jejak", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setJejakHarga(j))
+      .catch(() => {});
+  }, []);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [size] = useState(50);
@@ -846,6 +854,16 @@ export default function HargaPage() {
           <h1 className="text-[22px] font-extrabold tracking-tight flex items-center gap-2 text-[#3a3f4d]">
             <span>🏷️</span> Monitoring Harga & Komisi
           </h1>
+          {jejakHarga && (
+            <p className="text-[11px] text-[#b4b9c6] mt-1 leading-relaxed">
+              🔄 Data terakhir: <span className="text-[#8a90a2] font-medium">{tsWIB(jejakHarga.dataTerakhir)}</span>
+              {"  ·  "}Grab: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.grab)}</span>
+              {"  ·  "}Rubah Harga: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.rubah_harga)}</span>
+              {"  ·  "}Verifikasi: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.verifikasi)}</span>
+              {"  ·  "}Duplikat Promo: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.duplikat_promo)}</span>
+              {"  ·  "}Kampanye: <span className="text-[#8a90a2]">{tsWIB(jejakHarga.fase.kampanye)}</span>
+            </p>
+          )}
           <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 mt-0.5">
             <p className="text-[13px] text-[#8a90a2]">
               Kelola data master SKU, performa diskon promo shopee, dan rate komisi affiliate.
