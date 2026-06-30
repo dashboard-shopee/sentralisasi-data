@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       W += ` and (sku ilike $1 or parent_sku ilike $1 or product_name ilike $1 or current_category ilike $1 or po_no ilike $1)`;
     }
 
-    let order = "sku asc";
+    let order = "coalesce(ps.parent_qty, 0) desc, parent_sku asc, sku asc";
     if (sortCol) {
       const allowed = ["sku", "parent_sku", "product_name", "current_category", "total_stock", "total_inbound", "ttos_date", "po_no", "ordered_at", "forecast_val"];
       if (allowed.includes(sortCol)) {
@@ -63,10 +63,19 @@ export async function GET(req: Request) {
 
     params.push(size, offset);
     const rows = await q<any>(
-      `select sku, parent_sku "parentSku", product_name "productName", current_category "category", 
+      `with parent_sales as (
+         select 
+           coalesce(nullif(e2.parent_sku, ''), e2.sku) as parent_group,
+           sum(coalesce(sm.total_qty, 0)) as parent_qty
+         from erp_sku_list e2
+         left join erp_shopee_metrics sm on e2.sku = sm.sku
+         group by coalesce(nullif(e2.parent_sku, ''), e2.sku)
+       )
+       select sku, parent_sku "parentSku", product_name "productName", current_category "category", 
               total_stock "stock", total_inbound "inbound", ttos_date "ttosDate", po_no "poNo", 
               ordered_at "orderedAt", forecast_val "forecast"
        from erp_sku_list
+       left join parent_sales ps on coalesce(nullif(parent_sku, ''), sku) = ps.parent_group
        where ${W}
        order by ${order}
        limit $${params.length - 1} offset $${params.length}`,

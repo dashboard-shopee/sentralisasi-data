@@ -32,8 +32,8 @@ export default function StokPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [size] = useState(50);
-  const [sortCol, setSortCol] = useState("sku");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortCol, setSortCol] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const [rows, setRows] = useState<SkuRow[]>([]);
   const [total, setTotal] = useState(0);

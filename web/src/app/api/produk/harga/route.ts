@@ -45,7 +45,8 @@ export async function GET(req: Request) {
             h.custom_harga_diskon, h.custom_harga_pancing,
             coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net,
             coalesce(sm.total_qty, 0)::numeric as total_qty,
-            coalesce(sm.total_orders, 0)::numeric as total_orders
+            coalesce(sm.total_orders, 0)::numeric as total_orders,
+            sum(coalesce(sm.total_qty, 0)) over (partition by coalesce(nullif(h.sku_induk, ''), h.sku))::numeric as parent_total_qty
           from harga_all_produk h
           left join erp_sku_list e on h.sku = e.sku
           left join erp_shopee_metrics sm on h.sku = sm.sku
@@ -97,7 +98,8 @@ export async function GET(req: Request) {
             (case when (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end) > 0 
                then 1.0 - c3.total_pct_biaya - ((c3.hpp + c3.biaya_tetap_adjusted) / nullif((case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end), 0))
                else 0.0 end)::numeric as margin_persen,
-            coalesce(ot.catalogs, '[]'::jsonb) as catalogs
+            coalesce(ot.catalogs, '[]'::jsonb) as catalogs,
+            c3.parent_total_qty
           from calc3 c3
           left join mode_diskon md on c3.sku = md.sku
           left join olah_toko ot on c3.sku = ot.sku
@@ -107,7 +109,7 @@ export async function GET(req: Request) {
       const rowsSql = `
         ${sqlBase}
         select * from final 
-        order by ${sortCol ? (["sku", "sku_induk", "nama_produk", "category", "harga_awal", "harga_pancing", "diperbarui_pada"].includes(sortCol) ? sortCol : `"${sortCol}"`) : 'sku'} ${sortDir === "asc" ? "asc" : "desc"} 
+        order by ${sortCol ? (["sku", "sku_induk", "nama_produk", "category", "harga_awal", "harga_pancing", "diperbarui_pada"].includes(sortCol) ? sortCol : `"${sortCol}"`) : 'parent_total_qty'} ${sortCol ? (sortDir === "asc" ? "asc" : "desc") : 'desc'}, sku_induk asc, sku asc 
         limit $${params.length + 1} offset $${params.length + 2}
       `;
       
@@ -127,13 +129,35 @@ export async function GET(req: Request) {
         params.push(`%${search}%`);
         W += ` and (sku ilike $${params.length} or nama_produk ilike $${params.length} or nama_variasi ilike $${params.length} or item_id::text like $${params.length} or model_id::text like $${params.length})`;
       }
-      let order = "toko asc, item_id asc, model_id asc";
+      let order = "coalesce(ss.parent_qty, 0) desc, ho.toko asc, ho.item_id asc, ho.model_id asc";
       if (sortCol) {
         const allowed = ["toko", "item_id", "model_id", "ptag", "sku", "nama_variasi", "nama_produk", "harga_awal", "harga_diskon_db", "harga_pancing", "harga_akhir_target", "harga_tampil", "selisih", "sumber_harga", "alasan", "diperbarui_pada"];
-        if (allowed.includes(sortCol)) order = `${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
+        if (allowed.includes(sortCol)) order = `ho.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
       }
       params.push(size, offset);
-      const rows = await q<any>(`select toko, item_id "itemId", model_id "modelId", ptag, sku, nama_variasi "namaVariasi", nama_produk "namaProduk", harga_awal "hargaAwal", harga_diskon_db "hargaDiskonDb", harga_pancing "hargaPancing", harga_akhir_target "hargaAkhirTarget", harga_tampil "hargaTampil", selisih, sumber_harga "sumberHarga", alasan, diperbarui_pada "diperbaruiPada" from harga_olah_data where ${W} order by ${order} limit $${params.length - 1} offset $${params.length}`, params);
+      const rows = await q<any>(`
+        with parent_sales as (
+          select 
+            coalesce(nullif(e2.parent_sku, ''), e2.sku) as parent_group,
+            sum(coalesce(sm.total_qty, 0)) as parent_qty
+          from erp_sku_list e2
+          left join erp_shopee_metrics sm on e2.sku = sm.sku
+          group by coalesce(nullif(e2.parent_sku, ''), e2.sku)
+        ),
+        sku_sales as (
+          select 
+            e2.sku as sales_sku,
+            coalesce(ps.parent_qty, 0) as parent_qty
+          from erp_sku_list e2
+          left join parent_sales ps on coalesce(nullif(e2.parent_sku, ''), e2.sku) = ps.parent_group
+        )
+        select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal", ho.harga_diskon_db "hargaDiskonDb", ho.harga_pancing "hargaPancing", ho.harga_akhir_target "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diperbarui_pada "diperbaruiPada" 
+        from harga_olah_data ho
+        left join sku_sales ss on ho.sku = ss.sales_sku
+        where ${W} 
+        order by ${order} 
+        limit $${params.length - 1} offset $${params.length}
+      `, params);
       const countParams = [...params]; countParams.splice(countParams.length - 2, 2);
       const total = await q<{ count: string }>(`select count(*) from harga_olah_data where ${W}`, countParams);
       return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
@@ -142,7 +166,7 @@ export async function GET(req: Request) {
       let W = "1=1";
       const params: unknown[] = [];
       if (search) { params.push(`%${search}%`); W += ` and (p.sku ilike $1 or p.parent_sku ilike $1 or p.category ilike $1)`; }
-      let order = "p.sku asc";
+      let order = "p.total_sales desc, p.parent_sku asc, p.sku asc";
       if (sortCol) {
         const allowed = ["sku", "parent_sku", "category", "total_sales", "net_price"];
         if (allowed.includes(sortCol)) order = `p.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;

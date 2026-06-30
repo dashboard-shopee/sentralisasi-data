@@ -124,8 +124,8 @@ export default function KalkulatorPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [marginFilter, setMarginFilter] = useState("");
   const [page, setPage] = useState(1);
-  const [sortCol, setSortCol] = useState("sku");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortCol, setSortCol] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // Product editing state
   const [editingProduct, setEditingProduct] = useState<{

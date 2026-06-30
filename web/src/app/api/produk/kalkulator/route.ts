@@ -82,7 +82,15 @@ export async function GET(req: Request) {
 
     // CTE Query calculating everything dynamically
     const sqlBase = `
-      with base as (
+      with parent_sales as (
+        select 
+          coalesce(nullif(e2.parent_sku, ''), e2.sku) as parent_group,
+          sum(coalesce(sm.total_qty, 0)) as parent_qty
+        from erp_sku_list e2
+        left join erp_shopee_metrics sm on e2.sku = sm.sku
+        group by coalesce(nullif(e2.parent_sku, ''), e2.sku)
+      ),
+      base as (
         select 
           e.sku,
           coalesce(s.status, '') as status,
@@ -95,9 +103,11 @@ export async function GET(req: Request) {
             when coalesce(e.hpp, 0) < 1000 then 0.20 
             when coalesce(e.hpp, 0) < 3000 then 0.15 
             else 0.12 
-          end)::float as target_margin
+          end)::float as target_margin,
+          coalesce(ps.parent_qty, 0)::float as parent_qty
         from erp_sku_list e
         left join sku_database_link s on e.sku = s.sku
+        left join parent_sales ps on coalesce(nullif(e.parent_sku, ''), e.sku) = ps.parent_group
       ),
       calc1 as (
         select 
@@ -108,6 +118,7 @@ export async function GET(req: Request) {
           override_net,
           biaya_tetap,
           target_margin,
+          parent_qty,
           (case 
             when override_net > 0 then override_net 
             else (hpp + biaya_tetap) / (1.0 - $4 - target_margin) 
@@ -122,6 +133,7 @@ export async function GET(req: Request) {
           hpp,
           override_net,
           harga_jual_net,
+          parent_qty,
           ceil(harga_jual_net / 100.0) * 100 as net_rounded_100,
           (case 
             when harga_jual_net > 0 then (1.0 - $4 - (hpp + biaya_tetap) / harga_jual_net) 
@@ -139,6 +151,7 @@ export async function GET(req: Request) {
           harga_jual_net,
           net_rounded_100,
           actual_margin,
+          parent_qty,
           (case 
             when actual_margin >= 0.12 then 'Good' 
             when actual_margin > 0.08 then 'Average' 
@@ -157,7 +170,7 @@ export async function GET(req: Request) {
     }
 
     // Sorting
-    let order = "sku asc";
+    let order = "parent_qty desc, sku asc";
     const allowedSort = ["sku", "status", "nama_produk", "hpp", "override_net", "harga_jual_net", "actual_margin", "margin_status"];
     if (sortCol && allowedSort.includes(sortCol)) {
       order = `${sortCol === "nama_produk" ? "nama_produk" : sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
