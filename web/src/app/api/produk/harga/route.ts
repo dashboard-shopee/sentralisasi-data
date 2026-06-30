@@ -151,7 +151,7 @@ export async function GET(req: Request) {
       // CTE for harga_diskon
       const sqlBase = `
         with base as (
-          select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.net_price_detail, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
+          select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
           from harga_all_produk h
           left join erp_sku_list e on h.sku = e.sku
           left join erp_shopee_metrics sm on h.sku = sm.sku
