@@ -78,13 +78,23 @@ export default function RisetKompetitorPage() {
   const [detailProduct, setDetailProduct] = useState<ProductAcuan | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorDetail[]>([]);
   const [dbLink, setDbLink] = useState<DatabaseLink | null>(null);
+  const [excludedCompetitors, setExcludedCompetitors] = useState<any[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [activeDetailTab, setActiveDetailTab] = useState<"similar" | "manual">("similar");
+  const [activeDetailTab, setActiveDetailTab] = useState<"similar" | "manual" | "excluded">("similar");
   
   // Modal Edit Manual Links
   const [showEditModal, setShowEditModal] = useState(false);
   const [manualLinksInput, setManualLinksInput] = useState("");
   const [savingManual, setSavingManual] = useState(false);
+
+  // Modal Add Product Acuan
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSku, setNewSku] = useState("");
+  const [newMarket, setNewMarket] = useState("WP");
+  const [newLink, setNewLink] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState(false);
 
   // Fetch product list
   useEffect(() => {
@@ -123,6 +133,7 @@ export default function RisetKompetitorPage() {
       setDetailProduct(null);
       setCompetitors([]);
       setDbLink(null);
+      setExcludedCompetitors([]);
       return;
     }
 
@@ -135,6 +146,7 @@ export default function RisetKompetitorPage() {
           setDetailProduct(json.data.product);
           setCompetitors(json.data.competitors);
           setDbLink(json.data.databaseLink);
+          setExcludedCompetitors(json.data.excluded || []);
           
           // Set default edit text input
           const manualCompetitors = json.data.competitors.filter((c: any) => c.tipe === "manual");
@@ -172,6 +184,7 @@ export default function RisetKompetitorPage() {
         if (detailsJson.success) {
           setDetailProduct(detailsJson.data.product);
           setCompetitors(detailsJson.data.competitors);
+          setExcludedCompetitors(detailsJson.data.excluded || []);
         }
       } else {
         alert(json.error || "Gagal menyimpan link");
@@ -180,6 +193,142 @@ export default function RisetKompetitorPage() {
       alert("Error: " + err.message);
     } finally {
       setSavingManual(false);
+    }
+  };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSku.trim() || !newMarket || !newLink.trim()) {
+      alert("SKU, Market, dan Link Produk wajib diisi.");
+      return;
+    }
+    setAddingProduct(true);
+    try {
+      const res = await fetch("/api/riset-kompetitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: newSku,
+          market: newMarket,
+          link_produk: newLink,
+          product_category: newCategory
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message || "Produk acuan berhasil ditambahkan!");
+        setShowAddModal(false);
+        setNewSku("");
+        setNewLink("");
+        setNewCategory("");
+        
+        // Trigger list reload
+        setPage(1);
+        setSearch("");
+      } else {
+        alert(json.error || "Gagal menambahkan produk.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setAddingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id: number, sku: string) => {
+    const confirmDelete = window.confirm(
+      `Apakah Anda yakin ingin menghapus produk acuan dengan SKU "${sku}" dari riset? Semua data kompetitor terkait juga akan dihapus.`
+    );
+    if (!confirmDelete) return;
+
+    setDeletingProduct(true);
+    try {
+      const res = await fetch(`/api/riset-kompetitor/${id}`, {
+        method: "DELETE"
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message || "Produk acuan berhasil dihapus.");
+        setSelectedId(null);
+        
+        // Trigger list reload
+        setPage(1);
+        setSearch("");
+      } else {
+        alert(json.error || "Gagal menghapus produk.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setDeletingProduct(false);
+    }
+  };
+
+  const handleExcludeCompetitor = async (e: React.MouseEvent, comp: CompetitorDetail) => {
+    e.preventDefault();
+    if (!selectedId) return;
+    const confirmExclude = window.confirm(
+      `Apakah Anda yakin ingin mengeluarkan produk kompetitor dari "${comp.nama_toko}" ini?`
+    );
+    if (!confirmExclude) return;
+
+    try {
+      const res = await fetch(`/api/riset-kompetitor/${selectedId}/exclude`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: comp.url,
+          nama_toko: comp.nama_toko,
+          harga: comp.harga,
+          terjual: comp.terjual,
+          gambar: comp.gambar
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        // Optimistic UI updates
+        setCompetitors(prev => prev.filter(c => c.id !== comp.id));
+        
+        // Refresh details
+        const detailsRes = await fetch(`/api/riset-kompetitor/${selectedId}`);
+        const detailsJson = await detailsRes.json();
+        if (detailsJson.success) {
+          setDetailProduct(detailsJson.data.product);
+          setCompetitors(detailsJson.data.competitors);
+          setExcludedCompetitors(detailsJson.data.excluded || []);
+        }
+      } else {
+        alert(json.error || "Gagal mengecualikan produk.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleRestoreCompetitor = async (e: React.MouseEvent, itemId: string) => {
+    e.preventDefault();
+    if (!selectedId) return;
+    try {
+      const res = await fetch(`/api/riset-kompetitor/${selectedId}/exclude?item_id=${itemId}`, {
+        method: "DELETE"
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert("Eksklusi berhasil dibatalkan. Produk akan masuk kembali setelah scraper berjalan.");
+        
+        // Refresh details
+        const detailsRes = await fetch(`/api/riset-kompetitor/${selectedId}`);
+        const detailsJson = await detailsRes.json();
+        if (detailsJson.success) {
+          setDetailProduct(detailsJson.data.product);
+          setCompetitors(detailsJson.data.competitors);
+          setExcludedCompetitors(detailsJson.data.excluded || []);
+        }
+      } else {
+        alert(json.error || "Gagal memulihkan produk.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
     }
   };
 
@@ -213,13 +362,21 @@ export default function RisetKompetitorPage() {
     <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto p-1 text-[#3a3f4d]">
       
       {/* Title Header */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#f0f2f7] pb-4">
         <div>
           <h1 className="text-[22px] font-extrabold tracking-tight">Riset Kompetitor 🔍</h1>
           <p className="text-[13px] text-[#8a90a2] mt-0.5">
             Analisis dan perbandingan produk toko kita dengan kompetitor Shopee (WP, Best Seller, & PL Market).
           </p>
         </div>
+        {(!profile || profile.canEditCompetitor || profile.role === "owner") && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4.5 py-2.5 bg-[#ee4d2d] hover:bg-[#d83e1d] text-white rounded-xl text-[13px] font-bold shadow-sm transition-all cursor-pointer inline-flex items-center gap-1.5 shrink-0"
+          >
+            ➕ Tambah Produk Acuan
+          </button>
+        )}
       </div>
 
       {/* Main Grid Content */}
@@ -447,7 +604,7 @@ export default function RisetKompetitorPage() {
                       <h2 className="text-[17px] font-extrabold text-[#161a27] mt-0.5 truncate" title={detailProduct.nama_produk}>
                         {detailProduct.nama_produk}
                       </h2>
-                      <div className="flex flex-wrap gap-2 items-center mt-2">
+                      <div className="flex flex-wrap gap-2 items-center mt-2 w-full">
                         <span className="text-[12px] font-extrabold bg-[#fff1ed] text-[#ee4d2d] px-2.5 py-0.5 rounded-lg border border-[#ffd3c4]">
                           SKU: {detailProduct.sku}
                         </span>
@@ -456,9 +613,18 @@ export default function RisetKompetitorPage() {
                             Kategori: {detailProduct.product_category}
                           </span>
                         )}
-                        <span className="text-[11px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg border border-amber-100">
+                        <span className="text-[11px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg border border-amber-100 font-medium">
                           Stok Parent: {detailProduct.total_stock_parent_sku} pcs
                         </span>
+                        {(!profile || profile.canEditCompetitor || profile.role === "owner") && (
+                          <button
+                            onClick={() => handleDeleteProduct(detailProduct.id, detailProduct.sku)}
+                            disabled={deletingProduct}
+                            className="ml-auto text-[11px] font-extrabold bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 px-2.5 py-1 rounded-lg border border-red-100 cursor-pointer transition-all disabled:opacity-50 inline-flex items-center gap-1 shrink-0"
+                          >
+                            {deletingProduct ? "Menghapus..." : "🗑️ Hapus Produk"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -492,6 +658,8 @@ export default function RisetKompetitorPage() {
                         else if (storeName.toLowerCase().includes("topikece")) prefix = "🟡";
                         else if (storeName.toLowerCase().includes("yarra")) prefix = "🔴";
                         else if (storeName.toLowerCase().includes("zioscarf")) prefix = "⚪";
+                        else if (storeName.toLowerCase().includes("kimmio")) prefix = "🌸";
+                        else if (storeName.toLowerCase().includes("lolly")) prefix = "🍭";
 
                         return (
                           <a 
@@ -507,9 +675,9 @@ export default function RisetKompetitorPage() {
                       })}
                       
                       {/* Mention other stores */}
-                      {(!dbLink || !dbLink.links || Object.keys(dbLink.links).length === 0) && (
+                      {(!dbLink || !dbLink.links || (!dbLink.links["KIMMIO"] && !dbLink.links["LOLLYSWEET"])) && (
                         <div className="text-[12px] text-gray-500 italic mt-1 pl-1">
-                          (Untuk toko Kimio dan Lolly belum dipetakan di DB Link, silakan cari di Shopee langsung)
+                          (Jika link Kimmio / Lolly tidak muncul, artinya SKU ini tidak tersedia di kedua toko tersebut)
                         </div>
                       )}
                     </div>
@@ -557,6 +725,16 @@ export default function RisetKompetitorPage() {
                         >
                           Manual Input ({competitors.filter(c => c.tipe === "manual").length})
                         </button>
+                        <button
+                          onClick={() => setActiveDetailTab("excluded")}
+                          className={`pb-2.5 border-b-2 cursor-pointer transition-colors ${
+                            activeDetailTab === "excluded" 
+                              ? "border-[#ee4d2d] text-[#ee4d2d]" 
+                              : "border-transparent text-[#6b7180] hover:text-[#3a3f4d]"
+                          }`}
+                        >
+                          Dikecualikan ({excludedCompetitors.length})
+                        </button>
                       </div>
                       
                       {activeDetailTab === "manual" && !!(profile?.canEditCompetitor || profile?.role === "owner") && (
@@ -571,7 +749,59 @@ export default function RisetKompetitorPage() {
 
                     {/* Competitors List */}
                     <div className="max-h-[450px] overflow-y-auto pr-1">
-                      {activeCompetitors.length === 0 ? (
+                      {activeDetailTab === "excluded" ? (
+                        excludedCompetitors.length === 0 ? (
+                          <div className="py-12 text-center text-[#8a90a2] text-[13px]">
+                            Tidak ada produk kompetitor yang dikecualikan.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {excludedCompetitors.map((comp) => (
+                              <div
+                                key={comp.id}
+                                className="relative flex items-center justify-between p-3 bg-white border border-[#eef0f6] rounded-xl text-left"
+                              >
+                                <a
+                                  href={comp.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                                >
+                                  <div className="w-[50px] h-[50px] rounded-lg overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">
+                                    <img 
+                                      src={getImageUrl(comp.gambar)} 
+                                      alt={comp.nama_toko} 
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => { (e.target as any).src = '/no-image.png'; }}
+                                    />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-extrabold text-[12.5px] text-[#161a27] truncate">
+                                      🏪 {comp.nama_toko || "Toko Kompetitor"}
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1.5 text-[11.5px] text-[#8a90a2]">
+                                      <span className="font-bold text-[#161a27]">{formatRp(comp.harga)}</span>
+                                      <span>•</span>
+                                      <span className="bg-[#e7f7f4] text-[#16b8a6] px-1.5 py-0.5 rounded-md font-bold">
+                                        🛒 {comp.terjual.toLocaleString("id-ID")} terjual / bln
+                                      </span>
+                                    </div>
+                                  </div>
+                                </a>
+                                {(!profile || profile.canEditCompetitor || profile.role === "owner") && (
+                                  <button
+                                    onClick={(e) => handleRestoreCompetitor(e, comp.item_id)}
+                                    className="ml-3 px-2.5 py-1.5 bg-[#e7f7f4] text-[#16b8a6] hover:bg-[#16b8a6]/10 rounded-lg text-[11px] font-bold border border-[#16b8a6]/20 transition-colors cursor-pointer shrink-0 z-10 inline-flex items-center gap-1"
+                                    title="Batalkan pengecualian produk ini"
+                                  >
+                                    🔄 Pulihkan
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : activeCompetitors.length === 0 ? (
                         <div className="py-12 text-center text-[#8a90a2] text-[13px]">
                           {activeDetailTab === "manual" 
                             ? "Belum ada link kompetitor manual yang di-input untuk produk ini." 
@@ -580,44 +810,55 @@ export default function RisetKompetitorPage() {
                       ) : (
                         <div className="space-y-3">
                           {activeCompetitors.map((comp) => (
-                            <a
+                            <div
                               key={comp.id}
-                              href={comp.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 p-3 bg-white hover:bg-[#f8f9fc] border border-[#eef0f6] hover:border-orange-200 rounded-xl transition-all block text-left group cursor-pointer"
+                              className="relative flex items-center justify-between p-3 bg-white hover:bg-[#f8f9fc] border border-[#eef0f6] hover:border-orange-200 rounded-xl transition-all text-left group"
                             >
-                              {/* Competitor Image */}
-                              <div className="w-[50px] h-[50px] rounded-lg overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img 
-                                  src={getImageUrl(comp.gambar)} 
-                                  alt={comp.nama_toko} 
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => { (e.target as any).src = '/no-image.png'; }}
-                                />
-                              </div>
+                              <a
+                                href={comp.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                              >
+                                {/* Competitor Image */}
+                                <div className="w-[50px] h-[50px] rounded-lg overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">
+                                  <img 
+                                    src={getImageUrl(comp.gambar)} 
+                                    alt={comp.nama_toko} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.target as any).src = '/no-image.png'; }}
+                                  />
+                                </div>
 
-                              {/* Competitor Details */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
+                                {/* Competitor Details */}
+                                <div className="flex-1 min-w-0">
                                   <div className="font-extrabold text-[12.5px] text-[#161a27] truncate group-hover:text-[#ee4d2d]">
                                     🏪 {comp.nama_toko || "Toko Kompetitor"}
                                   </div>
-                                  <div className="text-[11px] bg-orange-50 text-orange-600 font-bold px-2 py-0.5 rounded-md">
-                                    Rank #{comp.rank}
+                                  <div className="flex items-center gap-3 mt-1.5 text-[11.5px] text-[#8a90a2]">
+                                    <span className="font-bold text-[#161a27]">{formatRp(comp.harga)}</span>
+                                    <span>•</span>
+                                    <span className="bg-[#e7f7f4] text-[#16b8a6] px-1.5 py-0.5 rounded-md font-bold">
+                                      🛒 {comp.terjual.toLocaleString("id-ID")} terjual / bln
+                                    </span>
                                   </div>
                                 </div>
-                                
-                                <div className="flex items-center gap-3 mt-1.5 text-[11.5px] text-[#8a90a2]">
-                                  <span className="font-bold text-[#161a27]">{formatRp(comp.harga)}</span>
-                                  <span>•</span>
-                                  <span className="bg-[#e7f7f4] text-[#16b8a6] px-1.5 py-0.5 rounded-md font-bold">
-                                    🛒 {comp.terjual.toLocaleString("id-ID")} terjual / bln
-                                  </span>
+                              </a>
+                              <div className="flex items-center gap-2 shrink-0 z-10 ml-3">
+                                <div className="text-[11px] bg-orange-50 text-orange-600 font-bold px-2 py-0.5 rounded-md">
+                                  Rank #{comp.rank}
                                 </div>
+                                {activeDetailTab === "similar" && (!profile || profile.canEditCompetitor || profile.role === "owner") && (
+                                  <button
+                                    onClick={(e) => handleExcludeCompetitor(e, comp)}
+                                    className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 rounded-lg text-[11px] font-bold border border-red-100 transition-colors cursor-pointer"
+                                    title="Kecualikan produk kompetitor ini"
+                                  >
+                                    ❌ Hapus
+                                  </button>
+                                )}
                               </div>
-                            </a>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -702,6 +943,124 @@ export default function RisetKompetitorPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Produk Acuan */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-[#eef0f6] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-[#f0f2f7] flex items-center justify-between">
+              <h3 className="font-extrabold text-[15px] text-[#161a27]">
+                ➕ Tambah Produk Acuan Riset
+              </h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center cursor-pointer text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddProduct}>
+              {/* Modal Body */}
+              <div className="p-5 space-y-4">
+                {/* SKU */}
+                <div>
+                  <label className="block text-[12px] font-bold text-[#8a90a2] uppercase mb-1.5">
+                    Kode SKU <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newSku}
+                    onChange={(e) => setNewSku(e.target.value)}
+                    placeholder="Contoh: ANT78, ZE, 5043"
+                    className="w-full border border-[#eef0f6] rounded-xl p-2.5 text-[13px] focus:outline-none focus:border-[#ee4d2d] bg-gray-50 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                {/* Market */}
+                <div>
+                  <label className="block text-[12px] font-bold text-[#8a90a2] uppercase mb-1.5">
+                    Market <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {["WP", "Best Seller", "PL"].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setNewMarket(m)}
+                        className={`flex-1 py-2 text-[13px] font-bold rounded-xl border transition-all cursor-pointer ${
+                          newMarket === m
+                            ? "bg-[#ee4d2d]/10 border-[#ee4d2d] text-[#ee4d2d]"
+                            : "bg-white border-[#eef0f6] text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Link Produk Shopee */}
+                <div>
+                  <label className="block text-[12px] font-bold text-[#8a90a2] uppercase mb-1.5">
+                    Link Produk Shopee Kita <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={newLink}
+                    onChange={(e) => setNewLink(e.target.value)}
+                    placeholder="https://shopee.co.id/product/..."
+                    className="w-full border border-[#eef0f6] rounded-xl p-2.5 text-[13px] focus:outline-none focus:border-[#ee4d2d] bg-gray-50 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                {/* Kategori Produk (Optional) */}
+                <div>
+                  <label className="block text-[12px] font-bold text-[#8a90a2] uppercase mb-1.5">
+                    Kategori SKU (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="Contoh: EOL, Best-400, PL"
+                    className="w-full border border-[#eef0f6] rounded-xl p-2.5 text-[13px] focus:outline-none focus:border-[#ee4d2d] bg-gray-50 focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3.5 bg-gray-50 border-t border-[#f0f2f7] flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={addingProduct}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-[12.5px] hover:bg-white text-gray-600 cursor-pointer disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingProduct}
+                  className="px-4 py-2 bg-[#ee4d2d] hover:bg-[#ee4d2d]/90 text-white font-bold rounded-xl text-[12.5px] cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {addingProduct ? (
+                    <>
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Menambahkan...
+                    </>
+                  ) : (
+                    "💾 Tambahkan"
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

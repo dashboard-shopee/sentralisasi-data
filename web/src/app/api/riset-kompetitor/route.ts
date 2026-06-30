@@ -56,3 +56,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { sku, market, link_produk, product_category } = body;
+
+    if (!sku || !market || !link_produk) {
+      return NextResponse.json(
+        { success: false, error: "SKU, Market, dan Link Produk wajib diisi." },
+        { status: 400 }
+      );
+    }
+
+    await q(
+      `insert into riset_produk_acuan (market, sku, link_produk, product_category, nama_produk, tgl_upload, gambar_produk, harga, skip_itemid, tanggal_update)
+       values ($1, $2, $3, $4, $2, null, null, null, null, null)`,
+      [market.trim(), sku.trim(), link_produk.trim(), (product_category || "").trim()]
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Produk acuan berhasil ditambahkan ke dalam antrean riset."
+    });
+  } catch (err: any) {
+    console.error("API Riset Add Product Error:", err);
+    if (err.code === "23505") {
+      return NextResponse.json(
+        { success: false, error: "Produk dengan link ini sudah terdaftar di market tersebut." },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+

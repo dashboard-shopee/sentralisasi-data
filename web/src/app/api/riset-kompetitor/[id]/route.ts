@@ -42,12 +42,57 @@ export async function GET(
       }
     }
 
+    // 4. Fetch Kimmio and Lolly items from dim_produk dynamically
+    if (prod.sku) {
+      const additionalLinks = await q<any>(
+        `select p.produk_id, p.toko_id, t.nama as toko_nama
+         from dim_produk p
+         join dim_toko t on p.toko_id = t.toko_id
+         where p.sku_induk = $1 and p.toko_id in (1, 2)`,
+        [prod.sku]
+      );
+      
+      if (additionalLinks.length > 0) {
+        if (!dbLink) {
+          dbLink = {
+            sku: prod.sku,
+            status: null,
+            total_sales_parent_sku: 0,
+            links: {}
+          };
+        } else if (!dbLink.links) {
+          dbLink.links = {};
+        }
+        
+        for (const linkItem of additionalLinks) {
+          const shopId = linkItem.toko_id === 1 ? "1772452045" : "1770737480";
+          const storeKey = linkItem.toko_id === 1 ? "KIMMIO" : "LOLLYSWEET";
+          const itemId = String(linkItem.produk_id);
+          dbLink.links[storeKey] = {
+            url: `https://shopee.co.id/product/${shopId}/${itemId}`,
+            item_id: itemId,
+            search_similar_url: `https://shopee.co.id/find_similar_products?itemid=${itemId}&shopid=${shopId}`
+          };
+        }
+      }
+    }
+
+    // 5. Fetch excluded competitors
+    const excluded = await q<any>(
+      `select id, produk_acuan_id, item_id, url, nama_toko, harga, terjual, gambar, diambil_pada
+       from riset_kompetitor_excluded
+       where produk_acuan_id = $1
+       order by diambil_pada desc`,
+      [id]
+    );
+
     return NextResponse.json({
       success: true,
       data: {
         product: prod,
         competitors,
-        databaseLink: dbLink
+        databaseLink: dbLink,
+        excluded
       }
     });
   } catch (err: any) {
@@ -112,3 +157,31 @@ export async function POST(
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const acuan = await q(
+      `select id from riset_produk_acuan where id = $1`,
+      [id]
+    );
+    if (acuan.length === 0) {
+      return NextResponse.json({ success: false, error: "Produk acuan tidak ditemukan" }, { status: 404 });
+    }
+
+    await q(`delete from riset_produk_acuan where id = $1`, [id]);
+
+    return NextResponse.json({
+      success: true,
+      message: "Produk acuan beserta seluruh data riset terkait berhasil dihapus."
+    });
+  } catch (err: any) {
+    console.error("API Riset Detail DELETE Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
