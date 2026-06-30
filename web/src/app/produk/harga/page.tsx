@@ -12,6 +12,7 @@ interface AllProdukRow {
   harga_awal: number | null;
   harga_diskon: number | null;
   custom_harga_diskon: number | null;
+  custom_harga_pancing: number | null;
   margin_persen: number | null;
   harga_pancing: number | null;
   catalogs: any[];
@@ -77,7 +78,20 @@ export default function HargaPage() {
   // Inline edit state for Custom Harga Diskon
   const [editingDiskonSku, setEditingDiskonSku] = useState<string | null>(null);
   const [editDiskonVal, setEditDiskonVal] = useState("");
+  // Inline edit state for Custom Harga Pancing
+  const [editingPancingSku, setEditingPancingSku] = useState<string | null>(null);
+  const [editPancingVal, setEditPancingVal] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Mass Update State
+  const [showMassModal, setShowMassModal] = useState(false);
+  const [massSkuInduk, setMassSkuInduk] = useState("");
+  const [massSkus, setMassSkus] = useState<any[]>([]);
+  const [massSelectedSkus, setMassSelectedSkus] = useState<string[]>([]);
+  const [massDiskon, setMassDiskon] = useState("");
+  const [massPancing, setMassPancing] = useState("");
+  const [isMassSaving, setIsMassSaving] = useState(false);
+  const [isMassLoading, setIsMassLoading] = useState(false);
 
   const formatRp = (n: number | null | undefined) => {
     if (n === null || n === undefined) return "-";
@@ -161,6 +175,91 @@ export default function HargaPage() {
     }
   };
 
+  const saveCustomPancing = async (sku: string) => {
+    try {
+      setIsSaving(true);
+      const res = await fetch("/api/produk/harga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-custom-pancing",
+          sku,
+          custom_harga_pancing: editPancingVal
+        })
+      });
+      if (res.ok) {
+        setEditingPancingSku(null);
+        fetchData();
+      } else {
+        alert("Gagal menyimpan harga pancing");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Terjadi kesalahan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const fetchMassSkus = useCallback(async (induk: string) => {
+    if (!induk) return;
+    setIsMassLoading(true);
+    try {
+      const res = await fetch(`/api/produk/harga?tab=all&q=${encodeURIComponent(induk)}&size=1000`);
+      if (res.ok) {
+        const d = await res.json();
+        // filter exact match
+        const exact = (d.rows || []).filter((r: any) => (r.sku_induk || "").toLowerCase() === induk.toLowerCase());
+        setMassSkus(exact);
+        setMassSelectedSkus(exact.map((r: any) => r.sku));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsMassLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (massSkuInduk) {
+      const delay = setTimeout(() => fetchMassSkus(massSkuInduk), 500);
+      return () => clearTimeout(delay);
+    } else {
+      setMassSkus([]);
+      setMassSelectedSkus([]);
+    }
+  }, [massSkuInduk, fetchMassSkus]);
+
+  const saveMassUpdate = async () => {
+    if (massSelectedSkus.length === 0) return alert("Pilih minimal 1 SKU");
+    try {
+      setIsMassSaving(true);
+      const payload: any = { action: "mass-update-harga", skus: massSelectedSkus };
+      if (massDiskon !== "") payload.custom_harga_diskon = massDiskon;
+      if (massPancing !== "") payload.custom_harga_pancing = massPancing;
+
+      const res = await fetch("/api/produk/harga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setShowMassModal(false);
+        fetchData();
+        setMassDiskon("");
+        setMassPancing("");
+        setMassSkuInduk("");
+      } else {
+        alert("Gagal melakukan update massal");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Terjadi kesalahan.");
+    } finally {
+      setIsMassSaving(false);
+    }
+  };
+
   // Reset pagination on search / tab change
   const handleTabChange = (t: "all" | "olah" | "komisi") => {
     setTab(t);
@@ -222,7 +321,7 @@ export default function HargaPage() {
               <th onClick={() => handleSort("harga_diskon")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px] text-right text-[#ee4d2d] bg-[#fff1ed]/40">
                 Harga Diskon {sortCol === "harga_diskon" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_pancing")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right">
+              <th onClick={() => handleSort("harga_pancing")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right bg-[#f0f9ff]/40">
                 Harga Pancing {sortCol === "harga_pancing" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               {/* Dynamic Store Headers */}
@@ -293,7 +392,38 @@ export default function HargaPage() {
                   )}
                 </td>
 
-                <td className="px-2 py-2 text-right text-[#6b7180] align-middle">{r.harga_pancing !== null && r.harga_pancing !== undefined ? formatRp(r.harga_pancing) : "-"}</td>
+                {/* Editable Harga Pancing */}
+                <td className="px-2 py-2 text-right align-middle bg-[#f0f9ff]/20">
+                  {editingPancingSku === r.sku ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <input 
+                        autoFocus
+                        type="number" 
+                        value={editPancingVal}
+                        onChange={(e) => setEditPancingVal(e.target.value)}
+                        className="w-[70px] border border-[#0ea5e9] rounded px-1 py-0.5 text-[11px] text-right outline-none bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveCustomPancing(r.sku);
+                          if (e.key === "Escape") setEditingPancingSku(null);
+                        }}
+                      />
+                      <button onClick={() => saveCustomPancing(r.sku)} disabled={isSaving} className="text-[#0ea5e9] hover:text-[#0284c7] cursor-pointer" title="Simpan">
+                        {isSaving ? "⏳" : "✔️"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="cursor-pointer group flex items-center justify-end gap-1 hover:bg-[#f0f9ff] hover:text-[#0ea5e9] rounded px-1 -mx-1 transition-colors"
+                      onClick={() => { setEditingPancingSku(r.sku); setEditPancingVal(r.custom_harga_pancing !== null ? String(r.custom_harga_pancing) : ""); }}
+                      title={r.custom_harga_pancing !== null ? "Pancing kustom aktif. Klik untuk mengubah" : "Pancing default. Klik untuk menimpa"}
+                    >
+                      <span className={r.custom_harga_pancing !== null ? "text-[#0ea5e9] font-bold" : "text-[#6b7180] font-medium"}>
+                        {r.harga_pancing !== null && r.harga_pancing !== undefined ? formatRp(r.harga_pancing) : "-"}
+                      </span>
+                      <span className="text-[9px] opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                    </div>
+                  )}
+                </td>
                 
                 {/* Dynamic Store Cells (Multiple Catalogs per Store) */}
                 {tokos.map((tk) => {
@@ -509,22 +639,33 @@ export default function HargaPage() {
           </div>
         </div>
         
-        {/* Search */}
-        <div className="relative w-full md:w-[320px] shrink-0">
-          <input
-            type="text"
-            placeholder={
-              tab === "all"
-                ? "Cari SKU, SKU induk..."
-                : tab === "olah"
-                ? "Cari SKU, nama produk, ID..."
-                : "Cari SKU, category..."
-            }
-            value={q}
-            onChange={handleSearchChange}
-            className="w-full bg-white border border-[#eef0f6] rounded-xl pl-9 pr-4 py-2 text-[13px] outline-none focus:border-[#ee4d2d] transition-all text-[#161a27]"
-          />
-          <span className="absolute left-3 top-[11px] text-[13px] text-[#9aa0b2]">🔍</span>
+        <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+          {tab === "all" && (
+            <button 
+              onClick={() => setShowMassModal(true)}
+              className="bg-[#161a27] text-white px-4 py-2 rounded-xl text-[13px] font-bold hover:bg-[#2c3245] transition-colors whitespace-nowrap shadow-sm flex items-center gap-2"
+            >
+              <span>✏️</span> Update Massal
+            </button>
+          )}
+          
+          {/* Search */}
+          <div className="relative w-full md:w-[280px]">
+            <input
+              type="text"
+              placeholder={
+                tab === "all"
+                  ? "Cari SKU, SKU induk..."
+                  : tab === "olah"
+                  ? "Cari SKU, nama produk, ID..."
+                  : "Cari SKU, category..."
+              }
+              value={q}
+              onChange={handleSearchChange}
+              className="w-full bg-white border border-[#eef0f6] rounded-xl pl-9 pr-4 py-2 text-[13px] outline-none focus:border-[#ee4d2d] transition-all text-[#161a27]"
+            />
+            <span className="absolute left-3 top-[11px] text-[13px] text-[#9aa0b2]">🔍</span>
+          </div>
         </div>
       </div>
 
@@ -640,6 +781,120 @@ export default function HargaPage() {
           </>
         )}
       </div>
+
+      {/* Mass Update Modal */}
+      {showMassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-[600px] shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-[#eef0f6] flex justify-between items-center bg-[#fcfdfe] rounded-t-2xl">
+              <h2 className="text-[16px] font-extrabold text-[#161a27] flex items-center gap-2">
+                <span>✏️</span> Update Massal Harga
+              </h2>
+              <button onClick={() => setShowMassModal(false)} className="text-[#8a90a2] hover:bg-[#f0f2f5] rounded-full w-8 h-8 flex items-center justify-center font-bold text-xl leading-none transition-colors">&times;</button>
+            </div>
+            
+            <div className="p-5 flex-1 overflow-y-auto">
+              <div className="mb-5">
+                <label className="block text-[12px] font-bold text-[#4b5563] mb-1.5">1. Filter SKU Induk</label>
+                <input 
+                  type="text" 
+                  value={massSkuInduk} 
+                  onChange={e => setMassSkuInduk(e.target.value)} 
+                  placeholder="Ketik SKU Induk untuk mencari varian..." 
+                  className="w-full border border-[#eef0f6] bg-[#f8f9fa] rounded-xl px-4 py-2.5 text-[13px] font-medium outline-none focus:border-[#ee4d2d] focus:bg-white transition-all" 
+                />
+              </div>
+              
+              {massSkuInduk && (
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-[12px] font-bold text-[#4b5563]">2. Pilih SKU yang Akan Diupdate ({massSelectedSkus.length}/{massSkus.length})</label>
+                    {massSkus.length > 0 && (
+                      <button 
+                        onClick={() => setMassSelectedSkus(massSelectedSkus.length === massSkus.length ? [] : massSkus.map(r=>r.sku))} 
+                        className="text-[11px] text-[#0369a1] hover:underline font-bold px-2 py-0.5 bg-[#e0f2fe]/50 rounded"
+                      >
+                        {massSelectedSkus.length === massSkus.length ? "Deselect All" : "Select All"}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isMassLoading ? (
+                    <div className="text-[12px] text-[#8a90a2] py-8 text-center flex flex-col items-center gap-2">
+                      <div className="w-5 h-5 rounded-full border-2 border-t-transparent border-[#0369a1] animate-spin"></div>
+                      Mencari SKU...
+                    </div>
+                  ) : massSkus.length === 0 ? (
+                    <div className="text-[12px] text-[#8a90a2] py-6 text-center border-2 border-dashed border-[#eef0f6] rounded-xl bg-[#fafbfc]">
+                      Tidak ada produk varian dengan SKU Induk "<span className="font-bold text-[#4b5563]">{massSkuInduk}</span>"
+                    </div>
+                  ) : (
+                    <div className="border border-[#eef0f6] rounded-xl max-h-[180px] overflow-y-auto divide-y divide-[#eef0f6]">
+                      {massSkus.map((r) => (
+                        <label key={r.sku} className="flex items-center gap-3 px-3 py-2.5 hover:bg-[#fcfdfe] cursor-pointer text-[12px] transition-colors">
+                          <input 
+                            type="checkbox" 
+                            checked={massSelectedSkus.includes(r.sku)} 
+                            onChange={(e) => {
+                              if(e.target.checked) setMassSelectedSkus([...massSelectedSkus, r.sku]);
+                              else setMassSelectedSkus(massSelectedSkus.filter(s => s !== r.sku));
+                            }} 
+                            className="accent-[#ee4d2d] w-[18px] h-[18px] cursor-pointer rounded-sm" 
+                          />
+                          <div className="flex flex-col flex-1 truncate">
+                            <span className="font-bold text-[#161a27]">{r.sku}</span>
+                            <span className="text-[#8a90a2] text-[10px] truncate" title={r.nama_produk}>{r.nama_produk}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <div className="flex-1 bg-[#fff1ed]/30 p-3.5 rounded-xl border border-[#ffddcc]/50">
+                  <label className="block text-[12px] font-bold text-[#ee4d2d] mb-1.5">3. Harga Diskon Baru</label>
+                  <input 
+                    type="number" 
+                    value={massDiskon} 
+                    onChange={e => setMassDiskon(e.target.value)} 
+                    placeholder="Biarkan kosong jika tetap" 
+                    className="w-full border border-[#ffddcc] bg-white rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#ee4d2d] focus:ring-1 focus:ring-[#ee4d2d]" 
+                  />
+                </div>
+                <div className="flex-1 bg-[#f0f9ff]/50 p-3.5 rounded-xl border border-[#bae6fd]/50">
+                  <label className="block text-[12px] font-bold text-[#0ea5e9] mb-1.5">Harga Pancing Baru</label>
+                  <input 
+                    type="number" 
+                    value={massPancing} 
+                    onChange={e => setMassPancing(e.target.value)} 
+                    placeholder="Biarkan kosong jika tetap" 
+                    className="w-full border border-[#bae6fd] bg-white rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0ea5e9] focus:ring-1 focus:ring-[#0ea5e9]" 
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-[#eef0f6] flex justify-end gap-3 bg-[#fdfdfd] rounded-b-2xl">
+              <button 
+                onClick={() => setShowMassModal(false)} 
+                className="px-5 py-2.5 text-[13px] font-bold text-[#6b7180] hover:bg-[#eaecef] hover:text-[#161a27] rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={saveMassUpdate} 
+                disabled={isMassSaving || massSelectedSkus.length === 0} 
+                className="px-5 py-2.5 text-[13px] font-bold bg-[#ee4d2d] text-white hover:bg-[#d73f22] rounded-xl shadow-md shadow-[#ee4d2d]/20 transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center gap-2"
+              >
+                {isMassSaving ? "Menyimpan..." : "✓ Terapkan Massal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
