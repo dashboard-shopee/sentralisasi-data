@@ -247,17 +247,39 @@ export async function GET(req: Request) {
       const params: unknown[] = [];
       if (search) { 
         params.push(`%${search}%`); 
-        W += ` and (sku ilike $1 or username ilike $1 or aksi ilike $1)`; 
+        W += ` and (r.sku ilike $1 or r.username ilike $1 or u.username ilike $1 or r.aksi ilike $1)`; 
       }
-      let order = "waktu_update desc";
+      let order = "r.waktu_update desc";
       if (sortCol) {
         const allowed = ["waktu_update", "sku", "aksi", "nilai_lama", "nilai_baru", "username"];
-        if (allowed.includes(sortCol)) order = `${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
+        if (allowed.includes(sortCol)) {
+          if (sortCol === "username") {
+            order = `coalesce(u.username, r.username) ${sortDir === "asc" ? "asc" : "desc"}`;
+          } else {
+            order = `r.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
+          }
+        }
       }
       params.push(size, offset);
-      const rows = await q<any>(`select id, waktu_update, sku, aksi, nilai_lama, nilai_baru, username from harga_riwayat_update where ${W} order by ${order} limit $${params.length - 1} offset $${params.length}`, params);
+      const rows = await q<any>(
+        `select r.id, r.waktu_update, r.sku, r.aksi, r.nilai_lama, r.nilai_baru, 
+                coalesce(u.username, r.username) as username, 
+                u.avatar_emoji 
+         from harga_riwayat_update r 
+         left join dashboard_user u on r.user_id = u.id 
+         where ${W} 
+         order by ${order} 
+         limit $${params.length - 1} offset $${params.length}`, 
+        params
+      );
       const countParams = search ? [`%${search}%`] : [];
-      const total = await q<{ count: string }>(`select count(*) from harga_riwayat_update where ${W}`, countParams);
+      const total = await q<{ count: string }>(
+        `select count(*) 
+         from harga_riwayat_update r 
+         left join dashboard_user u on r.user_id = u.id 
+         where ${W}`, 
+        countParams
+      );
       return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0") });
     }
     return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
@@ -313,8 +335,17 @@ export async function POST(req: Request) {
     const token = cookieStore.get("dash_auth")?.value;
     const secret = process.env.JWT_SECRET || "syntra_jwt_secret_key_2026_marketing_shopee";
     const user = token ? await verifySession(token, secret) : null;
-    const username = user?.username || "System";
+    const userId = user?.id || null;
+    let username = user?.username || "System";
     const role = user?.role || "staff";
+    
+    // Ambil nama user real-time dari database untuk menghindari nama usang dari JWT session cookie
+    if (userId) {
+      const dbUser = await q<any>("select username from dashboard_user where id = $1", [userId]);
+      if (dbUser.length > 0) {
+        username = dbUser[0].username;
+      }
+    }
 
     // Validasi izin edit berdasarkan role dan permission
     // Ambil langsung dari DB agar perubahan hak akses langsung berlaku tanpa re-login
@@ -347,7 +378,7 @@ export async function POST(req: Request) {
       const oldVal = oldData.length > 0 ? oldData[0].custom_harga_diskon : null;
 
       await q(`update harga_all_produk set custom_harga_diskon = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ($1, $2, $3, $4, $5)`, [sku, 'Edit Harga Diskon', oldVal, val, username]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5, $6)`, [sku, 'Edit Harga Diskon', oldVal, val, username, userId]);
 
       return NextResponse.json({ ok: true, message: `Harga diskon kustom SKU ${sku} diperbarui.` });
     }
@@ -360,7 +391,7 @@ export async function POST(req: Request) {
       const oldVal = oldData.length > 0 ? oldData[0].custom_harga_pancing : null;
 
       await q(`update harga_all_produk set custom_harga_pancing = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ($1, $2, $3, $4, $5)`, [sku, 'Edit Harga Pancing', oldVal, val, username]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5, $6)`, [sku, 'Edit Harga Pancing', oldVal, val, username, userId]);
 
       return NextResponse.json({ ok: true, message: `Harga pancing kustom SKU ${sku} diperbarui.` });
     }
@@ -394,22 +425,22 @@ export async function POST(req: Request) {
         const values: any[] = [];
         let i = 1;
         const placeholders = oldData.map((od: any) => {
-          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
-          values.push(od.sku, 'Mass Update Diskon', od.custom_harga_diskon, valD, username);
+          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
+          values.push(od.sku, 'Mass Update Diskon', od.custom_harga_diskon, valD, username, userId);
           return chunk;
         });
-        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ${placeholders.join(',')}`, values);
+        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ${placeholders.join(',')}`, values);
       }
 
       if (hasPancing && oldData.length > 0) {
         const values: any[] = [];
         let i = 1;
         const placeholders = oldData.map((od: any) => {
-          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
-          values.push(od.sku, 'Mass Update Pancing', od.custom_harga_pancing, valP, username);
+          const chunk = `($${i++}, $${i++}, $${i++}, $${i++}, $${i++}, $${i++})`;
+          values.push(od.sku, 'Mass Update Pancing', od.custom_harga_pancing, valP, username, userId);
           return chunk;
         });
-        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username) values ${placeholders.join(',')}`, values);
+        await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ${placeholders.join(',')}`, values);
       }
 
       return NextResponse.json({ ok: true, message: `Update massal pada ${skus.length} SKU berhasil.` });
@@ -426,9 +457,9 @@ export async function POST(req: Request) {
             diperbarui_pada = now()
       `, [sku, toko, komisi_persen !== undefined ? komisi_persen : null, harga_jual !== undefined ? harga_jual : null]);
       
-      const aksiName = komisi_persen !== undefined ? 'Edit Komisi Persen' : 'Edit Harga Jual Manual';
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
-        [sku, `${aksiName} (${toko})`, komisi_persen !== undefined ? komisi_persen : harga_jual, username]);
+       const aksiName = komisi_persen !== undefined ? 'Edit Komisi Persen' : 'Edit Harga Jual Manual';
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+        [sku, `${aksiName} (${toko})`, komisi_persen !== undefined ? komisi_persen : harga_jual, username, userId]);
 
       return NextResponse.json({ ok: true, message: `Komisi toko ${toko} SKU ${sku} diperbarui.` });
     }
@@ -443,8 +474,8 @@ export async function POST(req: Request) {
             diperbarui_pada = now()
       `, [toko, komisi_persen]);
       
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
-        ['ALL', `Mass Update Komisi (${toko})`, komisi_persen, username]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+        ['ALL', `Mass Update Komisi (${toko})`, komisi_persen, username, userId]);
 
       return NextResponse.json({ ok: true, message: `Komisi massal toko ${toko} diperbarui menjadi ${komisi_persen}%.` });
     }
@@ -489,8 +520,8 @@ export async function POST(req: Request) {
         count++;
       }
       
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username) values ($1, $2, $3, $4)`, 
-        ['ALL', `Batch Update Jual (${toko})`, null, username]);
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+        ['ALL', `Batch Update Jual (${toko})`, null, username, userId]);
 
       return NextResponse.json({ ok: true, message: `${count} SKU pada toko ${toko} berhasil diperbarui.` });
     }

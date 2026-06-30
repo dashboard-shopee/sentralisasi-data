@@ -66,6 +66,7 @@ interface RiwayatRow {
   nilai_lama: number | null;
   nilai_baru: number | null;
   username: string;
+  avatar_emoji?: string | null;
 }
 
 export default function HargaPage() {
@@ -805,9 +806,15 @@ export default function HargaPage() {
                 <td className="px-4 py-3 text-[#8a90a2] font-medium align-middle">{formatDate(r.waktu_update)}</td>
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-[#f3e8ff] flex items-center justify-center text-[10px] font-bold text-[#6b21a8]">
-                      {r.username.substring(0, 1).toUpperCase()}
-                    </span>
+                    {r.avatar_emoji ? (
+                      <span className="text-[14px] w-5 h-5 flex items-center justify-center">
+                        {r.avatar_emoji}
+                      </span>
+                    ) : (
+                      <span className="w-5 h-5 rounded-full bg-[#f3e8ff] flex items-center justify-center text-[10px] font-bold text-[#6b21a8]">
+                        {r.username.substring(0, 1).toUpperCase()}
+                      </span>
+                    )}
                     <span className="font-bold text-[#4b5563]">{r.username}</span>
                   </div>
                 </td>
