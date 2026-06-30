@@ -30,16 +30,15 @@ export async function GET(req: Request) {
 
       let order = "sku asc";
       if (sortCol) {
-        const allowed = ["sku", "sku_induk", "nama_produk", "diperbarui_pada"];
+        const allowed = ["sku", "sku_induk", "nama_produk", "category", "net_price_awal", "net_price_detail", "harga_awal", "harga_diskon", "harga_pancing", "diperbarui_pada"];
         if (allowed.includes(sortCol)) {
-          const col = sortCol === "sku_induk" ? "sku_induk" : sortCol === "nama_produk" ? "nama_produk" : sortCol === "diperbarui_pada" ? "diperbarui_pada" : "sku";
-          order = `${col} ${sortDir === "asc" ? "asc" : "desc"}`;
+          order = `${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
         }
       }
 
       params.push(size, offset);
-      const rows = await q<{ sku: string; sku_induk: string | null; nama_produk: string | null; diperbarui_pada: string }>(
-        `select sku, sku_induk, nama_produk, diperbarui_pada 
+      const rows = await q<any>(
+        `select sku, sku_induk, nama_produk, category, net_price_awal, net_price_detail, harga_awal, harga_diskon, harga_pancing, harga_toko, diperbarui_pada 
          from harga_all_produk 
          where ${W} 
          order by ${order} 
