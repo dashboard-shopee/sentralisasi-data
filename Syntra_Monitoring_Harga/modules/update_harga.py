@@ -43,7 +43,8 @@ def _updates_alasan(alasan):
 
 
 # Jenis promo yang SUDAH punya handler takedown otomatis (bisa dikeluarkan bot).
-_TAKEDOWN_OTOMATIS = {"Promo Toko", "Flash Sale"}
+# (Campaign lewat browser-context; masih perlu verifikasi live.)
+_TAKEDOWN_OTOMATIS = {"Promo Toko", "Flash Sale", "Campaign"}
 
 
 # LANGKAH 4b — keluarkan produk dari SEMUA promo (toko + flash sale + dll) lalu ubah HARGA DASAR ke K.
@@ -71,6 +72,16 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             fs_takedown(session, shop, fs_kunci)
         except Exception as e:
             print(colorama.Fore.RED + f"[harga dasar] [{shop}] - takedown flash sale gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+
+    # TAKEDOWN CAMPAIGN (browser-context) — item base-edit yang ikut campaign bulanan.
+    camp_kunci = {k for k in kunci if any("Campaign" in j for j in promo_item.get(k, set()))}
+    if camp_kunci:
+        try:
+            from modules.takedown_campaign import takedown_dari_campaign
+            idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
+            takedown_dari_campaign(session, shop, idx, camp_kunci)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[harga dasar] [{shop}] - takedown campaign gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
 
     if config.DRY_RUN:
         for b, _ in daftar:
