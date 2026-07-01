@@ -8,6 +8,7 @@ TIDAK ditimpa (dipertahankan saat upsert).
 """
 from sqlalchemy import text
 from modules.db import get_engine
+import config
 
 _SQL_UPSERT = text("""
     insert into harga_olah_data
@@ -45,7 +46,12 @@ def _baris_ke_param(r):
 
 
 def simpan_olah_data(rows):
-    """Upsert list baris hasil grab_produk ke harga_olah_data. Return jumlah baris."""
+    """Upsert list baris hasil grab_produk ke harga_olah_data. Return jumlah baris.
+    GUARD: baris toko di luar 10 toko resmi (sub-akun lain) DITOLAK — tidak ditulis."""
+    if not rows:
+        return 0
+    resmi = config.nama_toko_resmi()
+    rows = [r for r in rows if (r[0] in resmi)]
     if not rows:
         return 0
     params = [_baris_ke_param(r) for r in rows]
@@ -86,7 +92,9 @@ def isi_harga_diskon_kosong():
         n = c.execute(text("""
             with md as (
                 select sku, mode() within group (order by harga_tampil) as m
-                from harga_olah_data where harga_tampil > 0 group by sku
+                from harga_olah_data
+                where harga_tampil > 0 and toko = any(:resmi)   -- hanya 10 toko resmi
+                group by sku
             )
             update harga_all_produk ap
             set harga_diskon = md.m, diperbarui_pada = now()
@@ -94,14 +102,17 @@ def isi_harga_diskon_kosong():
             where upper(ap.sku) = upper(md.sku)
               and md.m > 0
               and coalesce(ap.harga_diskon, 0) <= 0
-        """)).rowcount
+        """), {"resmi": list(config.nama_toko_resmi())}).rowcount
     return n
 
 
 def simpan_konteks(toko, konteks):
     """Snapshot keikutsertaan promo 1 toko ke harga_promo_konteks.
     Hapus baris lama toko ini lalu insert ulang -> selalu mencerminkan kondisi
-    terkini (promo yang sudah ditinggalkan variasi otomatis hilang). Return jumlah."""
+    terkini (promo yang sudah ditinggalkan variasi otomatis hilang). Return jumlah.
+    GUARD: toko di luar 10 toko resmi (sub-akun lain) DITOLAK."""
+    if not config.is_toko_resmi(toko):
+        return 0
     with get_engine().begin() as c:
         c.execute(text("delete from harga_promo_konteks where toko = :t"), {"t": toko})
         if not konteks:

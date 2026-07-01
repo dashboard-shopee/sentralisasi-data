@@ -180,6 +180,24 @@ def daftar_toko_aktif():
     return {u: info for u, info in SHOP_DATABASE.items() if u in TOKO_AKTIF}
 
 
+# ── ALLOWLIST 10 TOKO RESMI (pengaman: kecualikan/skip toko sub-akun lain) ──
+# Semua operasi (grab, tulis DB, hitung Harga Diskon) DIBATASI ke toko ini saja.
+# username -> untuk verifikasi shop_switcher; nama tampilan -> untuk filter tabel harga_*.
+def username_toko_resmi():
+    """Set username 10 toko resmi (dari SHOP_DATABASE)."""
+    return set(SHOP_DATABASE.keys())
+
+
+def nama_toko_resmi():
+    """Set NAMA TAMPILAN 10 toko resmi (kolom `toko` di tabel harga_*)."""
+    return {info["name"] for info in SHOP_DATABASE.values()}
+
+
+def is_toko_resmi(nama_tampilan):
+    """True kalau nama tampilan toko termasuk 10 toko resmi."""
+    return nama_tampilan in nama_toko_resmi()
+
+
 # ============================================================
 #  ENDPOINT API SHOPEE  (Layer 2 & 4)
 #  ⚠️ VERIFIKASI dari DevTools (tab Network) saat buka halaman terkait.

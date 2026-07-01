@@ -65,10 +65,14 @@ def _buat_options():
     return options
 
 
-def shop_switcher(page, shop, i):
+def shop_switcher(page, shop, i, maks_percobaan=20):
+    """Pindah ke sub-toko `shop` (index i). BOUNDED: kalau setelah `maks_percobaan`
+    tetap tidak ketemu (mis. sedang di SUB-AKUN LAIN / toko bukan milik kita) ->
+    RAISE supaya toko itu di-SKIP mulus (bukan loop selamanya)."""
     print(colorama.Fore.YELLOW + f"[shop switcher] [{shop}] - ganti sub-toko" + colorama.Style.RESET_ALL)
     attempt = 0
-    while True:
+    while attempt < maks_percobaan:
+        attempt += 1
         try:
             page.get("https://seller.shopee.co.id/portal/shop")
             page.wait(random.randint(1, 3))
@@ -78,13 +82,19 @@ def shop_switcher(page, shop, i):
             page.wait(random.randint(2, 3))
             if username == shop:
                 print(colorama.Fore.GREEN + f"[shop switcher] [{shop}] - sukses" + colorama.Style.RESET_ALL)
-                break
+                return
+            if username and username != shop:
+                print(colorama.Style.DIM + colorama.Fore.WHITE
+                      + f"[shop switcher] [{shop}] - posisi {i} berisi '{username}' (bukan target); coba lagi ({attempt}/{maks_percobaan})"
+                      + colorama.Style.RESET_ALL)
         except Exception:
-            attempt += 1
             if attempt % 5 == 0:
                 print(colorama.Fore.RED + f"[shop switcher] [{shop}] - belum berhasil ({attempt}x). "
                       f"Pastikan sudah LOGIN (python run.py login)" + colorama.Style.RESET_ALL)
-            time.sleep(1)
+        time.sleep(1)
+    # Gagal setelah maks_percobaan -> SKIP toko ini (sub-akun lain / toko tak ditemukan).
+    raise RuntimeError(f"toko '{shop}' tidak ditemukan di shop switcher "
+                       f"({maks_percobaan}x) - kemungkinan sedang di sub-akun lain; DI-SKIP")
 
 
 def _harvest(shop, i):
