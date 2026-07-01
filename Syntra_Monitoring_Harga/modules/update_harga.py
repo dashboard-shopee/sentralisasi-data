@@ -90,8 +90,12 @@ def edit_harga_dasar(shop, session, daftar):
 
 
 # UPDATE HARGA — proses semua baris satu toko. Kembalikan list update kolom O (alasan).
-def update_harga(shop, session, baris):
+#   stok_habis : set (item_id, model_id) variasi STOK 0 yg harus DIKELUARKAN dari promo toko.
+# Target harga tiap baris = b["harga_akhir"] (= Harga Diskon), pembanding b["harga_real"].
+def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
     alasan = {}
+    stok_habis = stok_habis or set()
+    nama_toko = nama_toko or shop     # kunci toko utk state (samakan dgn konteks/olah_data)
 
     if not getattr(config, "UPDATE_HARGA_TERVERIFIKASI", False):
         print(colorama.Fore.RED + f"[update harga] [{shop}] - DIKUNCI: set config.UPDATE_HARGA_TERVERIFIKASI=True dulu." + colorama.Style.RESET_ALL)
@@ -129,8 +133,32 @@ def update_harga(shop, session, baris):
           + f"[update harga] [{shop}] - {len(peta_promo)} variasi terdaftar di {len(pids)} promo toko."
           + colorama.Style.RESET_ALL)
 
-    # 3) Susun perubahan
+    # 2b) TAKEDOWN STOK HABIS — variasi stok 0 yg masih AKTIF di promo toko -> keluarkan.
     upd_by_pid = {pid: [] for pid in pids}   # pid -> list entri update harga promo
+    n_takedown = 0
+    takedown_state = []                      # utk catat state (auto re-register saat restock)
+    for key in stok_habis:
+        in_promos = peta_promo.get(key)
+        if not in_promos:
+            continue                         # sudah tidak di promo (mungkin sudah keluar)
+        for pid, harga in in_promos.items():
+            upd_by_pid[pid].append(_entry(key[0], key[1], harga or 1, config.STATUS_NONAKTIF))
+        n_takedown += 1
+        takedown_state.append({"item_id": key[0], "model_id": key[1],
+                               "jenis": "Promo Toko", "harga_terakhir": max(in_promos.values(), default=0)})
+    if n_takedown:
+        warna = colorama.Fore.YELLOW if config.DRY_RUN else colorama.Fore.MAGENTA
+        print(warna + f"[takedown stok] [{shop}] - {n_takedown} variasi stok 0 "
+              + ("(DRY: simulasi keluarkan)" if config.DRY_RUN else "-> DIKELUARKAN dari promo toko")
+              + colorama.Style.RESET_ALL)
+        if not config.DRY_RUN:
+            from modules.sql_harga import catat_takedown_stok, catat_riwayat
+            catat_takedown_stok(nama_toko, takedown_state)
+            catat_riwayat([{"sku": f"{s['item_id']}/{s['model_id']}", "aksi": "takedown_stok_habis",
+                            "nilai_lama": s["harga_terakhir"], "nilai_baru": None,
+                            "username": "bot-harga"} for s in takedown_state])
+
+    # 3) Susun perubahan
     row_of = {}                              # (pid,item,model) -> row (untuk tandai gagal)
     perlu_harga_dasar = []                   # list (baris, {pid:harga})
     n = 0
@@ -146,7 +174,16 @@ def update_harga(shop, session, baris):
             alasan[row] = f"Tidak dirubah - harga dari {sumber or 'sumber tidak diketahui'}"
             continue
         if not K or K <= 0:
-            alasan[row] = "Tidak ada target (kolom K kosong)"
+            alasan[row] = "Tidak ada Harga Diskon (target kosong)"
+            continue
+
+        # SHORT-CIRCUIT — Harga Real (harga_tampil Fase 1) sudah = Harga Diskon -> tidak perlu diubah.
+        real = b.get("harga_real", 0)
+        if real and real == K:
+            alasan[row] = ""      # sudah sesuai
+            print(colorama.Style.DIM + colorama.Fore.WHITE
+                  + f"[harga sesuai] [{shop}] [{n}] - {item_id}/{model_id} real=diskon {config.fmt_angka(K)}"
+                  + colorama.Style.RESET_ALL)
             continue
 
         # K >= harga awal -> keluarkan dari semua promo + ubah harga dasar

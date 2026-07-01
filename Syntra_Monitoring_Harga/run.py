@@ -17,7 +17,10 @@ import colorama; colorama.init()
 import config
 from modules.session import grab_session, close_session, buka_login
 from modules.grab_produk import grab_produk
-from modules.sql_harga import simpan_olah_data, baca_baris_rubah, tulis_alasan, baca_proteksi_komisi
+from modules.sql_harga import (simpan_olah_data, simpan_konteks, baca_baris_rubah,
+                                tulis_alasan, baca_proteksi_komisi, baca_stok_habis,
+                                baca_takedown_aktif, tandai_register_ulang,
+                                isi_harga_diskon_kosong)
 from modules.update_harga import update_harga
 from modules.log_siklus import catat_fase
 
@@ -33,15 +36,18 @@ def jalankan():
           + f"\n[{_t()}] === FASE 1: GRAB PRODUK -> SQL ({len(toko)} toko: {nama}) ==="
           + colorama.Style.RESET_ALL)
     total = 0
+    total_konteks = 0
     n_gagal = 0
     for username, info in toko.items():
         try:
             session = grab_session(shop=username, i=info["i"])
-            rows = grab_produk(shop=username, nama_toko=info["name"], session=session)
+            rows, konteks = grab_produk(shop=username, nama_toko=info["name"], session=session)
             n = simpan_olah_data(rows)
+            nk = simpan_konteks(info["name"], konteks)
             total += n
+            total_konteks += nk
             print(colorama.Fore.LIGHTGREEN_EX
-                  + f"[{_t()}] [{info['name']}] {n} variasi -> harga_olah_data"
+                  + f"[{_t()}] [{info['name']}] {n} variasi -> harga_olah_data, {nk} promo -> konteks"
                   + colorama.Style.RESET_ALL)
         except Exception as e:
             n_gagal += 1
@@ -52,7 +58,18 @@ def jalankan():
     # Catat jejak fase grab -> dashboard (halaman Harga + menu Log)
     catat_fase("grab",
                status="gagal" if (total == 0 and n_gagal) else "ok",
-               keterangan=f"{total} variasi, {len(toko)} toko" + (f", {n_gagal} toko gagal" if n_gagal else ""))
+               keterangan=f"{total} variasi, {total_konteks} keikutsertaan promo, {len(toko)} toko"
+                          + (f", {n_gagal} toko gagal" if n_gagal else ""))
+
+    # Isi Harga Diskon (per-SKU) utk SKU yg masih kosong tapi harga real sudah ada (mode).
+    try:
+        n_diskon = isi_harga_diskon_kosong()
+        if n_diskon:
+            print(colorama.Fore.LIGHTGREEN_EX
+                  + f"[{_t()}] {n_diskon} SKU: Harga Diskon diisi dari mode (yg tadinya kosong)"
+                  + colorama.Style.RESET_ALL)
+    except Exception as e:
+        print(colorama.Fore.RED + f"[{_t()}] isi Harga Diskon GAGAL: {e}" + colorama.Style.RESET_ALL)
 
     # ── AMBIL HPP dari Jubelio -> erp_sku_list.hpp (token cache, browser cuma kalau expired) ──
     try:
@@ -76,7 +93,7 @@ def jalankan_rubah_harga():
     print(colorama.Fore.LIGHTCYAN_EX
           + f"\n[{_t()}] === FASE 2: RUBAH HARGA ({len(toko)} toko) — MODE: {mode} ==="
           + colorama.Style.RESET_ALL)
-    total_proses = total_komisi = 0
+    total_proses = total_komisi = total_stok0 = total_register = 0
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -92,18 +109,34 @@ def jalankan_rubah_harga():
                 else:
                     proses.append(b)
             total_komisi += len(baris) - len(proses)
+
+            # Fase 2A: variasi stok 0 yg masih di Promo Toko -> takedown.
+            stok_habis = baca_stok_habis(nama, "Promo Toko")
+            total_stok0 += len(stok_habis)
+
             # rubah harga (DRY/LIVE) -> dapat alasan per (item,model)
-            alasan.update(update_harga(username, session, proses))
+            alasan.update(update_harga(username, session, proses,
+                                       stok_habis=stok_habis, nama_toko=nama))
             n = tulis_alasan(nama, alasan)
             total_proses += len(proses)
+
+            # Re-register otomatis: variasi yg dulu di-takedown & sekarang stok>0
+            # (muncul lagi di baris/harga_olah_data) -> tandai sudah register ulang.
+            aktif_td = baca_takedown_aktif(nama)
+            if aktif_td:
+                restok = {b["row"] for b in baris if b.get("stok", 0) > 0 and b["row"] in aktif_td}
+                total_register += tandai_register_ulang(nama, restok)
+
             print(colorama.Fore.LIGHTGREEN_EX
-                  + f"[{_t()}] [{nama}] {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip, {n} alasan ditulis"
+                  + f"[{_t()}] [{nama}] {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip, "
+                  + f"{len(stok_habis)} stok0-takedown, {n} alasan ditulis"
                   + colorama.Style.RESET_ALL)
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
     close_session()
     catat_fase("rubah_harga",
-               keterangan=f"{total_proses} variasi diproses, {total_komisi} komisi-skip | {mode}")
+               keterangan=f"{total_proses} diproses, {total_komisi} komisi-skip, "
+                          f"{total_stok0} stok0-takedown, {total_register} re-register | {mode}")
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
 
 

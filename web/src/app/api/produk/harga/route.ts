@@ -40,8 +40,8 @@ export async function GET(req: Request) {
       const sqlBase = `
         with base as (
           select 
-            h.sku, h.sku_induk, h.nama_produk, h.category, 
-            h.harga_awal, h.harga_pancing, h.diperbarui_pada, 
+            h.sku, h.sku_induk, h.nama_produk, h.category,
+            h.harga_awal, h.harga_pancing, h.harga_diskon, h.diperbarui_pada,
             h.custom_harga_diskon, h.custom_harga_pancing,
             coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net,
             coalesce(sm.total_qty, 0)::numeric as total_qty,
@@ -79,29 +79,26 @@ export async function GET(req: Request) {
             (c2.packing_fee + (case when c2.total_qty > 0 then c2.service_fee * c2.total_orders / c2.total_qty else c2.service_fee end))::numeric as biaya_tetap_adjusted
           from calc2 c2
         ),
-        mode_diskon as (
-          select sku, mode() within group (order by harga_tampil) as mode_harga_tampil from harga_olah_data where harga_tampil > 0 group by sku
-        ),
         olah_toko as (
           select sku, jsonb_agg(jsonb_build_object('toko', toko, 'itemId', item_id, 'harga', harga_tampil)) as catalogs
           from harga_olah_data group by sku
         ),
         final as (
-          select 
-            c3.sku, c3.sku_induk as "sku_induk", c3.nama_produk as "nama_produk", c3.category, c3.harga_awal as "harga_awal", 
+          select
+            c3.sku, c3.sku_induk as "sku_induk", c3.nama_produk as "nama_produk", c3.category, c3.harga_awal as "harga_awal",
             c3.custom_harga_pancing as "custom_harga_pancing",
-            (case when c3.custom_harga_pancing is not null then c3.custom_harga_pancing else c3.harga_pancing end)::numeric as "harga_pancing", 
+            (case when c3.custom_harga_pancing is not null then c3.custom_harga_pancing else c3.harga_pancing end)::numeric as "harga_pancing",
             c3.diperbarui_pada as "diperbarui_pada",
             c3.net_price_awal as "net_price_awal", c3.net_price_detail as "net_price_detail",
             c3.custom_harga_diskon as "custom_harga_diskon",
-            (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end)::numeric as harga_diskon,
-            (case when (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end) > 0 
-               then 1.0 - c3.total_pct_biaya - ((c3.hpp + c3.biaya_tetap_adjusted) / nullif((case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end), 0))
+            -- Harga Diskon TERSIMPAN (stabil): custom override -> harga_diskon stored -> net_price_detail (fallback)
+            (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon else coalesce(nullif(c3.harga_diskon, 0), c3.net_price_detail) end)::numeric as harga_diskon,
+            (case when (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon else coalesce(nullif(c3.harga_diskon, 0), c3.net_price_detail) end) > 0
+               then 1.0 - c3.total_pct_biaya - ((c3.hpp + c3.biaya_tetap_adjusted) / nullif((case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon else coalesce(nullif(c3.harga_diskon, 0), c3.net_price_detail) end), 0))
                else 0.0 end)::numeric as margin_persen,
             coalesce(ot.catalogs, '[]'::jsonb) as catalogs,
             c3.parent_total_qty
           from calc3 c3
-          left join mode_diskon md on c3.sku = md.sku
           left join olah_toko ot on c3.sku = ot.sku
         )
       `;
@@ -131,7 +128,7 @@ export async function GET(req: Request) {
       }
       let order = "coalesce(ss.parent_qty, 0) desc, ho.toko asc, ho.item_id asc, ho.model_id asc";
       if (sortCol) {
-        const allowed = ["toko", "item_id", "model_id", "ptag", "sku", "nama_variasi", "nama_produk", "harga_awal", "harga_diskon_db", "harga_pancing", "harga_akhir_target", "harga_tampil", "selisih", "sumber_harga", "alasan", "diperbarui_pada"];
+        const allowed = ["toko", "item_id", "model_id", "ptag", "sku", "nama_variasi", "nama_produk", "harga_awal", "harga_pancing", "harga_akhir_target", "harga_tampil", "selisih", "sumber_harga", "alasan", "diperbarui_pada"];
         if (allowed.includes(sortCol)) order = `ho.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
       }
       params.push(size, offset);
@@ -151,9 +148,11 @@ export async function GET(req: Request) {
           from erp_sku_list e2
           left join parent_sales ps on coalesce(nullif(e2.parent_sku, ''), e2.sku) = ps.parent_group
         )
-        select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal", ho.harga_diskon_db "hargaDiskonDb", ho.harga_pancing "hargaPancing", ho.harga_akhir_target "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diperbarui_pada "diperbaruiPada" 
+        select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal",
+          coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", ho.harga_pancing "hargaPancing", ho.harga_akhir_target "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diperbarui_pada "diperbaruiPada"
         from harga_olah_data ho
         left join sku_sales ss on ho.sku = ss.sales_sku
+        left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
         where ${W} 
         order by ${order} 
         limit $${params.length - 1} offset $${params.length}
@@ -175,7 +174,7 @@ export async function GET(req: Request) {
       // CTE for harga_diskon
       const sqlBase = `
         with base as (
-          select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
+          select h.sku, coalesce(e.hpp, 0) as hpp, coalesce(e.override_net, 0) as override_net, coalesce(sm.total_qty, 0)::numeric as total_qty, coalesce(sm.total_orders, 0)::numeric as total_orders, h.custom_harga_diskon, h.harga_diskon, h.harga_pancing, h.custom_harga_pancing, h.harga_awal, h.sku_induk, h.nama_produk, h.category, h.diperbarui_pada
           from harga_all_produk h
           left join erp_sku_list e on h.sku = e.sku
           left join erp_shopee_metrics sm on h.sku = sm.sku
@@ -207,12 +206,9 @@ export async function GET(req: Request) {
             (c2.packing_fee + (case when c2.total_qty > 0 then c2.service_fee * c2.total_orders / c2.total_qty else c2.service_fee end))::numeric as biaya_tetap_adjusted
           from calc2 c2
         ),
-        mode_diskon as (
-          select sku, mode() within group (order by harga_tampil) as mode_harga_tampil from harga_olah_data where harga_tampil > 0 group by sku
-        ),
         final_diskon as (
-          select c3.sku, (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon when md.mode_harga_tampil is not null then md.mode_harga_tampil else c3.net_price_detail end)::numeric as harga_diskon
-          from calc3 c3 left join mode_diskon md on c3.sku = md.sku
+          select c3.sku, (case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon else coalesce(nullif(c3.harga_diskon, 0), c3.net_price_detail) end)::numeric as harga_diskon
+          from calc3 c3
         )
       `;
 
