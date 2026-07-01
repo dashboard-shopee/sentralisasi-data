@@ -124,28 +124,27 @@ def jalankan(nama_file):
 
     print(colorama.Fore.LIGHTCYAN_EX + """
 ================================================================
-  Tujuan: nangkep endpoint AKSI promo yg MEMBLOKIR ubah harga.
+  Tujuan: nangkep endpoint SAVE (yg beneran MENGUBAH), bukan cuma buka editor.
+  ⚠️ WAJIB sampai klik SIMPAN/KONFIRMASI & muncul notif "tersimpan" —
+     kalau cuma buka halaman, yg ketangkep cuma 'validate' (percuma).
   (boleh buka tab baru, semua tetap ketangkep)
 
-  Lakukan aksi berikut (boleh sebagian — yg lagi aktif aja),
-  TIAP aksi sampai benar-benar TERSIMPAN/KONFIRMASI:
-
-  [A] PAKET DISKON (Add-on Deal):
-      Marketing Centre -> Paket Diskon / Add-on Deal -> buka satu paket
-      -> HAPUS/keluarkan salah satu produk dari paket -> SIMPAN.
+  [A] PAKET DISKON (Add-on Deal) — PALING PENTING:
+      Marketing Centre -> Paket Diskon / Add-on Deal
+      -> klik EDIT salah satu paket yg berjalan
+      -> HAPUS 1 produk dari daftar paket (klik ikon hapus/silang)
+      -> klik SIMPAN / KONFIRMASI sampai muncul notif tersimpan.
+      (boleh ditambahin balik lagi habis itu)
 
   [B] GARANSI HARGA TERBAIK (Best Price Guarantee):
-      Produk Saya -> arahkan ke produk berlabel 'Garansi Harga Terbaik'
-      -> buka pengaturannya -> NONAKTIFKAN / keluarkan produk -> SIMPAN.
+      Produk Saya -> cari produk berlabel 'Garansi Harga Terbaik'
+      -> buka pengaturan program itu -> NONAKTIFKAN utk 1 produk
+      -> klik SIMPAN sampai notif tersimpan.
 
-  [C] FLASH SALE (kalau ada sesi aktif/terjadwal):
-      Marketing Centre -> Flash Sale Toko -> buka sesi -> HAPUS satu
-      produk dari flash sale -> SIMPAN.
+  [C] FLASH SALE (kalau ada sesi aktif/terjadwal) — opsional:
+      Flash Sale Toko -> buka sesi -> HAPUS 1 produk -> SIMPAN.
 
-  (Bonus otomatis: saat popup harga muncul, endpoint
-   get_campaign_info_by_item_list ikut ketangkep buat Fase 1.)
-
-  Selesai? Balik ke sini & tekan ENTER.
+  Lakukan A dulu (wajib), lalu B. Selesai? Balik ke sini & tekan ENTER.
 ================================================================
 """ + colorama.Style.RESET_ALL)
     input("Tekan ENTER setelah aksi tersimpan... ")
