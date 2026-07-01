@@ -1,80 +1,138 @@
-import colorama; colorama.init()
-import DrissionPage
+"""modules/session.py — harvest sesi Shopee via browser (metode Syntra_Iklan).
+
+Browser dibuka SECUKUPNYA buat manen sesi (cookie + params dari /api/v2/login)
+lalu LANGSUNG DITUTUP. Semua kerja API setelah itu lewat `requests` (cepat, tanpa
+browser nganggur) -> tidak bentrok & tidak berat. Login sekali: python run.py login
+"""
 import random
 import time
+import colorama; colorama.init()
+import DrissionPage
 import config
 
+# HANYA dipakai buka_login (login manual). Siklus normal pakai page LOKAL & nutup sendiri.
 page = None
 
 
-def get_page():
-    global page
-    return page
-
-
-# BUAT OPTIONS (path + port + profil bot)
 def _buat_options():
     options = DrissionPage.ChromiumOptions()
-    options.set_argument('--force-device-scale-factor=0.8')
-    if config.CHROME_PATH: options.set_browser_path(config.CHROME_PATH)
-    if config.CHROME_PORT: options.set_local_port(config.CHROME_PORT)
-    if config.CHROME_USER_DATA: options.set_user_data_path(config.CHROME_USER_DATA)
+    options.set_argument("--force-device-scale-factor=0.8")
+    if config.CHROME_PATH:
+        options.set_browser_path(config.CHROME_PATH)
+    if config.CHROME_PORT:
+        options.set_local_port(config.CHROME_PORT)
+    if config.CHROME_USER_DATA:
+        options.set_user_data_path(config.CHROME_USER_DATA)
     return options
 
 
-# SHOP SWITCHER
-def shop_switcher(shop, i):
-    print(colorama.Fore.YELLOW + f'[shop switcher] [{shop}] - bot sedang melakukan ganti sub-toko' + colorama.Style.RESET_ALL )
+def shop_switcher(page, shop, i):
+    print(colorama.Fore.YELLOW + f"[shop switcher] [{shop}] - ganti sub-toko" + colorama.Style.RESET_ALL)
     attempt = 0
     while True:
         try:
-            page.get('https://seller.shopee.co.id/portal/shop')
-            page.wait(random.randint(1,3))
+            page.get("https://seller.shopee.co.id/portal/shop")
+            page.wait(random.randint(1, 3))
             page.ele(f'xpath=(//button[@type="button"]//span[text()="Detail"])[{i}]', timeout=10).click()
-            page.wait(random.randint(1,3))
-            username=page.ele('xpath=//div[@class="subaccount-info"]//span[@class="subaccount-name"]', timeout=10).text
-            page.wait(random.randint(2,3))
-            if username == shop: print(colorama.Fore.GREEN + f'[shop switcher] [{shop}] - bot sukses melakukan ganti sub-toko' + colorama.Style.RESET_ALL ); break
-        except:
+            page.wait(random.randint(1, 3))
+            username = page.ele('xpath=//div[@class="subaccount-info"]//span[@class="subaccount-name"]', timeout=10).text
+            page.wait(random.randint(2, 3))
+            if username == shop:
+                print(colorama.Fore.GREEN + f"[shop switcher] [{shop}] - sukses" + colorama.Style.RESET_ALL)
+                break
+        except Exception:
             attempt += 1
             if attempt % 5 == 0:
-                print(colorama.Fore.RED + f'[shop switcher] [{shop}] - belum berhasil ({attempt}x). Pastikan sudah LOGIN Shopee Seller di jendela Chrome. (sekali login: python new.py login)' + colorama.Style.RESET_ALL )
+                print(colorama.Fore.RED + f"[shop switcher] [{shop}] - belum berhasil ({attempt}x). "
+                      f"Pastikan sudah LOGIN (python run.py login)" + colorama.Style.RESET_ALL)
             time.sleep(1)
 
 
-# GRAB SESSION
-def grab_session(shop, i):
-    global page
-    page=DrissionPage.ChromiumPage(_buat_options()); page.set.window.max(); page.set.timeouts(100)
-    shop_switcher(shop=shop, i=i); page.wait(random.randint(1,3))
-    page.listen.start('https://seller.shopee.co.id/api/v2/login')
-    page.get("https://seller.shopee.co.id/datacenter/product/performance?ADTAG=productranking")
-    page.wait(random.randint(1,3))
+def _harvest(shop, i):
+    # page LOKAL (bukan global) -> ditutup di finally, browser tak nganggur kebuka.
+    page = DrissionPage.ChromiumPage(_buat_options())
+    page.set.timeouts(100)
     try:
-        page.ele('xpath=//input[@type="password"]', timeout=10).input(config.SHOPEE_PASSWORD)
-        page.wait(random.randint(1,3))
-        page.ele('xpath=//button[@class="eds-button eds-button--primary eds-button--normal ios-action"]', timeout=10).click()
-        page.wait(random.randint(1,3))
-    except:
-        pass
-    get_requests=page.listen.wait().request; get_headers=get_requests.headers; get_params=get_requests.params; page.listen.stop()
-    return {'headers': get_headers, 'params': get_params}
+        try:
+            page.set.window.max()
+        except Exception:
+            pass
+        shop_switcher(page=page, shop=shop, i=i)
+        page.wait(random.randint(1, 3))
+        page.listen.start("https://seller.shopee.co.id/api/v2/login")
+        page.get("https://seller.shopee.co.id/datacenter/product/performance?ADTAG=productranking")
+        page.wait(random.randint(1, 3))
+        # isi password (auto re-login) sebelum tangkap /api/v2/login -> sesi valid
+        try:
+            page.ele('xpath=//input[@type="password"]', timeout=8).input(config.SHOPEE_PASSWORD)
+            page.wait(random.randint(1, 3))
+            page.ele('xpath=//button[@class="eds-button eds-button--primary eds-button--normal ios-action"]', timeout=8).click()
+            page.wait(random.randint(1, 3))
+        except Exception:
+            pass
+        paket = page.listen.wait(timeout=30)
+        page.listen.stop()
+        if not paket:
+            raise RuntimeError(f"[session] [{shop}] - gagal tangkap /api/v2/login 30s (cek LOGIN / akses sub-toko)")
+        hasil = {"headers": paket.request.headers, "params": paket.request.params}
+        print(colorama.Fore.WHITE + f"[session] [{shop}] - sesi terpanen, tutup browser & lanjut via API" + colorama.Style.RESET_ALL)
+        return hasil
+    finally:
+        try:
+            page.quit()
+        except Exception:
+            pass
+        # beri jeda biar Chrome benar-benar mati & port 9556 lepas
+        # (cegah "browser connection fails" pas toko berikutnya buka browser).
+        time.sleep(3)
 
 
-# CLOSE SESSION
+def grab_session(shop, i, percobaan=3):
+    # Retry kalau browser gagal connect (race buka/tutup di port sama).
+    last = None
+    for n in range(1, percobaan + 1):
+        try:
+            sess = _harvest(shop=shop, i=i)
+            break
+        except Exception as e:
+            last = e
+            print(colorama.Fore.YELLOW
+                  + f"[session] [{shop}] - panen gagal ({n}/{percobaan}): {str(e)[:80]} -> retry"
+                  + colorama.Style.RESET_ALL)
+            time.sleep(5)
+    else:
+        raise last
+
+    def refresh():
+        print(colorama.Fore.YELLOW + f"[session] [{shop}] - ambil ulang cookie..." + colorama.Style.RESET_ALL)
+        baru = _harvest(shop=shop, i=i)
+        sess["headers"] = baru["headers"]
+        sess["params"] = baru["params"]
+        print(colorama.Fore.GREEN + f"[session] [{shop}] - sesi diperbarui" + colorama.Style.RESET_ALL)
+        return sess
+
+    sess["refresh"] = refresh
+    return sess
+
+
 def close_session():
+    # siklus normal sudah nutup browser sendiri di _harvest; ini buat nutup browser login manual.
+    global page
     try:
-        page.quit()
-    except:
+        if page is not None:
+            page.quit()
+    except Exception:
         pass
+    finally:
+        page = None
 
 
-# BUKA LOGIN (sekali) — buka profil bot ke halaman login, tunggu user login manual
 def buka_login():
     global page
-    page = DrissionPage.ChromiumPage(_buat_options()); page.set.window.max()
-    page.get('https://seller.shopee.co.id/portal/shop')
-    print(colorama.Fore.LIGHTCYAN_EX + '\nSilakan LOGIN Shopee Seller di jendela Chrome yang terbuka.' + colorama.Style.RESET_ALL)
-    input('Setelah berhasil login & melihat dashboard, tekan ENTER di sini untuk menyimpan & menutup... ')
+    page = DrissionPage.ChromiumPage(_buat_options())
+    page.set.window.max()
+    page.get("https://seller.shopee.co.id/portal/shop")
+    print(colorama.Fore.LIGHTCYAN_EX + "\nSilakan LOGIN Shopee Seller di jendela Chrome yang terbuka." + colorama.Style.RESET_ALL)
+    input("Setelah berhasil login & melihat dashboard, tekan ENTER untuk menyimpan & menutup... ")
     close_session()
-    print(colorama.Fore.GREEN + 'Login tersimpan di profil bot. Lanjut: python new.py test' + colorama.Style.RESET_ALL)
+    print(colorama.Fore.GREEN + "Login tersimpan di profil bot. Lanjut: python run.py" + colorama.Style.RESET_ALL)

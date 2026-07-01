@@ -55,3 +55,45 @@ def simpan_olah_data(rows):
     with get_engine().begin() as c:
         c.execute(_SQL_UPSERT, params)
     return len(params)
+
+
+# ── FASE 2 (rubah harga) — baca target dari SQL, tulis alasan balik ──
+def baca_baris_rubah(toko):
+    """Baris siap-proses update_harga utk 1 toko (by NAMA toko). row = (item_id, model_id)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""
+            select item_id, model_id, sku, harga_awal, harga_akhir_target, sumber_harga
+            from harga_olah_data where toko = :t
+        """), {"t": toko}).fetchall()
+    out = []
+    for r in rows:
+        out.append({
+            "row": (int(r.item_id), int(r.model_id)),   # kunci alasan
+            "item_id": int(r.item_id),
+            "model_id": int(r.model_id),
+            "sku": (r.sku or "").strip(),
+            "harga_awal": int(r.harga_awal or 0),
+            "harga_akhir": int(r.harga_akhir_target or 0),   # K = target dari dashboard
+            "sumber": r.sumber_harga or "",
+        })
+    return out
+
+
+def tulis_alasan(toko, alasan):
+    """alasan = {(item_id, model_id): teks} -> tulis kolom alasan harga_olah_data."""
+    if not alasan:
+        return 0
+    params = [{"t": toko, "i": int(k[0]), "m": int(k[1]), "a": (v or None)}
+              for k, v in alasan.items()]
+    with get_engine().begin() as c:
+        c.execute(text("""update harga_olah_data set alasan = :a, diperbarui_pada = now()
+                          where toko = :t and item_id = :i and model_id = :m"""), params)
+    return len(params)
+
+
+def baca_proteksi_komisi(username_toko):
+    """SKU yang punya komisi affiliate (jangan diubah harganya) utk 1 toko (by username)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("select sku from harga_komisi_toko where username_toko = :u"),
+                         {"u": username_toko}).fetchall()
+    return {(r.sku or "").strip().upper() for r in rows if r.sku}

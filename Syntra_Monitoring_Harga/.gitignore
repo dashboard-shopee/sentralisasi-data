@@ -3,3 +3,7 @@ __chrome_profile/
 __pycache__/
 *.pyc
 data/
+__jubelio_profile/
+__sniff_jubelio.json
+__sniff_jubelio_auth.json
+__jubelio_token.json

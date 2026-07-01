@@ -50,6 +50,10 @@ def edit_harga_dasar(shop, session, daftar):
         for b, _ in daftar:
             hasil[b["row"]] = "Harga dasar dikunci (EDIT_HARGA_DASAR_AKTIF=False)"
         return hasil
+    if config.DRY_RUN:
+        for b, _ in daftar:
+            hasil[b["row"]] = "[DRY] akan ubah harga dasar"
+        return hasil
     sukses = gagal = 0
     for b, in_promos in daftar:
         item_id, model_id, K, row = b["item_id"], b["model_id"], b["harga_akhir"], b["row"]
@@ -91,22 +95,23 @@ def update_harga(shop, session, baris):
 
     if not getattr(config, "UPDATE_HARGA_TERVERIFIKASI", False):
         print(colorama.Fore.RED + f"[update harga] [{shop}] - DIKUNCI: set config.UPDATE_HARGA_TERVERIFIKASI=True dulu." + colorama.Style.RESET_ALL)
-        return []
+        return {}
 
     # 1) Ambil SEMUA promo toko (toko bisa punya lebih dari satu).
     promos = grab_semua_promo(shop, session)
     if not promos:
         # Tidak ada promo toko sama sekali -> bikin dari 0 + harga dasar (K>=H).
-        from modules.duplikat_promo import buat_promo_dari_nol
         print(colorama.Fore.CYAN + f"[update harga] [{shop}] - belum ada Promo Toko -> bikin dari 0 dulu." + colorama.Style.RESET_ALL)
-        buat_promo_dari_nol(shop, session, baris)
+        if not config.DRY_RUN:
+            from modules.duplikat_promo import buat_promo_dari_nol
+            buat_promo_dari_nol(shop, session, baris)
         perlu = [(b, {}) for b in baris
                  if b.get("sumber", "") in config.SUMBER_BOLEH_RUBAH
                  and b.get("harga_akhir") and (b.get("harga_awal") or 0)
                  and b["harga_akhir"] >= b["harga_awal"]]
         if perlu:
             alasan.update(edit_harga_dasar(shop, session, perlu))
-        return _updates_alasan(alasan)
+        return alasan
 
     pids = [p["promotion_id"] for p in promos]
     # promo toko UTAMA (untuk produk baru): cocok NAMA_PROMO, kalau tidak ada -> yang pertama (berjalan).
@@ -177,6 +182,9 @@ def update_harga(shop, session, baris):
     total_sukses = total_gagal = total_error = 0
     for pid, entries in upd_by_pid.items():
         for chunk in _chunks(entries, 50):
+            if config.DRY_RUN:
+                total_sukses += len(chunk)   # simulasi: anggap berhasil, tidak kirim
+                continue
             try:
                 data = api_post(config.URL_UPDATE_HARGA, config.grab_headers(session), session["params"],
                                 grab_payload(pid, chunk), kunci="data")["data"]
@@ -217,4 +225,4 @@ def update_harga(shop, session, baris):
                         alasan[r] = alasan_gagal
     print(colorama.Fore.GREEN + f"[update harga] [{shop}] - promo: {total_sukses} sukses, {total_gagal} ditolak, {total_error} error-kirim." + colorama.Style.RESET_ALL)
 
-    return _updates_alasan(alasan)
+    return alasan

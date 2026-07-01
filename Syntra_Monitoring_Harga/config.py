@@ -21,6 +21,11 @@ load_dotenv()
 # ============================================================
 SHOPEE_PASSWORD = os.getenv("SHOPEE_PASSWORD", "")
 
+# ── SAKLAR KEAMANAN FASE 2 (rubah harga) ──
+# DRY_RUN True  = SIMULASI: hitung perubahan + catat alasan, TIDAK kirim ke Shopee.
+# DRY_RUN False = LIVE: beneran ubah harga promo / harga dasar. Set env HARGA_LIVE=1.
+DRY_RUN = os.getenv("HARGA_LIVE", "0") != "1"
+
 
 def google_service_account():
     """Rekonstruksi dict service-account untuk gspread.service_account_from_dict()."""
