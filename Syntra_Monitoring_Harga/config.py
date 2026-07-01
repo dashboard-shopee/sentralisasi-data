@@ -188,6 +188,17 @@ def daftar_toko_aktif():
 # ============================================================
 # ✅ TERVERIFIKASI — daftar produk + variasi + harga (cursor-based).
 URL_GRAB_PRODUK = "https://seller.shopee.co.id/api/v3/opt/mpsku/list/v2/search_product_list"
+# ✅ TERVERIFIKASI (sniff) — flag RESMI apakah item keblok utk ubah promo/harga.
+#    POST body {"item_id_list":[...]} -> data.campaign_info[item_id].is_blocked_for_promotion
+URL_CEK_BLOKIR = "https://seller.shopee.co.id/api/v3/opt/product/get_campaign_info_by_item_list/"
+
+# ✅ TERVERIFIKASI (sniff) — FLASH SALE TOKO (daftar/takedown item).
+#   list: GET  ?offset&limit&type=0 -> data.flash_sale_list[] (flash_sale_id, status, timeslot_id)
+#   item: GET  ?flash_sale_id&offset&limit -> data.items[] (item_id, model_id, status, promotion_price, stock, item_display_image, purchase_limit)
+#   set : POST {flash_sale_id, items:[{item_id, model_id, status(0=keluar/1=ikut), input_promo_price, stock, item_display_image, purchase_limit}]}
+URL_FLASH_LIST = "https://seller.shopee.co.id/api/marketing/v4/shop_flash_sale/get_shop_flash_sale_list/"
+URL_FLASH_ITEMS = "https://seller.shopee.co.id/api/marketing/v4/shop_flash_sale/get_shop_flash_sale_item/"
+URL_FLASH_SET_ITEMS = "https://seller.shopee.co.id/api/marketing/v4/shop_flash_sale/set_shop_flash_sale_items/"
 # ✅ TERVERIFIKASI — cari campaign Diskon Toko (ambil promotion_id).
 URL_LIST_DISKON = "https://seller.shopee.co.id/api/marketing/v3/public/discount/list/"
 # ✅ TERVERIFIKASI — simpan/ubah harga item di campaign Diskon Toko.
@@ -224,6 +235,10 @@ FAKTOR_HARGA = 100000
 # status item di campaign: 1 = AKTIF (ikut promo), 2 = dimatikan/keluar promo.
 STATUS_AKTIF = 1
 STATUS_NONAKTIF = 2
+
+# status item di FLASH SALE (beda skala dgn promo toko): 0 = keluar, 1 = ikut.
+STATUS_FLASH_KELUAR = 0
+STATUS_FLASH_IKUT = 1
 
 # Langkah 4b: kalau K >= harga awal (promo mustahil), ubah HARGA DASAR langsung ke K
 # (keluarin dari promo dulu kalau lagi ikut). True = jalan, False = cuma ditandai.

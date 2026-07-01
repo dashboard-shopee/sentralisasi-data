@@ -13,6 +13,45 @@ import config
 # HANYA dipakai buka_login (login manual). Siklus normal pakai page LOKAL & nutup sendiri.
 page = None
 
+# PAGE PERSISTEN utk aksi browser-context (campaign/komisi yg kena anti-bot Shopee).
+# Siklus harga normal TIDAK memakainya (harvest sesi -> tutup -> requests). Hanya
+# dibuka saat butuh aksi yg wajib via run_js dari halaman Shopee asli.
+_page_ctx = None
+
+
+def get_page():
+    """Page browser yang sedang terbuka utk aksi browser-context (None kalau belum dibuka).
+    Dipakai campaign_util / komisi_api (api_post_browser via run_js)."""
+    return _page_ctx
+
+
+def buka_page_toko(shop, i):
+    """Buka browser (port 9556) + switch ke sub-toko `shop`, kembalikan page yang
+    TETAP TERBUKA utk aksi browser-context. Panggil tutup_page() setelah selesai.
+    Catatan: jangan barengan dengan harvest sesi (sama-sama pakai port 9556)."""
+    global _page_ctx
+    tutup_page()
+    _page_ctx = DrissionPage.ChromiumPage(_buat_options())
+    try:
+        _page_ctx.set.window.max()
+    except Exception:
+        pass
+    shop_switcher(page=_page_ctx, shop=shop, i=i)
+    _page_ctx.wait(random.randint(1, 2))
+    return _page_ctx
+
+
+def tutup_page():
+    """Tutup page browser-context (kalau ada) + beri jeda agar port 9556 lepas."""
+    global _page_ctx
+    if _page_ctx is not None:
+        try:
+            _page_ctx.quit()
+        except Exception:
+            pass
+        _page_ctx = None
+        time.sleep(3)
+
 
 def _buat_options():
     options = DrissionPage.ChromiumOptions()

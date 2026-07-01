@@ -42,21 +42,48 @@ def _updates_alasan(alasan):
     return [{"range": f"{kol_o}{row}", "values": [[teks]]} for row, teks in alasan.items()]
 
 
-# LANGKAH 4b — keluarkan produk dari SEMUA promo toko yang memuatnya, lalu ubah HARGA DASAR ke K.
+# Jenis promo yang SUDAH punya handler takedown otomatis (bisa dikeluarkan bot).
+_TAKEDOWN_OTOMATIS = {"Promo Toko", "Flash Sale"}
+
+
+# LANGKAH 4b — keluarkan produk dari SEMUA promo (toko + flash sale + dll) lalu ubah HARGA DASAR ke K.
+# Harga dasar TIDAK bisa diubah kalau produk masih nyangkut promosi/campaign apa pun,
+# jadi takedown dulu: Promo Toko + Flash Sale otomatis; Paket Diskon/Garansi/Campaign
+# (belum ada endpoint takedown) -> ditandai jelas di alasan biar bisa ditindak.
 # daftar = list of (baris, {promotion_id: harga_rupiah_sekarang})
-def edit_harga_dasar(shop, session, daftar):
+def edit_harga_dasar(shop, session, daftar, nama_toko=None):
     hasil = {}
     if not getattr(config, "EDIT_HARGA_DASAR_AKTIF", False):
         for b, _ in daftar:
             hasil[b["row"]] = "Harga dasar dikunci (EDIT_HARGA_DASAR_AKTIF=False)"
         return hasil
+
+    # Konteks promo tiap item (dari grab) -> tahu promo apa saja yg nyangkut.
+    from modules.sql_harga import baca_promo_item
+    kunci = {(b["item_id"], b["model_id"]) for b, _ in daftar}
+    promo_item = baca_promo_item(nama_toko or shop, kunci)
+
+    # TAKEDOWN FLASH SALE (semua item base-edit yang ikut flash sale) — sekali jalan.
+    fs_kunci = {k for k in kunci if "Flash Sale" in promo_item.get(k, set())}
+    if fs_kunci:
+        try:
+            from modules.flash_sale import takedown_items as fs_takedown
+            fs_takedown(session, shop, fs_kunci)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[harga dasar] [{shop}] - takedown flash sale gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+
     if config.DRY_RUN:
         for b, _ in daftar:
-            hasil[b["row"]] = "[DRY] akan ubah harga dasar"
+            key = (b["item_id"], b["model_id"])
+            blocker = promo_item.get(key, set()) - _TAKEDOWN_OTOMATIS
+            hasil[b["row"]] = (f"[DRY] takedown {', '.join(sorted(promo_item.get(key, set()))) or 'promo'} lalu ubah harga dasar"
+                               + (f" | BLOCKER manual: {', '.join(sorted(blocker))}" if blocker else ""))
         return hasil
     sukses = gagal = 0
     for b, in_promos in daftar:
         item_id, model_id, K, row = b["item_id"], b["model_id"], b["harga_akhir"], b["row"]
+        key = (item_id, model_id)
+        blocker = promo_item.get(key, set()) - _TAKEDOWN_OTOMATIS   # jenis tanpa handler
         try:
             # 1) keluarkan dari SEMUA promo toko yang memuat produk ini
             for pid, harga in in_promos.items():
@@ -79,7 +106,10 @@ def edit_harga_dasar(shop, session, daftar):
             else:
                 gagal += 1
                 pesan = data.get("user_message") or data.get("msg") or "ditolak Shopee"
-                hasil[row] = "Tidak bisa ubah harga dasar - produk masih ikut promosi lain"
+                if blocker:
+                    hasil[row] = f"Harga dasar keblok {', '.join(sorted(blocker))} - perlu takedown (belum otomatis)"
+                else:
+                    hasil[row] = "Tidak bisa ubah harga dasar - produk masih ikut promosi lain"
                 print(colorama.Fore.YELLOW + f"[harga dasar - dilewati] [{shop}] - {item_id}/{model_id}: {str(pesan)[:110]}" + colorama.Style.RESET_ALL)
         except Exception as e:
             gagal += 1
@@ -114,7 +144,7 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
                  and b.get("harga_akhir") and (b.get("harga_awal") or 0)
                  and b["harga_akhir"] >= b["harga_awal"]]
         if perlu:
-            alasan.update(edit_harga_dasar(shop, session, perlu))
+            alasan.update(edit_harga_dasar(shop, session, perlu, nama_toko=nama_toko))
         return alasan
 
     pids = [p["promotion_id"] for p in promos]
@@ -211,7 +241,7 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
     # 4) Harga dasar (K>=H)
     if perlu_harga_dasar:
         print(colorama.Fore.CYAN + f"[update harga] [{shop}] - {len(perlu_harga_dasar)} item -> UBAH HARGA DASAR (keluar promo dulu)." + colorama.Style.RESET_ALL)
-        alasan.update(edit_harga_dasar(shop, session, perlu_harga_dasar))
+        alasan.update(edit_harga_dasar(shop, session, perlu_harga_dasar, nama_toko=nama_toko))
 
     # 5) Kirim update harga promo per promo toko.
     #    Tiap chunk di-try sendiri -> 1 chunk gagal TIDAK menggugurkan chunk lain

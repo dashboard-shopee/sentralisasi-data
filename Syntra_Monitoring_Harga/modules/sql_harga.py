@@ -206,6 +206,23 @@ def baca_stok_habis(toko, jenis="Promo Toko"):
     return {(int(r.item_id), int(r.model_id)) for r in rows}
 
 
+def baca_promo_item(toko, kunci_set=None):
+    """{(item_id, model_id): set(jenis)} keikutsertaan promo per variasi dari konteks.
+    Dipakai Fase 2B: sebelum ubah harga dasar, tahu promo apa saja yg nyangkut
+    (Promo Toko / Paket Diskon / Garansi / Flash Sale / Campaign / ...)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select item_id, model_id, jenis
+                                 from harga_promo_konteks where toko = :t"""),
+                         {"t": toko}).fetchall()
+    out = {}
+    for r in rows:
+        key = (int(r.item_id), int(r.model_id))
+        if kunci_set is not None and key not in kunci_set:
+            continue
+        out.setdefault(key, set()).add(r.jenis)
+    return out
+
+
 def baca_hpp_per_sku(skus):
     """{SKU_UPPER: hpp} dari erp_sku_list utk daftar sku (guard 'jangan jual < modal')."""
     skus = [s.strip() for s in skus if s and s.strip()]
