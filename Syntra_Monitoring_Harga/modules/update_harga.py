@@ -202,6 +202,7 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
     # 3) Susun perubahan
     row_of = {}                              # (pid,item,model) -> row (untuk tandai gagal)
     perlu_harga_dasar = []                   # list (baris, {pid:harga})
+    takedown_sumber = {}                     # jenis -> set(key) promo penindih yg perlu di-takedown lalu koreksi
     n = 0
     for b in baris:
         n += 1
@@ -211,14 +212,12 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
         key = (int(item_id), int(model_id))
         in_promos = peta_promo.get(key, {})
 
-        if sumber not in config.SUMBER_BOLEH_RUBAH:
-            alasan[row] = f"Tidak dirubah - harga dari {sumber or 'sumber tidak diketahui'}"
-            continue
         if not K or K <= 0:
             alasan[row] = "Tidak ada Harga Diskon (target kosong)"
             continue
 
-        # SHORT-CIRCUIT — Harga Real (harga_tampil Fase 1) sudah = Harga Diskon -> tidak perlu diubah.
+        # SHORT-CIRCUIT — Harga Real (harga_tampil Fase 1) sudah = Harga Diskon -> tidak perlu diubah
+        # (apa pun sumbernya; termasuk Garansi/Promo yang kebetulan sudah pas).
         real = b.get("harga_real", 0)
         if real and real == K:
             alasan[row] = ""      # sudah sesuai
@@ -226,6 +225,14 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
                   + f"[harga sesuai] [{shop}] [{n}] - {item_id}/{model_id} real=diskon {config.fmt_angka(K)}"
                   + colorama.Style.RESET_ALL)
             continue
+
+        # Harga real != target -> PERLU KOREKSI. Kalau harga tampil dikunci promo penindih:
+        if sumber not in config.SUMBER_BOLEH_RUBAH:
+            if sumber in config.SUMBER_TAKEDOWN_OTOMATIS:
+                takedown_sumber.setdefault(sumber, set()).add(key)   # takedown dulu, lalu koreksi (fall-through)
+            else:
+                alasan[row] = f"Harga dikunci {sumber or 'promo lain'} - perlu takedown (endpoint belum ada)"
+                continue
 
         # K >= harga awal -> keluarkan dari semua promo + ubah harga dasar
         if H and K >= H:
@@ -248,6 +255,17 @@ def update_harga(shop, session, baris, stok_habis=None, nama_toko=None):
             print(colorama.Fore.GREEN + f"[rubah promo] [{shop}] [{n}] - {item_id}/{model_id} -> {config.fmt_angka(K)} (di {len(target_pids)} promo)" + colorama.Style.RESET_ALL)
         else:
             print(colorama.Style.DIM + colorama.Fore.WHITE + f"[sudah sesuai] [{shop}] [{n}] - {item_id}/{model_id} [{config.fmt_angka(K)}]" + colorama.Style.RESET_ALL)
+
+    # 3b) TAKEDOWN promo PENINDIH (Campaign) sebelum harga toko/dasar berlaku -> harga ikut Harga Diskon.
+    if takedown_sumber.get("Campaign"):
+        camp = takedown_sumber["Campaign"]
+        print(colorama.Fore.MAGENTA + f"[update harga] [{shop}] - {len(camp)} item harganya dikunci Campaign -> takedown dulu." + colorama.Style.RESET_ALL)
+        try:
+            from modules.takedown_campaign import takedown_dari_campaign
+            idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
+            takedown_dari_campaign(session, shop, idx, camp)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[update harga] [{shop}] - takedown campaign gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
 
     # 4) Harga dasar (K>=H)
     if perlu_harga_dasar:

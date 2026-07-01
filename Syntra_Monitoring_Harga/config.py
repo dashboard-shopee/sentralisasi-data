@@ -119,10 +119,16 @@ PROMO_LABEL = {
 LABEL_HARGA_AWAL = "Harga Awal"   # harga tampil = origin_price (tidak ada promo)
 LABEL_PROMO_LAIN = "Promosi Lain" # ada promo tapi tipe belum dikenali
 
-# Langkah 2 HANYA merubah harga bila sumber harga (kolom N) ada di daftar ini.
-# "Garansi Harga Terbaik" & "Promosi Lain" sengaja TIDAK ikut -> jangan ganggu
-# promo lain yang sedang menang. (kolom N harus sudah terisi dari Langkah 1/3)
-SUMBER_BOLEH_RUBAH = ["Promo Toko", "Harga Awal"]
+# Fase 2 mengoreksi harga bila sumber (kolom N) ada di daftar ini.
+# "Garansi Harga Terbaik" = BADGE harga terjamin termurah (bukan promo yg menyetel
+# harga) -> harga tetap milik toko, JADI boleh dikoreksi ke Harga Diskon.
+SUMBER_BOLEH_RUBAH = ["Promo Toko", "Harga Awal", "Garansi Harga Terbaik"]
+
+# Sumber yang harganya DIKUNCI promo penindih & PUNYA handler takedown otomatis:
+# takedown dulu (di jalur promo toko / base), lalu koreksi ke Harga Diskon.
+SUMBER_TAKEDOWN_OTOMATIS = ["Campaign"]      # Flash Sale ditangani via konteks (base-edit)
+# Sumber dikunci promo TANPA handler takedown (endpoint belum ada) -> ditandai jelas.
+SUMBER_BLOKIR_MANUAL = ["Paket Diskon", "Promosi Lain"]
 
 
 # ── FILTER STOK (Langkah 1) ──────────────────────────────────
