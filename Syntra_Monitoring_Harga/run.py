@@ -20,7 +20,7 @@ from modules.grab_produk import grab_produk
 from modules.sql_harga import (simpan_olah_data, simpan_konteks, baca_baris_rubah,
                                 tulis_alasan, baca_proteksi_komisi, baca_stok_habis,
                                 baca_takedown_aktif, tandai_register_ulang,
-                                isi_harga_diskon_kosong)
+                                isi_harga_diskon_kosong, verifikasi_toko)
 from modules.update_harga import update_harga
 from modules.log_siklus import catat_fase
 
@@ -140,6 +140,39 @@ def jalankan_rubah_harga():
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
 
 
+def jalankan_verifikasi():
+    """FASE 3: ambil ULANG harga terkini (re-grab) lalu banding Harga Real vs Target
+    (pancing/Harga Diskon). Tulis verdict ke kolom `alasan` + selisih. Dipakai SETELAH
+    Fase 2 utk memastikan perubahan harga benar-benar berlaku di Shopee."""
+    toko = config.daftar_toko_aktif()
+    print(colorama.Fore.LIGHTCYAN_EX
+          + f"\n[{_t()}] === FASE 3: VERIFIKASI HARGA ({len(toko)} toko) ==="
+          + colorama.Style.RESET_ALL)
+    tot_sesuai = tot_belum = 0
+    for username, info in toko.items():
+        nama = info["name"]
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            # 1) ambil ulang harga terkini (refresh harga_tampil + sumber + konteks)
+            rows, konteks = grab_produk(shop=username, nama_toko=nama, session=session)
+            simpan_olah_data(rows)
+            simpan_konteks(nama, konteks)
+            # 2) banding real vs target -> tulis verdict
+            sesuai, belum, tanpa = verifikasi_toko(nama)
+            tot_sesuai += sesuai
+            tot_belum += belum
+            warna = colorama.Fore.LIGHTGREEN_EX if belum == 0 else colorama.Fore.YELLOW
+            print(warna + f"[{_t()}] [{nama}] ✓ {sesuai} sesuai, ✗ {belum} belum, {tanpa} tanpa-target"
+                  + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+    close_session()
+    catat_fase("verifikasi", keterangan=f"{tot_sesuai} sesuai, {tot_belum} belum sesuai")
+    print(colorama.Fore.LIGHTCYAN_EX
+          + f"[{_t()}] === FASE 3 SELESAI — {tot_sesuai} sesuai, {tot_belum} belum ==="
+          + colorama.Style.RESET_ALL)
+
+
 def jalankan_fase4():
     """FASE 4: PERPANJANG promo toko yang mau berakhir (duplikat) + BUAT DARI 0
     untuk toko yang belum punya promo toko. DEFAULT DRY-RUN (config.DRY_RUN)."""
@@ -173,6 +206,8 @@ if __name__ == "__main__":
         buka_login()
     elif arg in ("rubah", "rubah_harga", "2"):
         jalankan_rubah_harga()
+    elif arg in ("verifikasi", "verif", "3"):
+        jalankan_verifikasi()
     elif arg in ("fase4", "perpanjang", "4"):
         jalankan_fase4()
     else:

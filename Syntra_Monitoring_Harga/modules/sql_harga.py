@@ -291,6 +291,56 @@ def baca_takedown_aktif(toko):
     return {(int(r.item_id), int(r.model_id)) for r in rows}
 
 
+def verifikasi_toko(toko):
+    """FASE 3: banding Harga Real (harga_tampil terkini, HARUS sudah re-grab) vs
+    Target (pancing/Harga Diskon) per variasi 1 toko, tulis verdict ke kolom `alasan`:
+      - target kosong           -> alasan tidak diubah (biarkan apa adanya)
+      - real == target          -> '' (terverifikasi/sesuai)
+      - real != target          -> 'Belum sesuai: real X != diskon Y (sumber Z)'
+    Return (n_sesuai, n_belum, n_tanpa_target)."""
+    with get_engine().begin() as c:
+        # tulis verdict langsung via SQL (target dihitung sama seperti _SQL_BARIS_RUBAH)
+        c.execute(text("""
+            with tgt as (
+                select ho.item_id, ho.model_id, ho.harga_tampil, ho.sumber_harga,
+                       coalesce(
+                           nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0),
+                           nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0)
+                       ) as target
+                from harga_olah_data ho
+                left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
+                where ho.toko = :t
+            )
+            update harga_olah_data ho set alasan = case
+                    when coalesce(t.target,0) <= 0 then ho.alasan
+                    when ho.harga_tampil = t.target then ''
+                    else 'Belum sesuai: real ' || ho.harga_tampil::bigint
+                         || ' != diskon ' || t.target::bigint
+                         || ' (sumber ' || coalesce(nullif(ho.sumber_harga,''),'?') || ')'
+                end,
+                selisih = coalesce(t.target,0) - ho.harga_tampil,
+                diperbarui_pada = now()
+            from tgt t
+            where ho.toko = :t and ho.item_id = t.item_id and ho.model_id = t.model_id
+              and coalesce(t.target,0) > 0
+        """), {"t": toko})
+        # hitung ringkasan
+        r = c.execute(text("""
+            with tgt as (
+                select ho.harga_tampil, coalesce(
+                           nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0),
+                           nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0)) as target
+                from harga_olah_data ho
+                left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
+                where ho.toko = :t)
+            select count(*) filter (where coalesce(target,0) > 0 and harga_tampil = target) sesuai,
+                   count(*) filter (where coalesce(target,0) > 0 and harga_tampil <> target) belum,
+                   count(*) filter (where coalesce(target,0) <= 0) tanpa_target
+            from tgt
+        """), {"t": toko}).one()
+    return int(r.sesuai), int(r.belum), int(r.tanpa_target)
+
+
 def catat_riwayat(entri):
     """Audit ke harga_riwayat_update. entri = list of
     {sku, aksi, nilai_lama, nilai_baru, username}."""
