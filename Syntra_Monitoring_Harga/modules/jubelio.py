@@ -10,26 +10,56 @@ Metode (cepat, sesuai mau user):
 Dipanggil tiap Fase 1 (grab). Fetch ~11rb SKU = beberapa detik (pure API).
 """
 import json
+import os
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
 import colorama; colorama.init()
+from dotenv import load_dotenv
 from sqlalchemy import text
 
 from modules.db import get_engine
 
 ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env")
 TOKEN_FILE = ROOT / "__jubelio_token.json"
 PROFILE = str(ROOT / "__jubelio_profile")
 CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 PORT = 9557
 INV_URL = "https://open.jubelio.com/core-api/inventory/v2/"
+LOGIN_URL = "https://v2.jubelio.com/auth/login"
+
+
+def _auto_login(page):
+    """Isi form login Jubelio otomatis (email+password dari .env, TANPA OTP).
+    Return raw localStorage __SNID__ setelah login sukses (atau None)."""
+    email = os.getenv("JUBELIO_EMAIL", "").strip()
+    pw = os.getenv("JUBELIO_PASSWORD", "").strip()
+    if not email or not pw:
+        raise RuntimeError("JUBELIO_EMAIL / JUBELIO_PASSWORD belum diisi di .env")
+    print(colorama.Fore.YELLOW + "[jubelio] sesi habis -> AUTO-LOGIN pakai kredensial .env" + colorama.Style.RESET_ALL)
+    page.get(LOGIN_URL)
+    page.wait(3)
+    page.ele("#textfield-email", timeout=15).input(email, clear=True)
+    page.wait(1)
+    page.ele("#textfield-password", timeout=15).input(pw, clear=True)
+    page.wait(1)
+    page.ele("xpath=//button[normalize-space()='Login']", timeout=15).click()
+    # Tunggu token muncul (login sukses) hingga ~25 detik.
+    for _ in range(25):
+        page.wait(1)
+        raw = page.run_js("return window.localStorage.getItem('__SNID__')")
+        if raw:
+            print(colorama.Fore.GREEN + "[jubelio] auto-login sukses" + colorama.Style.RESET_ALL)
+            return raw
+    return page.run_js("return window.localStorage.getItem('__SNID__')")
 
 
 def _harvest_token():
-    """Buka browser Jubelio -> baca token dari localStorage __SNID__ -> tutup."""
+    """Buka browser Jubelio -> pakai token localStorage __SNID__; kalau kosong ->
+    AUTO-LOGIN (email+password .env) -> baca token -> tutup."""
     import DrissionPage
     o = DrissionPage.ChromiumOptions()
     o.set_browser_path(CHROME_PATH)
@@ -41,7 +71,9 @@ def _harvest_token():
         page.wait(4)
         raw = page.run_js("return window.localStorage.getItem('__SNID__')")
         if not raw:
-            raise RuntimeError("Token Jubelio kosong (localStorage __SNID__). Login dulu: python sniff_jubelio.py")
+            raw = _auto_login(page)     # sesi habis -> login otomatis
+        if not raw:
+            raise RuntimeError("Auto-login Jubelio gagal (cek JUBELIO_EMAIL/PASSWORD di .env)")
         snid = json.loads(raw)
         tok = {"token": snid["token"], "expiredOn": snid.get("expiredOn")}
         TOKEN_FILE.write_text(json.dumps(tok), encoding="utf-8")
