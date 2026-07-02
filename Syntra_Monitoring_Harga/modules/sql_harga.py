@@ -211,14 +211,16 @@ def baca_proteksi_komisi(username_toko):
 
 # ── FASE 2A: stok habis (takedown), HPP guard, state & audit ──
 def baca_stok_habis(toko, jenis="Promo Toko"):
-    """Set (item_id, model_id) variasi STOK <= 0 yg masih nyangkut promo `jenis`
-    di harga_promo_konteks (kandidat takedown). item stok-0 tidak ada di
-    harga_olah_data (difilter grab), jadi sumbernya konteks."""
+    """Set (item_id, model_id) variasi STOK <= 0 yg masih nyangkut promo di
+    harga_promo_konteks (kandidat takedown). jenis=None -> SEMUA jenis. item stok-0
+    tidak ada di harga_olah_data (difilter grab), jadi sumbernya konteks."""
+    sql = "select item_id, model_id from harga_promo_konteks where toko = :t and coalesce(stok,0) <= 0"
+    params = {"t": toko}
+    if jenis is not None:
+        sql += " and jenis = :j"
+        params["j"] = jenis
     with get_engine().connect() as c:
-        rows = c.execute(text("""
-            select item_id, model_id from harga_promo_konteks
-            where toko = :t and jenis = :j and coalesce(stok,0) <= 0
-        """), {"t": toko, "j": jenis}).fetchall()
+        rows = c.execute(text(sql), params).fetchall()
     return {(int(r.item_id), int(r.model_id)) for r in rows}
 
 

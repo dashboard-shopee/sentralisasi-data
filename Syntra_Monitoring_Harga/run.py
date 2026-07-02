@@ -19,7 +19,6 @@ from modules.session import grab_session, close_session, buka_login
 from modules.grab_produk import grab_produk
 from modules.sql_harga import (simpan_olah_data, simpan_konteks, baca_baris_rubah,
                                 tulis_alasan, baca_proteksi_komisi, baca_stok_habis,
-                                baca_takedown_aktif, tandai_register_ulang,
                                 isi_harga_diskon_kosong, verifikasi_toko)
 from modules.update_harga import update_harga
 from modules.log_siklus import catat_fase
@@ -78,6 +77,30 @@ def jalankan():
           + colorama.Style.RESET_ALL)
 
 
+def _takedown_stok_campaign_flash(username, nama, i, session):
+    """Keluarkan variasi STOK 0 dari CAMPAIGN & FLASH SALE (yg menahan stok terpisah,
+    bisa kejual di harga campaign walau stok utama 0). Promo Toko TIDAK disentuh.
+    Return jumlah variasi ter-takedown."""
+    n = 0
+    # Flash Sale — hanya kalau toko punya flash sale aktif (hemat: skip kalau ga ada).
+    try:
+        from modules import flash_sale as FS
+        if FS.list_flash_sale(session):
+            stok0 = baca_stok_habis(nama, None)          # semua stok-0 (jenis apa pun)
+            n += FS.takedown_items(session, username, stok0)   # hanya yg beneran di flash sale
+    except Exception as e:
+        print(colorama.Fore.RED + f"[{_t()}] [{nama}] takedown stok flash sale gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+    # Campaign — variasi stok-0 yang konteksnya Campaign.
+    try:
+        camp = baca_stok_habis(nama, "Campaign")
+        if camp:
+            from modules.takedown_campaign import takedown_dari_campaign
+            n += takedown_dari_campaign(session, username, i, camp)
+    except Exception as e:
+        print(colorama.Fore.RED + f"[{_t()}] [{nama}] takedown stok campaign gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+    return n
+
+
 def jalankan_rubah_harga():
     """FASE 2: baca target (K) dari harga_olah_data -> rubah harga Shopee (promo/harga dasar).
     Proteksi komisi: produk yang ada di harga_komisi_toko TIDAK diubah.
@@ -87,7 +110,7 @@ def jalankan_rubah_harga():
     print(colorama.Fore.LIGHTCYAN_EX
           + f"\n[{_t()}] === FASE 2: RUBAH HARGA ({len(toko)} toko) — MODE: {mode} ==="
           + colorama.Style.RESET_ALL)
-    total_proses = total_komisi = total_stok0 = total_register = 0
+    total_proses = total_komisi = total_stok0 = 0
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -104,33 +127,25 @@ def jalankan_rubah_harga():
                     proses.append(b)
             total_komisi += len(baris) - len(proses)
 
-            # Fase 2A: variasi stok 0 yg masih di Promo Toko -> takedown.
-            stok_habis = baca_stok_habis(nama, "Promo Toko")
-            total_stok0 += len(stok_habis)
-
             # rubah harga (DRY/LIVE) -> dapat alasan per (item,model)
-            alasan.update(update_harga(username, session, proses,
-                                       stok_habis=stok_habis, nama_toko=nama))
+            alasan.update(update_harga(username, session, proses, nama_toko=nama))
             n = tulis_alasan(nama, alasan)
             total_proses += len(proses)
 
-            # Re-register otomatis: variasi yg dulu di-takedown & sekarang stok>0
-            # (muncul lagi di baris/harga_olah_data) -> tandai sudah register ulang.
-            aktif_td = baca_takedown_aktif(nama)
-            if aktif_td:
-                restok = {b["row"] for b in baris if b.get("stok", 0) > 0 and b["row"] in aktif_td}
-                total_register += tandai_register_ulang(nama, restok)
+            # STOK HABIS: variasi stok 0 yang masih di CAMPAIGN / FLASH SALE -> keluarkan
+            # (mereka menahan stok terpisah, bisa kejual di harga campaign walau stok utama 0).
+            # Promo Toko SENGAJA TIDAK dikeluarkan (biar tetap ikut promo saat restock).
+            total_stok0 += _takedown_stok_campaign_flash(username, nama, info["i"], session)
 
             print(colorama.Fore.LIGHTGREEN_EX
-                  + f"[{_t()}] [{nama}] {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip, "
-                  + f"{len(stok_habis)} stok0-takedown, {n} alasan ditulis"
+                  + f"[{_t()}] [{nama}] {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip, {n} alasan ditulis"
                   + colorama.Style.RESET_ALL)
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
     close_session()
     catat_fase("rubah_harga",
                keterangan=f"{total_proses} diproses, {total_komisi} komisi-skip, "
-                          f"{total_stok0} stok0-takedown, {total_register} re-register | {mode}")
+                          f"{total_stok0} stok0-takedown campaign/flash | {mode}")
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
 
 
