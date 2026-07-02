@@ -140,11 +140,40 @@ def jalankan_rubah_harga():
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
 
 
+def jalankan_fase4():
+    """FASE 4: PERPANJANG promo toko yang mau berakhir (duplikat) + BUAT DARI 0
+    untuk toko yang belum punya promo toko. DEFAULT DRY-RUN (config.DRY_RUN)."""
+    from modules.duplikat_promo import proses_duplikat_promo
+    toko = config.daftar_toko_aktif()
+    mode = "DRY-RUN (simulasi)" if config.DRY_RUN else "LIVE (bikin promo beneran)"
+    print(colorama.Fore.LIGHTCYAN_EX
+          + f"\n[{_t()}] === FASE 4: PERPANJANG/BUAT PROMO TOKO ({len(toko)} toko) — MODE: {mode} ==="
+          + colorama.Style.RESET_ALL)
+    n_ok = n_gagal = 0
+    for username, info in toko.items():
+        nama = info["name"]
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            baris = baca_baris_rubah(nama)
+            proses_duplikat_promo(username, session, baris)
+            n_ok += 1
+        except Exception as e:
+            n_gagal += 1
+            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+    close_session()
+    catat_fase("perpanjang_promo",
+               status="gagal" if (n_ok == 0 and n_gagal) else "ok",
+               keterangan=f"{n_ok} toko diproses" + (f", {n_gagal} gagal" if n_gagal else "") + f" | {mode}")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 4 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1].lower() if len(sys.argv) > 1 else ""
     if arg == "login":
         buka_login()
     elif arg in ("rubah", "rubah_harga", "2"):
         jalankan_rubah_harga()
+    elif arg in ("fase4", "perpanjang", "4"):
+        jalankan_fase4()
     else:
         jalankan()

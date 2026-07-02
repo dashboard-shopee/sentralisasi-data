@@ -123,8 +123,8 @@ def buat_promo_dari_nol(shop, session, baris_sheet):
           + f"mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}' | gambar: {len(images)}"
           + colorama.Style.RESET_ALL)
 
-    if config.DUPLIKAT_PROMO_SIMULASI:
-        print(colorama.Fore.MAGENTA + f"[buat promo] [{shop}] - [SIMULASI] tidak membuat promo." + colorama.Style.RESET_ALL)
+    if config.DRY_RUN or config.DUPLIKAT_PROMO_SIMULASI:
+        print(colorama.Fore.MAGENTA + f"[buat promo] [{shop}] - [SIMULASI] tidak membuat promo (DRY_RUN/simulasi)." + colorama.Style.RESET_ALL)
         return
 
     for idx, grup in enumerate(kelompok, start=1):
@@ -188,10 +188,10 @@ def proses_duplikat_promo(shop, session, baris_sheet):
           + f"mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}'"
           + colorama.Style.RESET_ALL)
 
-    if config.DUPLIKAT_PROMO_SIMULASI:
+    if config.DRY_RUN or config.DUPLIKAT_PROMO_SIMULASI:
         print(colorama.Fore.MAGENTA
-              + f"[duplikat promo] [{shop}] - [SIMULASI] tidak membuat promo. "
-              + "Set config.DUPLIKAT_PROMO_SIMULASI=False untuk eksekusi nyata."
+              + f"[duplikat promo] [{shop}] - [SIMULASI] tidak membuat promo (DRY_RUN/simulasi). "
+              + "Set HARGA_LIVE=1 untuk eksekusi nyata."
               + colorama.Style.RESET_ALL)
         return
 
