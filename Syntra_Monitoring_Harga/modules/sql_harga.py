@@ -318,14 +318,24 @@ def verifikasi_toko(toko):
                 left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
                 where ho.toko = :t
             ),
+            blk as (
+                -- promo penindih per ITEM (Paket Diskon di level item; selain Promo Toko).
+                select item_id, string_agg(distinct jenis, ', ' order by jenis) j
+                from harga_promo_konteks
+                where toko = :t and jenis <> 'Promo Toko'
+                group by item_id
+            ),
             v as (
-                select item_id, model_id, target, harga_tampil,
-                    case when harga_tampil = target then ''
-                         else 'Belum sesuai: real ' || harga_tampil::bigint
-                              || ' != diskon ' || target::bigint
-                              || ' (sumber ' || coalesce(nullif(sumber_harga,''),'?') || ')'
+                select t.item_id, t.model_id, t.target, t.harga_tampil,
+                    case when t.harga_tampil = t.target then ''
+                         else 'Belum sesuai'
+                              || case when b.j is not null then ' (keblok: ' || b.j || ')'
+                                      else ' (sumber ' || coalesce(nullif(t.sumber_harga,''),'?') || ')' end
+                              || ': real ' || t.harga_tampil::bigint
+                              || ' != diskon ' || t.target::bigint
                     end as verdict
-                from tgt where coalesce(target,0) > 0
+                from tgt t left join blk b on b.item_id = t.item_id
+                where coalesce(t.target,0) > 0
             )
             update harga_olah_data ho set
                 diproses_pada = case when v.verdict is distinct from ho.alasan then now() else ho.diproses_pada end,
