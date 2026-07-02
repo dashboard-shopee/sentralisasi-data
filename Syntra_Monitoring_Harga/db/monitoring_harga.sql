@@ -45,9 +45,11 @@ create table if not exists harga_olah_data (
     alasan             text,                -- alasan tidak/berhasil ubah harga (Fase 2)
     stok               numeric default 0,   -- stok variasi saat grab (Fase 1)
     diperbarui_pada    timestamptz default now(),
+    diproses_pada      timestamptz,         -- kapan Fase 2/3 terakhir MENGUBAH alasan baris ini (bukan tiap grab)
     primary key (toko, item_id, model_id)
 );
 alter table harga_olah_data add column if not exists stok numeric default 0;
+alter table harga_olah_data add column if not exists diproses_pada timestamptz;
 
 -- 3. Master Produk Komisi affiliate (per-SKU).
 create table if not exists harga_komisi_produk (

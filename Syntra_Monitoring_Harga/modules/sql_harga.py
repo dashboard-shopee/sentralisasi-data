@@ -188,7 +188,12 @@ def tulis_alasan(toko, alasan):
     params = [{"t": toko, "i": int(k[0]), "m": int(k[1]), "a": (v or None)}
               for k, v in alasan.items()]
     with get_engine().begin() as c:
-        c.execute(text("""update harga_olah_data set alasan = :a, diperbarui_pada = now()
+        # diproses_pada HANYA bump kalau alasan BERUBAH (kalau program tak mengubah baris,
+        # waktunya tetap). diperbarui_pada tetap jalan seperti biasa.
+        c.execute(text("""update harga_olah_data set
+                              diproses_pada = case when coalesce(alasan,'') <> coalesce(:a,'') then now() else diproses_pada end,
+                              alasan = :a,
+                              diperbarui_pada = now()
                           where toko = :t and item_id = :i and model_id = :m"""), params)
     return len(params)
 
@@ -310,19 +315,23 @@ def verifikasi_toko(toko):
                 from harga_olah_data ho
                 left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
                 where ho.toko = :t
+            ),
+            v as (
+                select item_id, model_id, target, harga_tampil,
+                    case when harga_tampil = target then ''
+                         else 'Belum sesuai: real ' || harga_tampil::bigint
+                              || ' != diskon ' || target::bigint
+                              || ' (sumber ' || coalesce(nullif(sumber_harga,''),'?') || ')'
+                    end as verdict
+                from tgt where coalesce(target,0) > 0
             )
-            update harga_olah_data ho set alasan = case
-                    when coalesce(t.target,0) <= 0 then ho.alasan
-                    when ho.harga_tampil = t.target then ''
-                    else 'Belum sesuai: real ' || ho.harga_tampil::bigint
-                         || ' != diskon ' || t.target::bigint
-                         || ' (sumber ' || coalesce(nullif(ho.sumber_harga,''),'?') || ')'
-                end,
-                selisih = coalesce(t.target,0) - ho.harga_tampil,
+            update harga_olah_data ho set
+                diproses_pada = case when v.verdict is distinct from ho.alasan then now() else ho.diproses_pada end,
+                alasan = v.verdict,
+                selisih = v.target - ho.harga_tampil,
                 diperbarui_pada = now()
-            from tgt t
-            where ho.toko = :t and ho.item_id = t.item_id and ho.model_id = t.model_id
-              and coalesce(t.target,0) > 0
+            from v
+            where ho.toko = :t and ho.item_id = v.item_id and ho.model_id = v.model_id
         """), {"t": toko})
         # hitung ringkasan
         r = c.execute(text("""

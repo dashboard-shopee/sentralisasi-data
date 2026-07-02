@@ -36,6 +36,7 @@ interface OlahDataRow {
   selisih: number;
   sumberHarga: string | null;
   alasan: string | null;
+  diprosesPada: string | null;
   diperbaruiPada: string;
 }
 
@@ -621,6 +622,9 @@ export default function HargaPage() {
               <th className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider w-[180px]">
                 Alasan / Keterangan
               </th>
+              <th className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider w-[140px]">
+                Terakhir Diproses
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#eef0f6] text-[13px]">
@@ -662,6 +666,14 @@ export default function HargaPage() {
                   </td>
                   <td className="p-3.5 text-xs text-[#8a90a2] truncate max-w-[180px]" title={r.alasan || ""}>
                     {r.alasan || "-"}
+                  </td>
+                  <td className="p-3.5 text-xs text-[#8a90a2] whitespace-nowrap">
+                    {r.diprosesPada
+                      ? new Date(r.diprosesPada).toLocaleString("id-ID", {
+                          day: "2-digit", month: "short", year: "2-digit",
+                          hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
+                        }) + " WIB"
+                      : "-"}
                   </td>
                 </tr>
               );
