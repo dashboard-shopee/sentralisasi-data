@@ -30,7 +30,7 @@ def _minta(method, url, headers, params, payload, kunci, attempts):
             cuplikan = f'{type(e).__name__}: {e}'
         if attempt < attempts - 1:
             print(colorama.Fore.RED + f'[api] respons tidak valid -> {cuplikan} | coba lagi dalam {delay}s ({attempt+1}/{attempts-1})' + colorama.Style.RESET_ALL)
-            time.sleep(delay); delay = min(delay * 2, 20)
+            time.sleep(delay); delay = min(delay * 2, 10)   # cap backoff 10s (dari 20) biar ga nunggu kelamaan
     raise RuntimeError(f'Respons API tidak valid dari {url} (kunci "{kunci}"). Terakhir: {cuplikan}')
 
 

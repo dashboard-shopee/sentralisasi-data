@@ -116,7 +116,7 @@ def _stok(obj):
 
 
 # GRAB PARAMS (daftar produk, cursor-based)
-def grab_params(session, cursor="", page_size=48):
+def grab_params(session, cursor="", page_size=48):   # Shopee batasi max ~48; 96 -> "page size exceed limit"
     return {
         "SPC_CDS": session["params"].get("SPC_CDS"),
         "SPC_CDS_VER": session["params"].get("SPC_CDS_VER", 2),

@@ -100,7 +100,12 @@ def shop_switcher(page, shop, i, maks_percobaan=20):
 def _harvest(shop, i):
     # page LOKAL (bukan global) -> ditutup di finally, browser tak nganggur kebuka.
     page = DrissionPage.ChromiumPage(_buat_options())
-    page.set.timeouts(100)
+    # Anti-beku: timeout wajar. base 15s (dari 100s) utk nunggu elemen, page_load 30s
+    # biar page.get() tak menggantung selamanya kalau halaman lambat/nyangkut.
+    try:
+        page.set.timeouts(base=15, page_load=30, script=20)
+    except Exception:
+        page.set.timeouts(15)
     try:
         try:
             page.set.window.max()

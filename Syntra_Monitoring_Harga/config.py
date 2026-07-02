@@ -21,7 +21,7 @@ load_dotenv()
 # 1) MODE — simulasi atau beneran?
 #    False = DRY-RUN (SIMULASI, AMAN): hitung + catat rencana, TIDAK ubah Shopee.
 #    True  = LIVE: beneran ubah harga / bikin promo di Shopee.
-MODE_LIVE = True
+MODE_LIVE = False
 
 # 2) FASE yang dijalankan saat dobel-klik RUN.bat (python run.py tanpa argumen).
 #    Boleh gabung, dijalankan berurutan.
@@ -42,6 +42,7 @@ NAMA_PROMO = "PROMO TOKO"        # nama campaign Diskon Toko yang dikelola bot
 JELANG_EXPIRE_HARI = 1           # perpanjang promo bila sisa <= ini (hari)
 DURASI_PROMO_HARI = 180          # durasi promo baru (maks 180 sesuai Shopee)
 BUAT_PROMO_DARI_NOL = True       # bikin promo baru kalau toko belum punya promo toko
+JEDA_VERIFIKASI_DETIK = 30        # jeda sebelum Fase 3 re-grab (beri waktu Shopee propagasi harga)
 
 # ── (turunan otomatis dari MODE_LIVE; env HARGA_LIVE=1 juga memaksa LIVE) ──
 DRY_RUN = not (MODE_LIVE or os.getenv("HARGA_LIVE", "0") == "1")
