@@ -71,14 +71,8 @@ def jalankan():
     except Exception as e:
         print(colorama.Fore.RED + f"[{_t()}] isi Harga Diskon GAGAL: {e}" + colorama.Style.RESET_ALL)
 
-    # ── AMBIL HPP dari Jubelio -> erp_sku_list.hpp (token cache, browser cuma kalau expired) ──
-    try:
-        from modules.jubelio import sync_hpp
-        ditarik, terupdate = sync_hpp()
-        catat_fase("hpp", keterangan=f"{terupdate} sku HPP di-update (dari {ditarik} Jubelio)")
-    except Exception as e:
-        print(colorama.Fore.RED + f"[{_t()}] HPP Jubelio GAGAL: {e}" + colorama.Style.RESET_ALL)
-        catat_fase("hpp", status="gagal", keterangan=str(e)[:120])
+    # (HPP Jubelio DIPINDAH ke Syntra_Iklan/etl/pull_erp.py — ikut alur ambil data ERP,
+    #  supaya tidak ke-truncate & selalu segar. Syntra Harga tidak mengurus HPP lagi.)
     print(colorama.Fore.LIGHTCYAN_EX
           + f"[{_t()}] === SELESAI — total {total} variasi tersimpan ke SQL ==="
           + colorama.Style.RESET_ALL)
@@ -194,10 +188,13 @@ def jalankan_fase4():
             n_gagal += 1
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
     close_session()
-    catat_fase("perpanjang_promo",
+    catat_fase("duplikat_promo",
                status="gagal" if (n_ok == 0 and n_gagal) else "ok",
                keterangan=f"{n_ok} toko diproses" + (f", {n_gagal} gagal" if n_gagal else "") + f" | {mode}")
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 4 SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
+
+
+_FASE = {1: jalankan, 2: jalankan_rubah_harga, 3: jalankan_verifikasi, 4: jalankan_fase4}
 
 
 if __name__ == "__main__":
@@ -210,5 +207,14 @@ if __name__ == "__main__":
         jalankan_verifikasi()
     elif arg in ("fase4", "perpanjang", "4"):
         jalankan_fase4()
-    else:
+    elif arg in ("grab", "1"):
         jalankan()
+    else:
+        # Tanpa argumen -> ikuti config.FASE_AKTIF (bisa gabung, dijalankan berurutan).
+        fase = getattr(config, "FASE_AKTIF", [1]) or [1]
+        for f in fase:
+            fn = _FASE.get(int(f))
+            if fn:
+                fn()
+            else:
+                print(colorama.Fore.RED + f"[run] FASE_AKTIF {f} tidak dikenal (pilih 1-4)" + colorama.Style.RESET_ALL)

@@ -16,6 +16,7 @@ const KATALOG = [
       { key: "laporan", label: "Log Laporan" },
       { key: "analisa", label: "Log Analisa Iklan" },
       { key: "ubah_roas", label: "Log Ubah ROAS" },
+      { key: "hpp", label: "Log Ambil HPP (Jubelio)" },
     ],
   },
   {
@@ -23,7 +24,6 @@ const KATALOG = [
     label: "Syntra Monitoring Harga",
     pemicu: [
       { key: "grab", label: "Log Ambil Produk (Grab)" },
-      { key: "hpp", label: "Log Ambil HPP (Jubelio)" },
       { key: "rubah_harga", label: "Log Rubah Harga" },
       { key: "verifikasi", label: "Log Verifikasi" },
       { key: "duplikat_promo", label: "Log Duplikat Promo" },
