@@ -171,7 +171,7 @@ def jalankan_verifikasi():
             tot_sesuai += sesuai
             tot_belum += belum
             warna = colorama.Fore.LIGHTGREEN_EX if belum == 0 else colorama.Fore.YELLOW
-            print(warna + f"[{_t()}] [{nama}] ✓ {sesuai} sesuai, ✗ {belum} belum, {tanpa} tanpa-target"
+            print(warna + f"[{_t()}] [{nama}] {sesuai} sesuai, {belum} belum, {tanpa} tanpa-target"
                   + colorama.Style.RESET_ALL)
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
