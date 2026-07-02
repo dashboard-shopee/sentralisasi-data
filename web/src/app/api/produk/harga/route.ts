@@ -149,7 +149,7 @@ export async function GET(req: Request) {
           left join parent_sales ps on coalesce(nullif(e2.parent_sku, ''), e2.sku) = ps.parent_group
         )
         select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal",
-          coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", ho.harga_pancing "hargaPancing", ho.harga_akhir_target "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diproses_pada "diprosesPada", ho.diperbarui_pada "diperbaruiPada"
+          coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), 0) "hargaPancing", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0), 0) "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diproses_pada "diprosesPada", ho.diperbarui_pada "diperbaruiPada"
         from harga_olah_data ho
         left join sku_sales ss on ho.sku = ss.sales_sku
         left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
