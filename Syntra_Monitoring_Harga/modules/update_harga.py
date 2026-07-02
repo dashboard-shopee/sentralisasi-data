@@ -108,7 +108,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             r = requests.post(
                 config.URL_EDIT_HARGA_DASAR, params=session["params"], headers=config.grab_headers(session),
                 json={"product_id": item_id, "product_info": {"model_list": [{"id": model_id, "price": str(K)}]},
-                      "is_draft": False}, timeout=30,
+                      "is_draft": False}, timeout=(15, 30),   # (connect, read) anti-hang SSL
             )
             data = r.json()
             if data.get("code") == 0:

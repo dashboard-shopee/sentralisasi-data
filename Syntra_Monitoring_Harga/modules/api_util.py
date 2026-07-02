@@ -12,12 +12,15 @@ def _valid(data, kunci):
 def _minta(method, url, headers, params, payload, kunci, attempts):
     delay = 2
     cuplikan = ''
+    # timeout TUPLE (connect, read): connect 15s biar SSL-handshake yg gantung
+    # (bug hang di Windows) diabort cepat, read 60s utk respons besar.
+    TO = (15, 60)
     for attempt in range(attempts):
         try:
             if method == 'get':
-                r = requests.get(url, headers=headers, params=params, timeout=60)
+                r = requests.get(url, headers=headers, params=params, timeout=TO)
             else:
-                r = requests.post(url, headers=headers, params=params, json=payload, timeout=60)
+                r = requests.post(url, headers=headers, params=params, json=payload, timeout=TO)
             try:
                 data = r.json()
             except ValueError:

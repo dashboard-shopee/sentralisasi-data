@@ -87,15 +87,24 @@ def peta_item(session):
     return peta, cache
 
 
-def set_items(session, flash_sale_id, entries):
-    """Kirim perubahan item ke 1 flash sale. Return (sukses_bool, failed_items)."""
+def set_items(session, flash_sale_id, entries, chunk=50):
+    """Kirim perubahan item ke 1 flash sale, DI-CHUNK (default 50) biar payload tak
+    besar & 1 chunk error/hang tidak menggugurkan sisanya. Return (sukses_bool, failed_items)."""
     if not entries:
         return True, []
     if config.DRY_RUN:
         return True, []      # simulasi: tidak kirim
-    data = api_post(config.URL_FLASH_SET_ITEMS, config.grab_headers(session), session["params"],
-                    {"flash_sale_id": flash_sale_id, "items": entries}, kunci="data")["data"]
-    failed = data.get("failed_items") or []
+    failed = []
+    for i in range(0, len(entries), chunk):
+        batch = entries[i:i + chunk]
+        try:
+            data = api_post(config.URL_FLASH_SET_ITEMS, config.grab_headers(session), session["params"],
+                            {"flash_sale_id": flash_sale_id, "items": batch},
+                            kunci="data", attempts=2)["data"]   # attempts=2: gagal cepat, jangan hang lama
+            failed += data.get("failed_items") or []
+        except Exception as e:
+            failed += batch   # chunk ini gagal (mis. timeout) -> tandai, LANJUT chunk berikut
+            print(colorama.Fore.RED + f"[flash sale] set_items chunk gagal ({len(batch)} item): {type(e).__name__} - lanjut" + colorama.Style.RESET_ALL)
     return (len(failed) == 0), failed
 
 
