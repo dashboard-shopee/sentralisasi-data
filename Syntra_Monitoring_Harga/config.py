@@ -21,7 +21,7 @@ load_dotenv()
 # 1) MODE — simulasi atau beneran?
 #    False = DRY-RUN (SIMULASI, AMAN): hitung + catat rencana, TIDAK ubah Shopee.
 #    True  = LIVE: beneran ubah harga / bikin promo di Shopee.
-MODE_LIVE = False
+MODE_LIVE = True
 
 # 2) FASE yang dijalankan saat dobel-klik RUN.bat (python run.py tanpa argumen).
 #    Boleh gabung, dijalankan berurutan.
@@ -30,7 +30,7 @@ MODE_LIVE = False
 #      3 = VERIFIKASI (re-grab + banding harga real vs target)
 #      4 = PERPANJANG / buat Promo Toko
 #    Contoh: [1] · [2,3] · [1,2,3] full · [4]
-FASE_AKTIF = [1]
+FASE_AKTIF = [1,2,3]
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko.
 TOKO_AKTIF = []
