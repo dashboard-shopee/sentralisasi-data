@@ -31,7 +31,7 @@ interface SkuDetail {
 export default function StokPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [size] = useState(50);
+  const [size, setSize] = useState(50);
   const [sortCol, setSortCol] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -374,10 +374,29 @@ export default function StokPage() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between p-4 border-t border-[#eef0f6] bg-[#fafbfc]">
-              <span className="text-[12px] text-[#8a90a2]">
-                Menampilkan <span className="font-bold text-[#4b5563]">{rows.length}</span> dari <span className="font-bold text-[#4b5563]">{total.toLocaleString("id-ID")}</span> master SKU
-              </span>
+            <div className="flex items-center justify-between p-4 border-t border-[#eef0f6] bg-[#fafbfc] flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <span className="text-[12px] text-[#8a90a2]">
+                  Menampilkan <span className="font-bold text-[#4b5563]">{rows.length}</span> dari <span className="font-bold text-[#4b5563]">{total.toLocaleString("id-ID")}</span> master SKU
+                </span>
+                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+                  <span>Tampilkan:</span>
+                  <select
+                    value={size}
+                    onChange={(e) => {
+                      setSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-white border border-[#eef0f6] rounded px-2 py-1 text-[12px] font-semibold outline-none focus:border-[#ee4d2d] cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span>produk</span>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   disabled={page === 1}

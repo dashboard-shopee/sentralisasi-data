@@ -273,6 +273,11 @@ export default function ServerTable({
 }) {
   const [edits, setEdits] = useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
+  const [pageSizeState, setPageSizeState] = useState(pageSize);
+
+  useEffect(() => {
+    setPageSizeState(pageSize);
+  }, [pageSize]);
 
   useEffect(() => {
     if (!editKey) return;
@@ -338,7 +343,7 @@ export default function ServerTable({
         }
         // Force refresh rows
         setPage(1);
-        const r = await fetch(`/api/produk?${params({ page: "1", size: String(pageSize) })}`);
+        const r = await fetch(`/api/produk?${params({ page: "1", size: String(pageSizeState) })}`);
         const j = await r.json();
         setRows(j.rows || []);
         setModal({
@@ -486,15 +491,15 @@ export default function ServerTable({
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    fetch(`/api/produk?${params({ page: String(page), size: String(pageSize) })}`)
+    fetch(`/api/produk?${params({ page: String(page), size: String(pageSizeState) })}`)
       .then((r) => r.json())
       .then((j) => { if (alive) { setRows(j.rows || []); setTotal(j.total || 0); } })
       .catch(() => { if (alive) { setRows([]); setTotal(0); } })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [params, page, pageSize]);
+  }, [params, page, pageSizeState]);
 
-  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const pages = Math.max(1, Math.ceil(total / pageSizeState));
   function clickSort(c: SCol) {
     if (!c.sort) return;
     if (sort === c.sort) setDir(dir === "asc" ? "desc" : "asc");
@@ -543,7 +548,7 @@ export default function ServerTable({
         <span className="text-[12px] text-[#9aa0b2] ml-auto">{total.toLocaleString("id-ID")} produk</span>
       </div>
 
-      <div className="card p-0 overflow-auto max-h-[600px] relative">
+      <div className="card p-0 overflow-x-auto relative">
         {loading && (
           <div className="absolute inset-0 bg-white/60 grid place-items-center z-20 text-[13px] text-[#8a90a2]">Memuat…</div>
         )}
@@ -803,13 +808,32 @@ export default function ServerTable({
         </table>
       </div>
 
-      <div className="flex items-center justify-between mt-3 text-[12px]">
-        <span className="text-[#9aa0b2]">Halaman {page} dari {pages}</span>
+      <div className="flex items-center justify-between mt-3 text-[12px] flex-wrap gap-3">
+        <div className="flex items-center gap-4">
+          <span className="text-[#9aa0b2]">Halaman {page} dari {pages}</span>
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <span>Tampilkan:</span>
+            <select
+              value={pageSizeState}
+              onChange={(e) => {
+                setPageSizeState(Number(e.target.value));
+                setPage(1);
+              }}
+              className="bg-white border border-[#e6e9f0] rounded px-2 py-1 text-[12px] font-semibold outline-none focus:border-[#ee4d2d] cursor-pointer"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span>produk</span>
+          </div>
+        </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setPage(1)} disabled={page <= 1} className="px-2.5 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40">⏮</button>
-          <button onClick={() => setPage(page - 1)} disabled={page <= 1} className="px-3 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40">‹ Prev</button>
-          <button onClick={() => setPage(page + 1)} disabled={page >= pages} className="px-3 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40">Next ›</button>
-          <button onClick={() => setPage(pages)} disabled={page >= pages} className="px-2.5 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40">⏭</button>
+          <button onClick={() => setPage(1)} disabled={page <= 1} className="px-2.5 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40 hover:bg-slate-50 cursor-pointer">⏮</button>
+          <button onClick={() => setPage(page - 1)} disabled={page <= 1} className="px-3 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40 hover:bg-slate-50 cursor-pointer">‹ Prev</button>
+          <button onClick={() => setPage(page + 1)} disabled={page >= pages} className="px-3 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40 hover:bg-slate-50 cursor-pointer">Next ›</button>
+          <button onClick={() => setPage(pages)} disabled={page >= pages} className="px-2.5 py-1.5 rounded-lg border border-[#e6e9f0] disabled:opacity-40 hover:bg-slate-50 cursor-pointer">⏭</button>
         </div>
       </div>
 

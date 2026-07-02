@@ -65,7 +65,8 @@ export default function RisetKompetitorPage() {
 
   // State lists
   const [products, setProducts] = useState<ProductAcuan[]>([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 15, pages: 1 });
+  const [limit, setLimit] = useState(50);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 50, pages: 1 });
   const [loading, setLoading] = useState(true);
   
   // Filters
@@ -105,7 +106,7 @@ export default function RisetKompetitorPage() {
           market,
           search,
           page: String(page),
-          limit: "15"
+          limit: String(limit)
         });
         const res = await fetch(`/api/riset-kompetitor?${query.toString()}`);
         const json = await res.json();
@@ -125,7 +126,7 @@ export default function RisetKompetitorPage() {
     }, 300); // debounce search input
 
     return () => clearTimeout(timer);
-  }, [market, search, page]);
+  }, [market, search, page, limit]);
 
   // Fetch product details on selection
   useEffect(() => {
@@ -539,9 +540,28 @@ export default function RisetKompetitorPage() {
           </div>
 
           {/* Pagination */}
-          {!loading && pagination.pages > 1 && (
-            <div className="flex items-center justify-between mt-5 pt-3 border-t border-[#f8f9fc] text-[12px] font-semibold text-[#6b7180]">
-              <div>Total: {pagination.total} produk</div>
+          {!loading && pagination.total > 0 && (
+            <div className="flex items-center justify-between mt-5 pt-3 border-t border-[#f8f9fc] text-[12px] font-semibold text-[#6b7180] flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <div>Total: {pagination.total} produk</div>
+                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+                  <span>Tampilkan:</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-white border border-[#eef0f6] rounded px-2 py-1 text-[12px] font-semibold outline-none focus:border-[#ee4d2d] cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span>produk</span>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <button
                   disabled={page === 1}
