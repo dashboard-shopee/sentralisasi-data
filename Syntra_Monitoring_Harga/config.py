@@ -21,7 +21,7 @@ load_dotenv()
 # 1) MODE — simulasi atau beneran?
 #    False = DRY-RUN (SIMULASI, AMAN): hitung + catat rencana, TIDAK ubah Shopee.
 #    True  = LIVE: beneran ubah harga / bikin promo di Shopee.
-MODE_LIVE = False
+MODE_LIVE = True
 
 # 2) FASE yang dijalankan saat dobel-klik RUN.bat (python run.py tanpa argumen).
 #    Boleh gabung, dijalankan berurutan.
@@ -108,12 +108,16 @@ LABEL_HARGA_AWAL = "Harga Awal"    # tidak ada promo -> origin_price
 LABEL_PROMO_LAIN = "Promosi Lain"  # ada promo tapi tipe belum dikenali
 
 # ── Fase 2: sumber harga mana yang bot boleh koreksi / takedown ──
-# Garansi Harga Terbaik = badge (bukan promo penyetel harga) -> boleh dikoreksi.
-SUMBER_BOLEH_RUBAH = ["Promo Toko", "Harga Awal", "Garansi Harga Terbaik"]
+# HANYA Promo Toko & Harga Awal yg dikoreksi (SAMA dgn bot 02 acuan).
+# Garansi Harga Terbaik SENGAJA TIDAK di sini: dia auto-nurunin harga ikut kompetitor
+# (BUKAN badge) -> koreksi percuma ditarik balik. Ditangani PR terpisah (opt-out Garansi).
+SUMBER_BOLEH_RUBAH = ["Promo Toko", "Harga Awal"]
 # Dikunci promo penindih TAPI ada handler takedown otomatis -> takedown lalu koreksi.
 SUMBER_TAKEDOWN_OTOMATIS = ["Campaign"]
-# Dikunci promo TANPA handler takedown (endpoint belum ada) -> ditandai di alasan.
+# Dikunci promo TANPA handler takedown (endpoint belum ada) -> di-FLAG "perlu takedown".
 SUMBER_BLOKIR_MANUAL = ["Paket Diskon", "Promosi Lain"]
+# Sumber yg SENGAJA dilewati (ditangani PR terpisah): auto-lower / proteksi.
+SUMBER_SKIP_PR = ["Garansi Harga Terbaik", "Komisi"]
 
 # ── Konstanta harga/promo ──
 FAKTOR_HARGA = 100000            # uang di API promo = rupiah × 100000
@@ -121,6 +125,12 @@ STATUS_AKTIF = 1                 # item campaign: 1=ikut promo, 2=keluar
 STATUS_NONAKTIF = 2
 STATUS_FLASH_KELUAR = 0          # item flash sale: 0=keluar, 1=ikut
 STATUS_FLASH_IKUT = 1
+# ⚠️ SKIP takedown FLASH SALE sementara (PR flash sale besok). Endpoint per-item
+# `set_shop_flash_sale_items` DITOLAK Shopee (code 1001 "spex common error") 100% -> tak ada
+# yg ke-takedown, cuma buang waktu (Yarra ratusan sesi × retry 2s). True = lewati Fase 2A/2B flash.
+# Perbaikan: re-sniff endpoint remove item flash sale yg benar (yg verified baru `set_shop_flash_sale`
+# level-SESI: body {flash_sale_id, time_slot_id, status}). Balikin False setelah endpoint benar.
+SKIP_FLASH_TAKEDOWN = True
 MAKS_PRODUK_PER_PROMO = 999      # > ini -> dipecah jadi beberapa promo
 PROMO_IMAGES = []                # thumbnail promo (boleh kosong; Shopee isi otomatis)
 DUPLIKAT_PROMO_SIMULASI = False  # (dilewati kalau DRY_RUN sudah True)

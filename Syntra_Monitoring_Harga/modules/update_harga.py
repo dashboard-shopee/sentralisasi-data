@@ -204,12 +204,19 @@ def update_harga(shop, session, baris, nama_toko=None):
                   + colorama.Style.RESET_ALL)
             continue
 
-        # Harga real != target -> PERLU KOREKSI. Kalau harga tampil dikunci promo penindih:
+        # Harga real != target -> PERLU KOREKSI. Tangani sesuai SUMBER harga tampil:
+        #   Promo Toko / Harga Awal        -> lanjut koreksi (promo toko / harga dasar)
+        #   Campaign                       -> takedown dulu, lalu koreksi (fall-through)
+        #   Paket Diskon / Promosi Lain    -> FLAG "perlu takedown" (endpoint belum ada, PR)
+        #   Garansi Harga Terbaik / lainnya-> SKIP (ditangani PR terpisah: auto-lower/opt-out)
         if sumber not in config.SUMBER_BOLEH_RUBAH:
             if sumber in config.SUMBER_TAKEDOWN_OTOMATIS:
-                takedown_sumber.setdefault(sumber, set()).add(key)   # takedown dulu, lalu koreksi (fall-through)
+                takedown_sumber.setdefault(sumber, set()).add(key)   # Campaign: takedown lalu koreksi (fall-through)
+            elif sumber in config.SUMBER_BLOKIR_MANUAL:
+                alasan[row] = f"Harga dikunci {sumber} - perlu takedown (endpoint belum ada)"
+                continue
             else:
-                alasan[row] = f"Harga dikunci {sumber or 'promo lain'} - perlu takedown (endpoint belum ada)"
+                alasan[row] = f"Dilewati - harga dari {sumber or 'sumber lain'} (ditangani PR terpisah)"
                 continue
 
         # K >= harga awal -> keluarkan dari semua promo + ubah harga dasar
@@ -254,6 +261,7 @@ def update_harga(shop, session, baris, nama_toko=None):
     #    Tiap chunk di-try sendiri -> 1 chunk gagal TIDAK menggugurkan chunk lain
     #    (Beverra punya puluhan chunk; dulu 1 error bikin sisanya tidak terkirim).
     total_sukses = total_gagal = total_error = 0
+    tolak_detail = {}     # pesan_error_ASLI_Shopee -> list "item/model" (buat diagnosa akurat)
     for pid, entries in upd_by_pid.items():
         for chunk in _chunks(entries, 50):
             if config.DRY_RUN:
@@ -281,13 +289,15 @@ def update_harga(shop, session, baris, nama_toko=None):
             for x in (data.get("failed_item_list") or []):
                 try: fitems.add(int(x.get("item_id")) if isinstance(x, dict) else int(x))
                 except (TypeError, ValueError): pass
-            # Alasan dari pesan error Shopee (mis. "some item has participated in promotion").
+            # Pesan error ASLI Shopee (kumpulkan SEMUA, bukan cuma [0]) -> diagnosa akurat.
             errs = data.get("error_list") or []
-            pesan_err = str(errs[0].get("error_message", "")).strip() if (errs and isinstance(errs[0], dict)) else ""
+            pesan_list = [str(x.get("error_message", "")).strip()
+                          for x in errs if isinstance(x, dict) and x.get("error_message")]
+            pesan_err = pesan_list[0] if pesan_list else ""
             if "participat" in pesan_err.lower():
                 alasan_gagal = "Sudah ikut promosi lain - tidak bisa ditambah ke promo toko"
             elif pesan_err:
-                alasan_gagal = f"Gagal masuk promo toko: {pesan_err}"
+                alasan_gagal = f"Ditolak Shopee: {pesan_err}"
             else:
                 alasan_gagal = "Gagal masuk promo toko"
             for entri in chunk:
@@ -297,6 +307,13 @@ def update_harga(shop, session, baris, nama_toko=None):
                     r = row_of.get((pid, iid, mid))
                     if r:
                         alasan[r] = alasan_gagal
+                    # simpan alasan ASLI Shopee per item (buat ringkasan diagnosa)
+                    tolak_detail.setdefault(pesan_err or "(tanpa pesan)", []).append(f"{iid}/{mid}")
     print(colorama.Fore.GREEN + f"[update harga] [{shop}] - promo: {total_sukses} sukses, {total_gagal} ditolak, {total_error} error-kirim." + colorama.Style.RESET_ALL)
+    # RINCIAN PENOLAKAN ASLI SHOPEE -> biar tahu blocker SEBENARNYA (bukan tebakan Fase 3).
+    if tolak_detail:
+        print(colorama.Fore.YELLOW + f"[update harga] [{shop}] - ALASAN ASLI penolakan Shopee:" + colorama.Style.RESET_ALL)
+        for msg, contoh in sorted(tolak_detail.items(), key=lambda kv: -len(kv[1])):
+            print(colorama.Fore.YELLOW + f"    - \"{msg[:120]}\"  x{len(contoh)}  (contoh: {', '.join(contoh[:5])})" + colorama.Style.RESET_ALL)
 
     return alasan

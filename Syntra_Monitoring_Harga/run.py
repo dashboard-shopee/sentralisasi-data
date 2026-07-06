@@ -49,7 +49,7 @@ def _takedown_stok_campaign_flash(username, nama, i, session):
     n = 0
     try:
         from modules import flash_sale as FS
-        if FS.list_flash_sale(session):
+        if not getattr(config, "SKIP_FLASH_TAKEDOWN", False) and FS.list_flash_sale(session):
             n += FS.takedown_items(session, username, baca_stok_habis(nama, None))
     except Exception as e:
         print(colorama.Fore.RED + f"[{_t()}] [{nama}] takedown stok flash sale gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)

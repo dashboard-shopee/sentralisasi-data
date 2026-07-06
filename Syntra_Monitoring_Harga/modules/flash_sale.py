@@ -113,6 +113,11 @@ def takedown_items(session, shop, kunci_set):
     kunci_set = set (item_id, model_id). Return jumlah variasi ter-takedown."""
     if not kunci_set:
         return 0
+    if getattr(config, "SKIP_FLASH_TAKEDOWN", False):
+        # Endpoint set_shop_flash_sale_items ditolak Shopee (code 1001) -> skip total
+        # (hindari peta_item yg enumerasi ratusan sesi + retry gagal). PR flash sale besok.
+        print(colorama.Fore.YELLOW + f"[flash sale] [{shop}] - takedown DILEWATI (SKIP_FLASH_TAKEDOWN, PR besok)" + colorama.Style.RESET_ALL)
+        return 0
     peta, cache = peta_item(session)
     n = 0
     for fsid, items in cache.items():

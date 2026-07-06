@@ -16,9 +16,25 @@ Endpoint terverifikasi via `python sniff.py komisi` (__sniff_komisi.json):
 CATATAN:
   - Komisi diatur per ITEM (item_id); takedown pakai commissionId (dari GetOpenCampaignProducts).
   - commissionRate dalam satuan persen×1000 (6000 = 6%, 10000 = 10%).
-  - ⚠️ Endpoint affiliateplatform/gql DIJAGA anti-bot Shopee (error 90309999) untuk
-    panggilan otomatis/sintetis. Fungsi di sini SIAP PAKAI tapi butuh jalur yang lolos
-    shield (piggyback panggilan asli halaman / UI-automation) — lihat memory fitur-komisi.
+  - Bisa dikelola juga dari halaman PRODUK SAYA (filter `?productType=ams_commission`), bukan cuma
+    halaman affiliate — tapi endpoint tetap gql yang sama.
+
+  ⚠️⚠️ ANTI-BOT (TERKONFIRMASI DEFINITIF, tes live 3 Jul 2026) ⚠️⚠️
+  Endpoint `affiliateplatform/gql` (SetOpenCampaigns/RemoveOpenCampaigns/Query...) WAJIB header
+  `x-sap-sec` + `af-ac-enc-*` yang di-generate SDK JS Shopee (`x-sz-sdk-version`) HANYA saat klik
+  tombol asli. Bukti: cURL SetOpenCampaigns yg SUKSES dari browser MENGANDUNG `x-sap-sec`.
+  Yang GAGAL (tes langsung):
+    - `requests` biasa            -> HTTP 403 error 90309999
+    - `run_js`/`api_post_browser` -> JUGA gagal (fetch mentah tak ditandatangani SDK)
+  => TIDAK ADA jalur API murni. Satu-satunya cara EKSEKUSI = **UI-AUTOMATION** (DrissionPage:
+     navigate -> pilih produk -> input rate -> klik SIMPAN, biar SDK halaman yg nandatangan).
+  RENCANA: jadikan **TOOL MANUAL** (mis. `python run.py komisi`), BUKAN bagian bot per-jam —
+  biar kalau Shopee ubah UI, cukup benerin selektor 1x tanpa ganggu core harga/promo.
+  Fungsi di modul ini (payload/query gql) tetap VALID sebagai REFERENSI utk UI-automation nanti.
+
+  CATATAN HARGA BOT: proteksi harga (skip item komisi) TIDAK butuh komisi write — cukup baca
+  `harga_komisi_toko` (di-edit di dashboard SYNTRA). Jadi tanpa modul ini pun Yarra aman.
+  (Saat ini cuma YARRA yg pakai komisi; toko lain nihil, lolly cuma uji coba.)
 """
 import colorama; colorama.init()
 import config

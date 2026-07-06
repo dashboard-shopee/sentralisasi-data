@@ -19,6 +19,8 @@ def _minta(method, url, headers, params, payload, kunci, attempts):
         try:
             if method == 'get':
                 r = requests.get(url, headers=headers, params=params, timeout=TO)
+            elif method == 'put':
+                r = requests.put(url, headers=headers, params=params, json=payload, timeout=TO)
             else:
                 r = requests.post(url, headers=headers, params=params, json=payload, timeout=TO)
             try:
@@ -43,3 +45,7 @@ def api_post(url, headers, params, payload, kunci='data', attempts=4):
 
 def api_get(url, headers, params, kunci='result', attempts=4):
     return _minta('get', url, headers, params, None, kunci, attempts)
+
+
+def api_put(url, headers, params, payload, kunci='data', attempts=4):
+    return _minta('put', url, headers, params, payload, kunci, attempts)

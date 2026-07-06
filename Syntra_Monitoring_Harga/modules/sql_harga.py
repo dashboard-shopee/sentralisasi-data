@@ -319,10 +319,12 @@ def verifikasi_toko(toko):
                 where ho.toko = :t
             ),
             blk as (
-                -- promo penindih per ITEM (Paket Diskon di level item; selain Promo Toko).
+                -- promo penindih per ITEM yg BENAR-BENAR AKTIF (selain Promo Toko).
+                -- ⚠️ WAJIB filter status='aktif': Paket Diskon yg NONAKTIF tidak ngeblok apa pun,
+                --    dulu tanpa filter ini 326 item salah dicap "keblok Paket Diskon" (padahal mati).
                 select item_id, string_agg(distinct jenis, ', ' order by jenis) j
                 from harga_promo_konteks
-                where toko = :t and jenis <> 'Promo Toko'
+                where toko = :t and jenis <> 'Promo Toko' and coalesce(status,'') = 'aktif'
                 group by item_id
             ),
             v as (
