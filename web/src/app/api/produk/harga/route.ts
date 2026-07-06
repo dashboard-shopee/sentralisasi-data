@@ -371,7 +371,16 @@ export async function POST(req: Request) {
     // Ambil langsung dari DB agar perubahan hak akses langsung berlaku tanpa re-login
     if (role !== "owner") {
       const isCatalogEdit = ["update-custom-diskon", "update-custom-pancing", "mass-update-harga"].includes(action);
-      const isKomisiEdit = ["update-komisi-toko", "update-harga-jual-toko", "mass-update-komisi-toko", "add-komisi-produk", "delete-komisi-produk", "batch-update-jual"].includes(action);
+      const isKomisiEdit = [
+        "update-komisi-toko", 
+        "update-harga-jual-toko", 
+        "mass-update-komisi-toko", 
+        "add-komisi-produk", 
+        "delete-komisi-produk", 
+        "batch-update-jual",
+        "mass-delete-jual-toko",
+        "update-jual-parent-sku"
+      ].includes(action);
       
       if (isCatalogEdit || isKomisiEdit) {
         // Cek langsung dari database untuk memastikan data selalu up-to-date
@@ -544,6 +553,43 @@ export async function POST(req: Request) {
         ['ALL', `Batch Update Jual (${toko})`, null, username, userId]);
 
       return NextResponse.json({ ok: true, message: `${count} SKU pada toko ${toko} berhasil diperbarui.` });
+    }
+
+    if (action === "mass-delete-jual-toko") {
+      const { toko } = body;
+      if (!toko) return NextResponse.json({ ok: false, error: "Toko wajib diisi" }, { status: 400 });
+
+      await q(`
+        update harga_komisi_toko 
+        set harga_jual = 0, diperbarui_pada = now() 
+        where username_toko = $1
+      `, [toko]);
+
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+        ['ALL', `Mass Delete Jual (${toko})`, null, username, userId]);
+
+      return NextResponse.json({ ok: true, message: `Semua harga jual manual toko ${toko} berhasil dihapus.` });
+    }
+
+    if (action === "update-jual-parent-sku") {
+      const { toko, parent_sku, harga_jual } = body;
+      if (!toko) return NextResponse.json({ ok: false, error: "Toko wajib diisi" }, { status: 400 });
+      if (!parent_sku) return NextResponse.json({ ok: false, error: "Parent SKU wajib diisi" }, { status: 400 });
+      const valJual = harga_jual !== "" && harga_jual !== null ? parseFloat(harga_jual) : 0;
+
+      await q(`
+        insert into harga_komisi_toko (sku, username_toko, harga_jual, diperbarui_pada)
+        select sku, $1, $2, now()
+        from harga_komisi_produk
+        where parent_sku ilike $3
+        on conflict (sku, username_toko) do update
+        set harga_jual = excluded.harga_jual, diperbarui_pada = now()
+      `, [toko, valJual, parent_sku]);
+
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+        [parent_sku, `Edit Harga Jual Parent SKU (${toko})`, valJual, username, userId]);
+
+      return NextResponse.json({ ok: true, message: `Harga jual untuk Parent SKU ${parent_sku} di toko ${toko} berhasil diperbarui.` });
     }
 
     return NextResponse.json({ ok: false, error: "Action tidak dikenal" }, { status: 400 });

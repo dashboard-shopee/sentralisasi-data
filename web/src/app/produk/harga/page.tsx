@@ -118,6 +118,13 @@ export default function HargaPage() {
   const [isMassSaving, setIsMassSaving] = useState(false);
   const [isMassLoading, setIsMassLoading] = useState(false);
 
+  // Jual settings modal states
+  const [showJualModal, setShowJualModal] = useState(false);
+  const [selectedJualToko, setSelectedJualToko] = useState<TokoInfo | null>(null);
+  const [jualParentSku, setJualParentSku] = useState("");
+  const [jualParentPrice, setJualParentPrice] = useState("");
+  const [isJualSaving, setIsJualSaving] = useState(false);
+
   const formatRp = (n: number | null | undefined) => {
     if (n === null || n === undefined) return "-";
     return "Rp" + Math.round(n).toLocaleString("id-ID");
@@ -715,7 +722,7 @@ export default function HargaPage() {
                      <div className="flex gap-2.5">
                        <span title="Harga Real Saat Ini (dari Olah Data)">Saat ini</span> 
                        <span className="cursor-pointer hover:text-[#6b21a8] text-[#6b21a8] font-bold transition-colors" onClick={() => handleMassKomisi(tk.username)} title={`Set Komisi Massal ${tk.nama}`}>⚙️ Rkm (%)</span> 
-                       <span className="cursor-pointer hover:text-[#ee4d2d] text-[#ee4d2d] font-bold transition-colors" onClick={() => handleMassJual(tk.username)} title={`Set Jual Massal ${tk.nama} mengikuti Rekomendasi`}>⚙️ Jual</span>
+                       <span className="cursor-pointer hover:text-[#ee4d2d] text-[#ee4d2d] font-bold transition-colors" onClick={() => { setSelectedJualToko(tk); setShowJualModal(true); }} title={`Pengaturan Jual Massal ${tk.nama}`}>⚙️ Jual</span>
                      </div>
                   </div>
                 </th>
@@ -1186,6 +1193,161 @@ export default function HargaPage() {
                 className="px-5 py-2.5 text-[13px] font-bold bg-[#ee4d2d] text-white hover:bg-[#d73f22] rounded-xl shadow-md shadow-[#ee4d2d]/20 transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center gap-2"
               >
                 {isMassSaving ? "Menyimpan..." : "✓ Terapkan Massal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jual Settings Modal */}
+      {showJualModal && selectedJualToko && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-[500px] shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-[#eef0f6] flex justify-between items-center bg-[#fcfdfe] rounded-t-2xl">
+              <h2 className="text-[16px] font-extrabold text-[#161a27] flex items-center gap-2">
+                <span>⚙️</span> Pengaturan Jual - {selectedJualToko.nama}
+              </h2>
+              <button 
+                onClick={() => { setShowJualModal(false); setJualParentSku(""); setJualParentPrice(""); }} 
+                className="text-[#8a90a2] hover:bg-[#f0f2f5] rounded-full w-8 h-8 flex items-center justify-center font-bold text-xl leading-none transition-colors"
+              >
+                &times;
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="p-5 flex-1 overflow-y-auto space-y-6">
+              {/* Option 1: Tambah Massal (ikut rekomendasi) */}
+              <div className="bg-[#fff1ed]/30 p-4 rounded-xl border border-[#ffddcc]/50">
+                <h3 className="text-xs font-bold text-[#ee4d2d] mb-1">1. Tambah Massal (Ikuti Rekomendasi)</h3>
+                <p className="text-[11px] text-[#6b7180] mb-3">Set harga jual massal untuk semua produk di toko ini mengikuti harga rekomendasi (Net Price / (1 - Komisi%)).</p>
+                <button
+                  onClick={async () => {
+                    setShowJualModal(false);
+                    await handleMassJual(selectedJualToko.username);
+                  }}
+                  className="w-full py-2 bg-[#ee4d2d] hover:bg-[#d73f22] text-white font-bold text-[12px] rounded-lg transition-colors cursor-pointer text-center"
+                >
+                  🚀 Terapkan Tambah Massal
+                </button>
+              </div>
+
+              {/* Option 2: Edit Harga per SKU Induk */}
+              <div className="bg-[#f3e8ff]/30 p-4 rounded-xl border border-[#e9d5ff]/50">
+                <h3 className="text-xs font-bold text-[#6b21a8] mb-1">2. Edit Harga per SKU Induk</h3>
+                <p className="text-[11px] text-[#6b7180] mb-3">Set harga jual manual untuk semua varian SKU yang memiliki SKU Induk yang sama.</p>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#4b5563] mb-1">SKU Induk / Parent SKU</label>
+                    <input 
+                      type="text" 
+                      value={jualParentSku} 
+                      onChange={e => setJualParentSku(e.target.value)} 
+                      placeholder="Contoh: BSCR, BSCT, TRC..." 
+                      className="w-full border border-[#eef0f6] bg-white rounded-lg px-3 py-2 text-[12px] font-medium outline-none focus:border-[#6b21a8] transition-all" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#4b5563] mb-1">Harga Jual Baru (Rp)</label>
+                    <input 
+                      type="number" 
+                      value={jualParentPrice} 
+                      onChange={e => setJualParentPrice(e.target.value)} 
+                      placeholder="Masukkan nominal harga jual..." 
+                      className="w-full border border-[#eef0f6] bg-white rounded-lg px-3 py-2 text-[12px] font-medium outline-none focus:border-[#6b21a8] transition-all" 
+                    />
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!jualParentSku.trim()) return alert("SKU Induk wajib diisi");
+                      if (!jualParentPrice.trim()) return alert("Harga Jual wajib diisi");
+                      
+                      try {
+                        setIsJualSaving(true);
+                        const res = await fetch("/api/produk/harga", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "update-jual-parent-sku",
+                            toko: selectedJualToko.username,
+                            parent_sku: jualParentSku,
+                            harga_jual: jualParentPrice
+                          })
+                        });
+                        const d = await res.json();
+                        if (res.ok) {
+                          alert(d.message);
+                          setShowJualModal(false);
+                          setJualParentSku("");
+                          setJualParentPrice("");
+                          fetchData();
+                        } else {
+                          alert(d.error || "Gagal mengupdate harga per SKU Induk");
+                        }
+                      } catch (err: any) {
+                        alert(err.message);
+                      } finally {
+                        setIsJualSaving(false);
+                      }
+                    }}
+                    disabled={isJualSaving}
+                    className="w-full py-2 bg-[#6b21a8] hover:bg-[#581c87] text-white font-bold text-[12px] rounded-lg transition-colors cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    {isJualSaving ? "Memproses..." : "✏️ Update Harga SKU Induk"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 3: Hapus Massal */}
+              <div className="bg-[#fff1f2]/50 p-4 rounded-xl border border-[#ffe4e6]/50">
+                <h3 className="text-xs font-bold text-[#e11d48] mb-1">3. Hapus Massal Harga Jual</h3>
+                <p className="text-[11px] text-[#6b7180] mb-3">Hapus semua harga jual manual di toko ini. Harga akan otomatis kembali mengikuti Harga Rekomendasi.</p>
+                <button
+                  onClick={async () => {
+                    const confirmDelete = confirm(`Apakah Anda yakin ingin menghapus SEMUA harga jual manual untuk toko ${selectedJualToko.nama}? Harga akan kembali ke rekomendasi.`);
+                    if (!confirmDelete) return;
+                    
+                    try {
+                      setIsJualSaving(true);
+                      const res = await fetch("/api/produk/harga", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "mass-delete-jual-toko",
+                          toko: selectedJualToko.username
+                        })
+                      });
+                      const d = await res.json();
+                      if (res.ok) {
+                        alert(d.message);
+                        setShowJualModal(false);
+                        fetchData();
+                      } else {
+                        alert(d.error || "Gagal menghapus harga massal");
+                      }
+                    } catch (err: any) {
+                      alert(err.message);
+                    } finally {
+                      setIsJualSaving(false);
+                    }
+                  }}
+                  disabled={isJualSaving}
+                  className="w-full py-2 bg-white border border-[#e11d48] text-[#e11d48] hover:bg-[#fff1f2] font-bold text-[12px] rounded-lg transition-colors cursor-pointer disabled:opacity-50 text-center"
+                >
+                  {isJualSaving ? "Memproses..." : "🗑️ Hapus Semua Harga Jual Manual"}
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-[#eef0f6] flex justify-end bg-[#fdfdfd] rounded-b-2xl">
+              <button 
+                onClick={() => { setShowJualModal(false); setJualParentSku(""); setJualParentPrice(""); }} 
+                className="px-5 py-2.5 text-[13px] font-bold text-[#6b7180] hover:bg-[#eaecef] hover:text-[#161a27] rounded-xl transition-colors cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>
