@@ -15,6 +15,34 @@ export async function GET(req: Request) {
   const offset = (page - 1) * size;
 
   try {
+    // DETAIL 1 variasi (buat expand-row di /produk/harga): semua fakta promo variasi ini.
+    if (tab === "detail") {
+      const item = p.get("item");
+      const model = p.get("model");
+      const tk = p.get("toko");
+      const sku = p.get("sku") || "";
+      if (!item || !tk) return NextResponse.json({ error: "item & toko wajib" }, { status: 400 });
+      const promos = await q<Record<string, unknown>>(
+        `select jenis, harga_promo "hargaPromo", status, mulai, berakhir
+         from harga_promo_konteks where toko=$1 and item_id=$2 and model_id=$3 order by jenis`,
+        [tk, item, model || 0]
+      );
+      const garansi = await q<Record<string, unknown>>(
+        `select bid_price "bidPrice", current_price "currentPrice"
+         from harga_fakta_garansi where toko=$1 and item_id=$2 and model_id=$3`,
+        [tk, item, model || 0]
+      );
+      const komisi = sku
+        ? await q<Record<string, unknown>>(
+            `select d.nama "toko", k.komisi_persen "komisiPersen", k.harga_jual "hargaJual"
+             from harga_komisi_toko k left join dim_toko d on d.username=k.username_toko
+             where k.sku=$1 and coalesce(k.harga_jual,0)>0`,
+            [sku]
+          )
+        : [];
+      return NextResponse.json({ promos, garansi, komisi });
+    }
+
     const tokos = await q<{ username: string; nama: string }>(
       `select username, nama from dim_toko order by shop_index`
     );

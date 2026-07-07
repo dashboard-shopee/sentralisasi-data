@@ -89,6 +89,32 @@ export default function HargaPage() {
   // Tab-specific filters
   const [selectedToko, setSelectedToko] = useState("");
   const [selectedSumber, setSelectedSumber] = useState("");
+
+  // Expand-row: detail fakta promo per variasi (tab Olah Data)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [detailCache, setDetailCache] = useState<Record<string, any>>({});
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggleDetail = async (r: OlahDataRow) => {
+    const key = `${r.toko}-${r.itemId}-${r.modelId}`;
+    if (expandedKey === key) { setExpandedKey(null); return; }
+    setExpandedKey(key);
+    if (!detailCache[key]) {
+      setDetailLoading(true);
+      try {
+        const u = new URL("/api/produk/pusat-promosi", window.location.origin);
+        u.searchParams.set("tab", "detail");
+        u.searchParams.set("toko", r.toko);
+        u.searchParams.set("item", String(r.itemId));
+        u.searchParams.set("model", String(r.modelId));
+        if (r.sku) u.searchParams.set("sku", r.sku);
+        const res = await fetch(u.toString(), { cache: "no-store" });
+        const d = await res.json();
+        setDetailCache((prev) => ({ ...prev, [key]: d }));
+      } catch { /* diamkan */ }
+      finally { setDetailLoading(false); }
+    }
+  };
   
   // Data states
   const [rows, setRows] = useState<any[]>([]);
@@ -586,6 +612,58 @@ export default function HargaPage() {
     );
   };
 
+  const renderPromoDetail = (key: string) => {
+    const dd = detailCache[key];
+    if (!dd) return <div className="p-4 text-xs text-[#8a90a2]">{detailLoading ? "Memuat detail…" : "—"}</div>;
+    const promos: any[] = dd.promos || [];
+    const komisi: any[] = dd.komisi || [];
+    const garansi: any[] = dd.garansi || [];
+    const badge = (j: string) => {
+      if (j === "Promo Toko") return "bg-[#fff1ed] text-[#ee4d2d] border-[#ffddcc]";
+      if (j === "Paket Diskon") return "bg-[#e0f2fe] text-[#0369a1] border-[#bae6fd]";
+      if (j.includes("Garansi")) return "bg-[#ecfdf5] text-[#047857] border-[#a7f3d0]";
+      if (j === "Campaign") return "bg-[#fef3c7] text-[#92400e] border-[#fde68a]";
+      if (j.includes("Flash")) return "bg-[#fae8ff] text-[#a21caf] border-[#f5d0fe]";
+      return "bg-[#f0f2f5] text-[#4b5563] border-[#e5e7eb]";
+    };
+    return (
+      <div className="p-4 flex flex-col gap-3">
+        <div>
+          <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">🎯 Keikutsertaan Promo (fakta bot)</div>
+          {promos.length === 0 ? (
+            <div className="text-xs text-[#8a90a2]">Variasi ini tidak sedang ikut promo apa pun.</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {promos.map((pm, i) => (
+                <div key={i} className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${badge(pm.jenis)}`}>
+                  <span className="font-bold">{pm.jenis}</span>
+                  {pm.status && <span className={pm.status === "aktif" ? "ml-1.5" : "ml-1.5 opacity-60"}>({pm.status})</span>}
+                  {pm.hargaPromo > 0 && <span className="ml-1.5">· {formatRp(pm.hargaPromo)}</span>}
+                  {pm.berakhir && <span className="ml-1.5 opacity-70">s/d {new Date(pm.berakhir).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {garansi.length > 0 && (
+          <div className="text-[11px] text-[#047857]">🛡️ Garansi Harga Terbaik — bid {formatRp(garansi[0].bidPrice)} · harga kini {formatRp(garansi[0].currentPrice)}</div>
+        )}
+        {komisi.length > 0 && (
+          <div>
+            <div className="text-[11px] font-bold text-[#6b21a8] uppercase tracking-wider mb-1">Komisi Affiliate Aktif</div>
+            <div className="flex flex-wrap gap-2">
+              {komisi.map((k, i) => (
+                <span key={i} className="px-2 py-1 rounded-lg bg-[#f3e8ff] text-[#6b21a8] border border-[#e9d5ff] text-[11px]">
+                  {k.toko}: {k.komisiPersen}% · jual {formatRp(k.hargaJual)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderOlahDataTable = () => {
     const list = rows as OlahDataRow[];
     return (
@@ -646,9 +724,15 @@ export default function HargaPage() {
               else if (r.sumberHarga === "Garansi Harga Terbaik") badgeColor = "bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]";
               else if (r.sumberHarga === "Komisi Aktif") badgeColor = "bg-[#f3e8ff] text-[#6b21a8] border border-[#e9d5ff]";
 
+              const rowKey = `${r.toko}-${r.itemId}-${r.modelId}`;
+              const isOpen = expandedKey === rowKey;
               return (
-                <tr key={`${r.toko}-${r.itemId}-${r.modelId}`} className="hover:bg-[#fcfdfe] transition-colors">
-                  <td className="p-3.5 font-semibold text-[#161a27]">{r.toko}</td>
+                <React.Fragment key={rowKey}>
+                <tr onClick={() => toggleDetail(r)} className={`cursor-pointer transition-colors ${isOpen ? "bg-[#fff8f6]" : "hover:bg-[#fcfdfe]"}`}>
+                  <td className="p-3.5 font-semibold text-[#161a27]">
+                    <span className="inline-block w-3 text-[#ee4d2d] mr-1 select-none">{isOpen ? "▾" : "▸"}</span>
+                    {r.toko}
+                  </td>
                   <td className="p-3.5 font-bold text-[#4b5563]">{r.sku || "-"}</td>
                   <td className="p-3.5 text-xs text-[#8a90a2]">
                     <div>{r.itemId}</div>
@@ -683,6 +767,14 @@ export default function HargaPage() {
                       : "-"}
                   </td>
                 </tr>
+                {isOpen && (
+                  <tr>
+                    <td colSpan={13} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
+                      {renderPromoDetail(rowKey)}
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               );
             })}
           </tbody>
