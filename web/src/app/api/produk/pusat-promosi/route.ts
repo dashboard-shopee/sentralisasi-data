@@ -1,0 +1,119 @@
+import { NextResponse } from "next/server";
+import { q } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+
+// Pusat Promosi — fakta per-program (diisi bot Syntra Monitoring Harga Fase 1).
+// Tab: promo_toko | paket | voucher | campaign | garansi | flash | komisi
+export async function GET(req: Request) {
+  const p = new URL(req.url).searchParams;
+  const tab = p.get("tab") || "promo_toko";
+  const search = (p.get("q") || "").trim();
+  const filterToko = (p.get("toko") || "").trim();      // NAMA toko (mis. 'Kimmioshop')
+  const page = parseInt(p.get("page") || "1") || 1;
+  const size = Math.min(parseInt(p.get("size") || "50") || 50, 200);
+  const offset = (page - 1) * size;
+
+  try {
+    const tokos = await q<{ username: string; nama: string }>(
+      `select username, nama from dim_toko order by shop_index`
+    );
+
+    // Susun WHERE + params dinamis per tab. `s` = alias tabel utama.
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const like = (cols: string[]) => {
+      params.push(`%${search}%`);
+      const ph = `$${params.length}`;
+      where.push(`(${cols.map((c) => `${c} ilike ${ph}`).join(" or ")})`);
+    };
+    const eqToko = (col: string) => {
+      params.push(filterToko);
+      where.push(`${col} = $${params.length}`);
+    };
+
+    let base = "";        // FROM + JOIN
+    let cols = "";        // SELECT list
+    let order = "";
+
+    if (tab === "promo_toko") {
+      cols = `s.toko, s.item_id "itemId", s.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+              o.nama_variasi "namaVariasi", s.harga_promo "hargaPromo", s.status, s.stok,
+              s.mulai, s.berakhir, s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_promo_konteks s
+              left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id`;
+      where.push(`s.jenis = 'Promo Toko'`);
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["o.sku", "o.nama_produk", "s.item_id::text"]);
+      order = `s.toko asc, s.item_id asc`;
+    } else if (tab === "garansi") {
+      cols = `s.toko, s.item_id "itemId", s.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+              o.nama_variasi "namaVariasi", s.current_price "currentPrice", s.bid_price "bidPrice",
+              s.stok, s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_fakta_garansi s
+              left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id`;
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["o.sku", "o.nama_produk", "s.item_id::text"]);
+      order = `s.toko asc, s.item_id asc`;
+    } else if (tab === "campaign") {
+      cols = `s.toko, s.campaign_id "campaignId", s.session_id "sessionId", s.campaign_name "campaignName",
+              s.session_name "sessionName", s.session_start "sessionStart", s.session_end "sessionEnd",
+              s.nomination_end "nominationEnd",
+              (select count(*) from harga_fakta_campaign_item i where i.toko=s.toko and i.session_id=s.session_id) "nominated",
+              s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_fakta_campaign_sesi s`;
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["s.campaign_name", "s.session_name"]);
+      order = `s.toko asc, s.nomination_end asc`;
+    } else if (tab === "flash") {
+      cols = `s.toko, s.flash_sale_id "flashSaleId", s.status, s.timeslot_id "timeslotId",
+              s.start_time "startTime", s.end_time "endTime", s.item_count "itemCount",
+              s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_fakta_flash_sesi s`;
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["s.flash_sale_id::text"]);
+      order = `s.toko asc, s.start_time asc`;
+    } else if (tab === "voucher") {
+      cols = `s.toko, s.voucher_id "voucherId", s.code, s.name, s.discount, s.min_price "minPrice",
+              s.tipe, s.start_time "startTime", s.end_time "endTime", s.status,
+              s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_fakta_voucher s`;
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["s.code", "s.name"]);
+      order = `s.toko asc, s.end_time asc`;
+    } else if (tab === "paket") {
+      cols = `s.toko, s.bundle_deal_id "bundleDealId", s.name, s.status,
+              s.start_time "startTime", s.end_time "endTime", s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_fakta_paket s`;
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["s.name"]);
+      order = `s.toko asc, s.end_time asc`;
+    } else if (tab === "komisi") {
+      // Komisi = harga_komisi_toko (source of truth dashboard), bukan grab Shopee. AKTIF = harga_jual>0.
+      cols = `d.nama "toko", s.username_toko "usernameToko", s.sku, p.parent_sku "parentSku",
+              p.category, s.komisi_persen "komisiPersen", s.harga_jual "hargaJual",
+              s.diperbarui_pada "diperbaruiPada"`;
+      base = `from harga_komisi_toko s
+              left join harga_komisi_produk p on p.sku = s.sku
+              left join dim_toko d on d.username = s.username_toko`;
+      where.push(`coalesce(s.harga_jual,0) > 0`);
+      if (filterToko) eqToko("d.nama");
+      if (search) like(["s.sku", "p.parent_sku", "p.category"]);
+      order = `d.nama asc, s.sku asc`;
+    } else {
+      return NextResponse.json({ error: "Tab tidak dikenal" }, { status: 400 });
+    }
+
+    const W = where.length ? `where ${where.join(" and ")}` : "";
+    const rowsSql = `select ${cols} ${base} ${W} order by ${order} limit $${params.length + 1} offset $${params.length + 2}`;
+    const rows = await q<Record<string, unknown>>(rowsSql, [...params, size, offset]);
+    const totalRes = await q<{ count: string }>(`select count(*) ${base} ${W}`, params);
+    const total = parseInt(totalRes[0]?.count || "0");
+
+    return NextResponse.json({ rows, total, tokos, tab });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("GET /api/produk/pusat-promosi error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
