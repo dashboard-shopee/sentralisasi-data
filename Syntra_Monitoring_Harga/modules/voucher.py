@@ -98,21 +98,27 @@ def bagi_produk_per_band(produk_harga):
 
 
 # ── BACA ──
-def list_vouchers(session):
-    # ⚠️ ENDPOINT LIST BELUM TERVERIFIKASI: GET marketing/v3/voucher/list/ balik `201600001
-    #    ERROR_PARAM` utk SEMUA kombinasi param yg dicoba (15+ varian live, 6 Jul). Params asli
-    #    perlu di-CAPTURE DevTools: buka Seller Center > Voucher Saya > Network > cari request
-    #    'voucher/list' -> copy URL query + method + body, ganti URL_LIST/param di sini.
-    #    Sementara: gagal-anggun (return []) biar Fase 1 (tier mingguan) tak error-spam.
-    try:
-        data = _call("GET", URL_LIST, session).get("data") or {}
-    except Exception as e:
-        print(colorama.Fore.YELLOW + f"[voucher] list belum jalan (perlu capture endpoint): {type(e).__name__}"
-              + colorama.Style.RESET_ALL)
-        return []
-    if isinstance(data, list):
-        return data
-    return data.get("voucher_list") or data.get("list") or []
+def list_vouchers(session, promotion_type=0, page_size=50):
+    """List voucher toko. Endpoint VERIFIED via sniff (6 Jul): GET marketing/v3/voucher/list/
+    params {offset, limit, promotion_type}. promotion_type 0=SEMUA (1=akan datang, 2=berlangsung).
+    Paginate offset s/d total_count. Return list voucher (data.voucher_list). Gagal-anggun -> []."""
+    hasil = []
+    offset = 0
+    while True:
+        try:
+            data = _call("GET", URL_LIST, session,
+                         extra_params={"offset": offset, "limit": page_size,
+                                       "promotion_type": promotion_type}).get("data") or {}
+        except Exception as e:
+            print(colorama.Fore.YELLOW + f"[voucher] list gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            break
+        lst = (data.get("voucher_list") or data.get("list") or []) if isinstance(data, dict) else (data or [])
+        hasil.extend(x for x in lst if isinstance(x, dict))
+        total = int(data.get("total_count") or 0) if isinstance(data, dict) else 0
+        offset += page_size
+        if len(lst) < page_size or (total and offset >= total) or offset > 5000:
+            break
+    return hasil
 
 
 def get_voucher(session, voucher_id):

@@ -145,19 +145,31 @@ def fakta_flash(nama_toko, session):
 
 
 # ── TIER MINGGUAN: Voucher ──
+def _num(x):
+    """Rupiah/persen string ('50000.00') -> float; None/'' -> None."""
+    if x in (None, "", "None"):
+        return None
+    try:
+        return float(x)
+    except (ValueError, TypeError):
+        return None
+
+
 def _norm_voucher(v):
-    """Normalisasi 1 voucher raw (field Shopee bervariasi) -> dict standar."""
+    """Normalisasi 1 voucher raw -> dict standar. Field verified via sniff 6 Jul:
+    voucher_id, voucher_code, name, discount, value, min_price, start/end_time, status,
+    use_type, rule.items (voucher produk)."""
     rule = v.get("rule") or {}
     items = rule.get("items") if isinstance(rule, dict) else None
-    item_scope = [int(i.get("itemid")) for i in items if i.get("itemid")] if items else None
+    item_scope = [int(i.get("itemid")) for i in items
+                  if isinstance(i, dict) and i.get("itemid")] if items else None
     return {
-        "voucher_id": int(v.get("voucher_id") or v.get("id") or v.get("promotionid") or 0),
+        "voucher_id": int(v.get("voucher_id") or v.get("id") or 0),
         "code": v.get("voucher_code") or v.get("code") or None,
         "name": v.get("name") or None,
-        "discount": v.get("discount_percentage") or v.get("percentage") or v.get("discount"),
-        "min_price": v.get("min_price") or v.get("min_spend") or v.get("min_basket_price"),
-        "tipe": (str(v.get("voucher_market_type")) if v.get("voucher_market_type") is not None
-                 else (str(v.get("usecase")) if v.get("usecase") is not None else None)),
+        "discount": _num(v.get("discount")) or _num(v.get("value")),
+        "min_price": _num(v.get("min_price")),
+        "tipe": str(v.get("use_type")) if v.get("use_type") is not None else None,
         "start_time": _iso(v.get("start_time")),
         "end_time": _iso(v.get("end_time")),
         "status": v.get("status"),
