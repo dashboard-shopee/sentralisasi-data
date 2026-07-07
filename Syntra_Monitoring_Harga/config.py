@@ -49,6 +49,32 @@ DRY_RUN = not (MODE_LIVE or os.getenv("HARGA_LIVE", "0") == "1")
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║        SCHEDULER 24 JAM — FASE 1 (pola sama Syntra_Iklan)          ║
+# ║  Bot nyala terus, detak tiap 3 detik (tanpa log), nembak 1×/jam    ║
+# ║  di menit MENIT_RUNNING. Tiap tier fakta dipicu by JAM/HARI/TGL.   ║
+# ║  Semua bisa di-custom di sini.                                     ║
+# ╚══════════════════════════════════════════════════════════════════╝
+MENIT_RUNNING         = "5"       # nembak tiap jam di menit ini (:05)
+# TIER HARIAN (Garansi + Campaign) — jalan sekali sehari di jam ini.
+JAM_FAKTA_HARIAN      = "2"       # 02:00
+# TIER MINGGUAN (Flash Sale + Voucher + Paket Diskon) — sekali seminggu.
+HARI_FAKTA_MINGGUAN   = "SENIN"   # hari grab mingguan
+JAM_FAKTA_MINGGUAN    = "3"       # 03:00 (di hari mingguan)
+# TIER BULANAN (housekeeping: prune fakta yatim) — sekali sebulan.
+TANGGAL_FAKTA_BULANAN = "1"       # tanggal grab bulanan
+JAM_FAKTA_BULANAN     = "4"       # 04:00 (di tanggal bulanan)
+
+# Map weekday Inggris -> Indonesia (buat banding dgn HARI_FAKTA_MINGGUAN).
+HARI_ID = {
+    "Monday": "SENIN", "Tuesday": "SELASA", "Wednesday": "RABU", "Thursday": "KAMIS",
+    "Friday": "JUMAT", "Saturday": "SABTU", "Sunday": "MINGGU",
+}
+
+# Umur maksimum baris fakta sebelum dianggap yatim & di-prune housekeeping (hari).
+FAKTA_MAKS_UMUR_HARI = 35
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║                    DAFTAR 10 TOKO (urutan = tombol "Detail")       ║
 # ╚══════════════════════════════════════════════════════════════════╝
 SHOP_DATABASE = {

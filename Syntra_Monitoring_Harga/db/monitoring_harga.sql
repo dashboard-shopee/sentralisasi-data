@@ -127,3 +127,120 @@ create table if not exists harga_stok_takedown (
     primary key (toko, item_id, model_id, jenis)
 );
 create index if not exists idx_stok_takedown_toko on harga_stok_takedown(toko);
+
+-- ============================================================
+--  FASE 1 (PENGUMPUL FAKTA) — tabel fakta per-program.
+--  Diisi READ-ONLY oleh bot (tier harian/mingguan). Pola snapshot:
+--  baris toko dihapus lalu di-insert ulang tiap grab -> selalu terkini.
+--  Kolom 'toko' = NAMA toko (mis. 'Kimmioshop') biar bisa JOIN dgn
+--  harga_olah_data / harga_promo_konteks on (toko, item_id, model_id).
+--  Sumber render: halaman dashboard "Pusat Promosi" (tab per modul) +
+--  expand row di /produk/harga.
+-- ============================================================
+
+-- 8. FAKTA GARANSI HARGA TERBAIK (harian) — grain: variasi. Sumber: garansi.list_ongoing.
+create table if not exists harga_fakta_garansi (
+    toko             text   not null,
+    item_id          bigint not null,
+    model_id         bigint not null,
+    bid_id           text,
+    cspu_id          text,
+    current_price    numeric default 0,
+    bid_price        numeric default 0,
+    stok             numeric default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, item_id, model_id)
+);
+create index if not exists idx_fakta_garansi_toko on harga_fakta_garansi(toko);
+
+-- 9. FAKTA CAMPAIGN — sesi buka-nominasi (harian). Grain: sesi. Sumber: campaign.open_sessions.
+create table if not exists harga_fakta_campaign_sesi (
+    toko             text not null,
+    campaign_id      text not null,
+    session_id       text not null,
+    campaign_name    text,
+    session_name     text,
+    session_start    timestamptz,
+    session_end      timestamptz,
+    nomination_end   timestamptz,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, session_id)
+);
+create index if not exists idx_fakta_camp_sesi_toko on harga_fakta_campaign_sesi(toko);
+
+-- 10. FAKTA CAMPAIGN — produk kita yang ternominasi (harian). Grain: variasi/sesi. Sumber: campaign.get_nominated.
+create table if not exists harga_fakta_campaign_item (
+    toko             text   not null,
+    session_id       text   not null,
+    item_id          bigint not null,
+    model_id         bigint not null,
+    nomination_id    text,
+    nominate_status  integer,
+    campaign_price   numeric default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, session_id, item_id, model_id)
+);
+create index if not exists idx_fakta_camp_item_toko on harga_fakta_campaign_item(toko);
+create index if not exists idx_fakta_camp_item_key on harga_fakta_campaign_item(item_id, model_id);
+
+-- 11. FAKTA FLASH SALE — sesi (mingguan). Grain: sesi. Sumber: flash_sale.list_flash_sale.
+create table if not exists harga_fakta_flash_sesi (
+    toko             text   not null,
+    flash_sale_id    bigint not null,
+    status           integer,
+    timeslot_id      bigint,
+    start_time       timestamptz,
+    end_time         timestamptz,
+    item_count       integer default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, flash_sale_id)
+);
+create index if not exists idx_fakta_flash_sesi_toko on harga_fakta_flash_sesi(toko);
+
+-- 12. FAKTA FLASH SALE — item (mingguan). Grain: variasi/sesi. Sumber: flash_sale.items_flash_sale.
+create table if not exists harga_fakta_flash_item (
+    toko             text   not null,
+    flash_sale_id    bigint not null,
+    item_id          bigint not null,
+    model_id         bigint not null,
+    status           integer,
+    promotion_price  numeric default 0,
+    stock            numeric default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, flash_sale_id, item_id, model_id)
+);
+create index if not exists idx_fakta_flash_item_toko on harga_fakta_flash_item(toko);
+create index if not exists idx_fakta_flash_item_key on harga_fakta_flash_item(item_id, model_id);
+
+-- 13. FAKTA VOUCHER (mingguan). Grain: voucher. Sumber: voucher.list_vouchers.
+--     item_scope = jsonb daftar itemid (voucher produk) atau null (semua produk).
+create table if not exists harga_fakta_voucher (
+    toko             text   not null,
+    voucher_id       bigint not null,
+    code             text,
+    name             text,
+    discount         numeric,
+    min_price        numeric,
+    tipe             text,
+    start_time       timestamptz,
+    end_time         timestamptz,
+    status           integer,
+    item_scope       jsonb,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, voucher_id)
+);
+create index if not exists idx_fakta_voucher_toko on harga_fakta_voucher(toko);
+
+-- 14. FAKTA PAKET DISKON (mingguan). Grain: bundle. Sumber: paket_diskon.list_deals.
+create table if not exists harga_fakta_paket (
+    toko             text   not null,
+    bundle_deal_id   bigint not null,
+    name             text,
+    status           integer,
+    start_time       timestamptz,
+    end_time         timestamptz,
+    tiers            jsonb,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, bundle_deal_id)
+);
+create index if not exists idx_fakta_paket_toko on harga_fakta_paket(toko);

@@ -6,6 +6,7 @@ harga_awal, harga_tampil, sumber_harga. Kolom lain (ptag, harga_diskon_db,
 harga_pancing, harga_akhir_target, selisih, alasan) = milik dashboard/user ->
 TIDAK ditimpa (dipertahankan saat upsert).
 """
+import json
 from sqlalchemy import text
 from modules.db import get_engine
 import config
@@ -362,6 +363,123 @@ def verifikasi_toko(toko):
             from tgt
         """), {"t": toko}).one()
     return int(r.sesuai), int(r.belum), int(r.tanpa_target)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  FASE 1 (PENGUMPUL FAKTA) — writer tabel fakta per-program.
+#  Pola SNAPSHOT: hapus baris toko lalu insert ulang -> selalu terkini
+#  (fakta yg sudah hilang otomatis kebuang). READ-ONLY ke Shopee.
+#  GUARD: toko di luar 10 toko resmi ditolak.
+# ══════════════════════════════════════════════════════════════════
+
+def _snapshot_toko(tabel, toko, kolom, baris, pk, jsonb_cols=()):
+    """Delete baris toko lalu insert ulang. kolom = urutan kolom (tanpa diperbarui_pada).
+    baris = list dict (key = kolom). pk = tuple kolom PK (buat dedup dalam batch).
+    jsonb_cols = kolom yang di-cast ke jsonb (nilainya string JSON / None)."""
+    if not config.is_toko_resmi(toko):
+        return 0
+    # dedup dalam batch (PK tak boleh dobel di 1 insert)
+    seen = {}
+    for b in baris:
+        seen[tuple(b[k] for k in pk)] = b
+    baris = list(seen.values())
+    with get_engine().begin() as c:
+        c.execute(text(f"delete from {tabel} where toko = :t"), {"t": toko})
+        if not baris:
+            return 0
+        cols = ", ".join(kolom)
+        vals = ", ".join((f"cast(:{k} as jsonb)" if k in jsonb_cols else f":{k}") for k in kolom)
+        c.execute(text(f"insert into {tabel} ({cols}, diperbarui_pada) values ({vals}, now())"), baris)
+    return len(baris)
+
+
+def simpan_fakta_garansi(toko, baris):
+    """baris = list {item_id, model_id, bid_id, cspu_id, current_price, bid_price, stok}."""
+    return _snapshot_toko(
+        "harga_fakta_garansi", toko,
+        ["toko", "item_id", "model_id", "bid_id", "cspu_id", "current_price", "bid_price", "stok"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "item_id", "model_id"))
+
+
+def simpan_fakta_campaign_sesi(toko, baris):
+    """baris = list {campaign_id, session_id, campaign_name, session_name,
+    session_start, session_end, nomination_end} (waktu = ISO string / None)."""
+    return _snapshot_toko(
+        "harga_fakta_campaign_sesi", toko,
+        ["toko", "campaign_id", "session_id", "campaign_name", "session_name",
+         "session_start", "session_end", "nomination_end"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "session_id"))
+
+
+def simpan_fakta_campaign_item(toko, baris):
+    """baris = list {session_id, item_id, model_id, nomination_id, nominate_status, campaign_price}."""
+    return _snapshot_toko(
+        "harga_fakta_campaign_item", toko,
+        ["toko", "session_id", "item_id", "model_id", "nomination_id", "nominate_status", "campaign_price"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "session_id", "item_id", "model_id"))
+
+
+def simpan_fakta_flash_sesi(toko, baris):
+    """baris = list {flash_sale_id, status, timeslot_id, start_time, end_time, item_count}."""
+    return _snapshot_toko(
+        "harga_fakta_flash_sesi", toko,
+        ["toko", "flash_sale_id", "status", "timeslot_id", "start_time", "end_time", "item_count"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "flash_sale_id"))
+
+
+def simpan_fakta_flash_item(toko, baris):
+    """baris = list {flash_sale_id, item_id, model_id, status, promotion_price, stock}."""
+    return _snapshot_toko(
+        "harga_fakta_flash_item", toko,
+        ["toko", "flash_sale_id", "item_id", "model_id", "status", "promotion_price", "stock"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "flash_sale_id", "item_id", "model_id"))
+
+
+def simpan_fakta_voucher(toko, baris):
+    """baris = list {voucher_id, code, name, discount, min_price, tipe,
+    start_time, end_time, status, item_scope(list/None)}. item_scope -> jsonb."""
+    for b in baris:
+        sc = b.get("item_scope")
+        b["item_scope"] = json.dumps(sc) if sc else None
+    return _snapshot_toko(
+        "harga_fakta_voucher", toko,
+        ["toko", "voucher_id", "code", "name", "discount", "min_price", "tipe",
+         "start_time", "end_time", "status", "item_scope"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "voucher_id"), jsonb_cols=("item_scope",))
+
+
+def simpan_fakta_paket(toko, baris):
+    """baris = list {bundle_deal_id, name, status, start_time, end_time, tiers(list/None)}."""
+    for b in baris:
+        tr = b.get("tiers")
+        b["tiers"] = json.dumps(tr) if tr else None
+    return _snapshot_toko(
+        "harga_fakta_paket", toko,
+        ["toko", "bundle_deal_id", "name", "status", "start_time", "end_time", "tiers"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers",))
+
+
+def prune_fakta_yatim(maks_umur_hari=35):
+    """Housekeeping (tier bulanan): buang baris fakta yg TIDAK ke-refresh > maks_umur_hari
+    (mis. toko/sesi yg sudah hilang). Aman: baris yg masih di-grab rutin selalu fresh.
+    Return total baris terhapus."""
+    tabel = ["harga_fakta_garansi", "harga_fakta_campaign_sesi", "harga_fakta_campaign_item",
+             "harga_fakta_flash_sesi", "harga_fakta_flash_item", "harga_fakta_voucher",
+             "harga_fakta_paket"]
+    total = 0
+    with get_engine().begin() as c:
+        for t in tabel:
+            total += c.execute(
+                text(f"delete from {t} where diperbarui_pada < now() - (:d || ' days')::interval"),
+                {"d": int(maks_umur_hari)}).rowcount
+    return total
 
 
 def catat_riwayat(entri):
