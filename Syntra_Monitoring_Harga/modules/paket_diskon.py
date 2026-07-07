@@ -25,7 +25,7 @@ import requests
 import config
 
 _BASE = "https://seller.shopee.co.id/api/marketing/v3/bundle_deal/"
-URL_LIST = _BASE
+URL_LIST = _BASE + "list/"    # LIST pakai /list/ (base '/' = detail, minta bundle_deal_id) — verified live
 URL_CREATE = _BASE
 URL_VALIDATE = _BASE + "item/validate/"
 URL_ITEM = _BASE + "item/"

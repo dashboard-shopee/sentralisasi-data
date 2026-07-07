@@ -99,7 +99,17 @@ def bagi_produk_per_band(produk_harga):
 
 # ── BACA ──
 def list_vouchers(session):
-    data = _call("GET", URL_LIST, session).get("data") or {}
+    # ⚠️ ENDPOINT LIST BELUM TERVERIFIKASI: GET marketing/v3/voucher/list/ balik `201600001
+    #    ERROR_PARAM` utk SEMUA kombinasi param yg dicoba (15+ varian live, 6 Jul). Params asli
+    #    perlu di-CAPTURE DevTools: buka Seller Center > Voucher Saya > Network > cari request
+    #    'voucher/list' -> copy URL query + method + body, ganti URL_LIST/param di sini.
+    #    Sementara: gagal-anggun (return []) biar Fase 1 (tier mingguan) tak error-spam.
+    try:
+        data = _call("GET", URL_LIST, session).get("data") or {}
+    except Exception as e:
+        print(colorama.Fore.YELLOW + f"[voucher] list belum jalan (perlu capture endpoint): {type(e).__name__}"
+              + colorama.Style.RESET_ALL)
+        return []
     if isinstance(data, list):
         return data
     return data.get("voucher_list") or data.get("list") or []
