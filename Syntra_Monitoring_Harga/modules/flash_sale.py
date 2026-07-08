@@ -7,6 +7,7 @@ Endpoint terverifikasi (sniff __sniff_promo.json), berbasis `requests` (pakai se
 
 status flash sale (data.status): umumnya 1=berjalan/mendatang, 2=berakhir/stop.
 """
+import time
 import colorama; colorama.init()
 import config
 from modules.api_util import api_get, api_post
@@ -18,25 +19,37 @@ _FS_AKTIF = {1}
 
 def list_flash_sale(session, hanya_aktif=True):
     """List flash sale toko. Return list dict (flash_sale_id, status, timeslot_id,
-    start_time, end_time, item_count)."""
+    start_time, end_time, item_count).
+
+    hanya_aktif=True -> HANYA sesi BERJALAN + AKAN DATANG (`end_time >= now`); sesi
+    BERAKHIR di-skip. Sesi diurut `start_time` DESCENDING (terbaru/upcoming dulu) ->
+    begitu 1 halaman TAK punya sesi future lagi, STOP (sisanya pasti ended). Ini cegah
+    over-fetch (toko lama bisa punya ratusan/ribuan sesi ended -> dulu narik semua) +
+    hindari pagination offset tinggi (kadang balik param err transient)."""
     hasil = []
     offset = 0
+    now = int(time.time())
     while True:
         data = api_get(config.URL_FLASH_LIST, config.grab_headers(session),
                        {**session["params"], "offset": offset, "limit": 50, "type": 0},
                        kunci="data")["data"]
         lst = data.get("flash_sale_list") or []
+        future_di_halaman = 0
         for f in lst:
-            if (not hanya_aktif) or f.get("status") in _FS_AKTIF:
-                hasil.append({
-                    "flash_sale_id": f.get("flash_sale_id"),
-                    "status": f.get("status"),
-                    "timeslot_id": f.get("timeslot_id"),
-                    "start_time": f.get("start_time"),
-                    "end_time": f.get("end_time"),
-                    "item_count": f.get("item_count", 0),
-                })
-        if len(lst) < 50 or offset > 5000:
+            aktif_upcoming = int(f.get("end_time") or 0) >= now
+            if hanya_aktif and not aktif_upcoming:
+                continue
+            future_di_halaman += 1
+            hasil.append({
+                "flash_sale_id": f.get("flash_sale_id"),
+                "status": f.get("status"),
+                "timeslot_id": f.get("timeslot_id"),
+                "start_time": f.get("start_time"),
+                "end_time": f.get("end_time"),
+                "item_count": f.get("item_count", 0),
+            })
+        # Stop: halaman terakhir, ATAU (mode aktif) halaman ini 0 future -> udah masuk zona ended.
+        if len(lst) < 50 or (hanya_aktif and future_di_halaman == 0) or offset > 20000:
             break
         offset += 50
     return hasil
