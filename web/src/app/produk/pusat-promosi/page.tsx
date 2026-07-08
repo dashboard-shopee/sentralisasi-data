@@ -5,13 +5,15 @@ import { useState, useEffect, useCallback } from "react";
 type Row = Record<string, unknown>;
 type Toko = { username: string; nama: string };
 
+// Urutan by cadence tarik: jam (Promo Toko) -> harian (Garansi, Campaign) ->
+// mingguan (Flash, Voucher, Paket) -> Komisi (dari dashboard).
 const TABS = [
   { key: "promo_toko", label: "Promo Toko" },
-  { key: "paket", label: "Paket Diskon" },
-  { key: "voucher", label: "Voucher" },
-  { key: "campaign", label: "Campaign" },
   { key: "garansi", label: "Garansi" },
+  { key: "campaign", label: "Campaign" },
   { key: "flash", label: "Flash Sale" },
+  { key: "voucher", label: "Voucher" },
+  { key: "paket", label: "Paket Diskon" },
   { key: "komisi", label: "Komisi" },
 ];
 
