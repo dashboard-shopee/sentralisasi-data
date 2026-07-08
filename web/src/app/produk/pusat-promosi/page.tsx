@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 
 type Row = Record<string, unknown>;
 type Toko = { username: string; nama: string };
@@ -123,6 +123,58 @@ export default function PusatPromosiPage() {
   const cols = COLS[tab] || [];
   const totalPages = Math.max(1, Math.ceil(total / size));
 
+  // Expand-row: produk dalam promo. Untuk sekarang baru tab Voucher (item 5-7 nyusul).
+  const DETAIL_TABS: Record<string, boolean> = { voucher: true };
+  const bisaDetail = DETAIL_TABS[tab] || false;
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Record<string, { shopWide?: boolean; produk?: Row[] }>>({});
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggleRow = async (row: Row) => {
+    if (!bisaDetail) return;
+    const key = String(row.voucherId);
+    if (expanded === key) { setExpanded(null); return; }
+    setExpanded(key);
+    if (!detail[key]) {
+      setDetailLoading(true);
+      try {
+        const u = new URL("/api/produk/pusat-promosi", window.location.origin);
+        u.searchParams.set("tab", "voucher_produk");
+        u.searchParams.set("voucher_id", String(row.voucherId));
+        u.searchParams.set("toko", String(row.toko));
+        const r = await fetch(u.toString(), { cache: "no-store" });
+        const d = await r.json();
+        setDetail((prev) => ({ ...prev, [key]: d }));
+      } catch { /* diamkan */ }
+      finally { setDetailLoading(false); }
+    }
+  };
+
+  const renderVoucherProduk = (key: string) => {
+    const dd = detail[key];
+    if (!dd) return <div className="p-3 text-xs text-[#8a90a2]">{detailLoading ? "Memuat produk…" : "—"}</div>;
+    if (dd.shopWide) return <div className="p-3 text-[12px] text-[#6b7180]">🏷️ Voucher ini berlaku untuk <b>semua produk</b> toko.</div>;
+    const produk = dd.produk || [];
+    return (
+      <div className="p-3">
+        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam voucher ({produk.length})</div>
+        {produk.length === 0 ? (
+          <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {produk.map((pr, i) => (
+              <div key={i} className="flex items-center gap-2 text-[12px]">
+                <span className="font-semibold text-[#4b5563] w-[130px] truncate">{String(pr.sku ?? "-")}</span>
+                <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(pr.namaProduk ?? "")}>{String(pr.namaProduk ?? "-")}</span>
+                <span className="text-[#16b8a6] font-semibold shrink-0">{rp(pr.hargaTampil)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-5 md:p-8 max-w-[1600px] mx-auto">
       <div className="mb-5">
@@ -137,7 +189,7 @@ export default function PusatPromosiPage() {
         {TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setPage(1); }}
+            onClick={() => { setTab(t.key); setPage(1); setExpanded(null); }}
             className={
               "px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all " +
               (tab === t.key
@@ -190,10 +242,20 @@ export default function PusatPromosiPage() {
               ) : rows.length === 0 ? (
                 <tr><td colSpan={cols.length} className="px-3 py-8 text-center text-[#9aa0b2]">Belum ada data. Bot Fase 1 mengisi tab ini otomatis (harian/mingguan).</td></tr>
               ) : (
-                rows.map((row, i) => (
-                  <tr key={i} className="border-t border-[#f2f3f8] hover:bg-[#fafbfe]">
-                    {cols.map((c) => (
+                rows.map((row, i) => {
+                  const key = bisaDetail ? String(row.voucherId) : String(i);
+                  const isOpen = bisaDetail && expanded === key;
+                  return (
+                  <Fragment key={key}>
+                  <tr
+                    onClick={() => toggleRow(row)}
+                    className={"border-t border-[#f2f3f8] " + (bisaDetail ? "cursor-pointer " : "") + (isOpen ? "bg-[#fff8f6]" : "hover:bg-[#fafbfe]")}
+                  >
+                    {cols.map((c, ci) => (
                       <td key={c.k} className="px-3 py-2 whitespace-nowrap text-[#3a3f4d]">
+                        {ci === 0 && bisaDetail && (
+                          <span className="inline-block w-3 text-[#ee4d2d] mr-1 select-none">{isOpen ? "▾" : "▸"}</span>
+                        )}
                         {c.f === "status" ? (
                           <span className={
                             "px-2 py-0.5 rounded-full text-[11px] font-semibold " +
@@ -210,7 +272,16 @@ export default function PusatPromosiPage() {
                       </td>
                     ))}
                   </tr>
-                ))
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={cols.length} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
+                        {renderVoucherProduk(key)}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>

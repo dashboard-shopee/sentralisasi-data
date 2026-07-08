@@ -43,6 +43,27 @@ export async function GET(req: Request) {
       return NextResponse.json({ promos, garansi, komisi });
     }
 
+    // PRODUK dalam 1 voucher (buat expand-row tab Voucher). item_scope jsonb = daftar itemid
+    // (voucher produk); null = voucher SEMUA produk toko.
+    if (tab === "voucher_produk") {
+      const vid = p.get("voucher_id");
+      const tk = p.get("toko");
+      if (!vid || !tk) return NextResponse.json({ error: "voucher_id & toko wajib" }, { status: 400 });
+      const v = await q<{ item_scope: number[] | null }>(
+        `select item_scope from harga_fakta_voucher where toko=$1 and voucher_id=$2`, [tk, vid]
+      );
+      const scope = v[0]?.item_scope;
+      if (!scope || !Array.isArray(scope) || scope.length === 0) {
+        return NextResponse.json({ shopWide: true, produk: [] });
+      }
+      const produk = await q<Record<string, unknown>>(
+        `select distinct on (item_id) item_id "itemId", sku, nama_produk "namaProduk", harga_tampil "hargaTampil"
+         from harga_olah_data where toko=$1 and item_id = any($2::bigint[]) order by item_id`,
+        [tk, scope]
+      );
+      return NextResponse.json({ shopWide: false, produk });
+    }
+
     const tokos = await q<{ username: string; nama: string }>(
       `select username, nama from dim_toko order by shop_index`
     );
