@@ -42,7 +42,8 @@ const COLS: Record<string, Col[]> = {
   garansi: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
     { k: "namaVariasi", t: "Variasi" }, { k: "currentPrice", t: "Harga Kini", f: "rp" },
-    { k: "bidPrice", t: "Harga Bid", f: "rp" }, { k: "stok", t: "Stok", f: "num" },
+    { k: "bestPrice", t: "Harga Terbaik", f: "rp" }, { k: "bidPrice", t: "Harga Program", f: "rp" },
+    { k: "stok", t: "Stok", f: "num" },
   ],
   flash: [
     { k: "toko", t: "Toko" }, { k: "flashSaleId", t: "ID Sesi" }, { k: "status", t: "Status", f: "status" },

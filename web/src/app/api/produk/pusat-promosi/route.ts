@@ -28,7 +28,7 @@ export async function GET(req: Request) {
         [tk, item, model || 0]
       );
       const garansi = await q<Record<string, unknown>>(
-        `select bid_price "bidPrice", current_price "currentPrice"
+        `select current_price "currentPrice", bid_price "bidPrice", best_price "bestPrice"
          from harga_fakta_garansi where toko=$1 and item_id=$2 and model_id=$3`,
         [tk, item, model || 0]
       );
@@ -76,8 +76,8 @@ export async function GET(req: Request) {
       order = `s.toko asc, s.item_id asc`;
     } else if (tab === "garansi") {
       cols = `s.toko, s.item_id "itemId", s.model_id "modelId", o.sku, o.nama_produk "namaProduk",
-              o.nama_variasi "namaVariasi", s.current_price "currentPrice", s.bid_price "bidPrice",
-              s.stok, s.diperbarui_pada "diperbaruiPada"`;
+              o.nama_variasi "namaVariasi", s.current_price "currentPrice", s.best_price "bestPrice",
+              s.bid_price "bidPrice", s.stok, s.diperbarui_pada "diperbaruiPada"`;
       base = `from harga_fakta_garansi s
               left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id`;
       if (filterToko) eqToko("s.toko");

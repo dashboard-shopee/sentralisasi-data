@@ -105,7 +105,8 @@ def siklus_fase1(paksa_semua=False):
 
     # ── CATAT JEJAK tiap tier -> dashboard (menu Log) ──
     g = f", {T['gagal']} toko gagal" if T["gagal"] else ""
-    catat_fase("fakta_jam", status="gagal" if (T["grab"] == 0 and T["gagal"]) else "ok",
+    # Tier jam = grab produk -> pakai pemicu 'grab' yg SUDAH terdaftar di Log (reuse, bukan bikin baru).
+    catat_fase("grab", status="gagal" if (T["grab"] == 0 and T["gagal"]) else "ok",
                keterangan=f"{T['grab']} variasi, {T['konteks']} promo, {len(toko)} toko{g}")
     if due_harian:
         catat_fase("fakta_harian", keterangan=f"{len(toko)} toko | Garansi + Campaign")

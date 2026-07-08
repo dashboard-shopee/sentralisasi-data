@@ -145,12 +145,14 @@ create table if not exists harga_fakta_garansi (
     model_id         bigint not null,
     bid_id           text,
     cspu_id          text,
-    current_price    numeric default 0,
-    bid_price        numeric default 0,
+    current_price    numeric default 0,   -- Harga Kini (harga tampil Shopee)
+    bid_price        numeric default 0,   -- Harga Program (garansi yg diset)
+    best_price       numeric default 0,   -- Harga Terbaik (rekomendasi terendah Shopee)
     stok             numeric default 0,
     diperbarui_pada  timestamptz default now(),
     primary key (toko, item_id, model_id)
 );
+alter table harga_fakta_garansi add column if not exists best_price numeric default 0;
 create index if not exists idx_fakta_garansi_toko on harga_fakta_garansi(toko);
 
 -- 9. FAKTA CAMPAIGN — sesi buka-nominasi (harian). Grain: sesi. Sumber: campaign.open_sessions.

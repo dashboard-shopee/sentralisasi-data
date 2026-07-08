@@ -394,10 +394,10 @@ def _snapshot_toko(tabel, toko, kolom, baris, pk, jsonb_cols=()):
 
 
 def simpan_fakta_garansi(toko, baris):
-    """baris = list {item_id, model_id, bid_id, cspu_id, current_price, bid_price, stok}."""
+    """baris = list {item_id, model_id, bid_id, cspu_id, current_price, bid_price, best_price, stok}."""
     return _snapshot_toko(
         "harga_fakta_garansi", toko,
-        ["toko", "item_id", "model_id", "bid_id", "cspu_id", "current_price", "bid_price", "stok"],
+        ["toko", "item_id", "model_id", "bid_id", "cspu_id", "current_price", "bid_price", "best_price", "stok"],
         [{"toko": toko, **b} for b in baris],
         pk=("toko", "item_id", "model_id"))
 

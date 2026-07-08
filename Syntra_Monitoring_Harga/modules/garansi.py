@@ -54,8 +54,14 @@ def list_ongoing(session, page_size=100, maks_halaman=50):
             hasil[key] = {
                 "bid_id": str(bi.get("bid_id", "")),
                 "cspu_id": str(ci.get("cspu_id", "")),
-                "current_price": int(pi.get("current_price") or 0) // FAKTOR,
-                "bid_price": int(bi.get("bid_price") or 0) // FAKTOR,
+                # 3 harga (semua rupiah × FAKTOR):
+                "current_price": int(pi.get("current_price") or 0) // FAKTOR,   # Harga Kini (tampil Shopee)
+                "bid_price": int(bi.get("bid_price") or 0) // FAKTOR,            # Harga Program (garansi yg diset)
+                # Harga Terbaik (rekomendasi terendah). Field pasti belum dikonfirmasi ke UI ->
+                # pakai suggest_final_price (cspu) dulu, fallback default_bid_price/prefill_floor_price.
+                "best_price": int(ci.get("suggest_final_price")
+                                  or bi.get("default_bid_price")
+                                  or bi.get("prefill_floor_price") or 0) // FAKTOR,
                 "stok": int(pi.get("normal_stock") or 0),
             }
         if len(lst) < page_size:

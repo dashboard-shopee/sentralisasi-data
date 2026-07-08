@@ -56,6 +56,7 @@ def fakta_garansi(nama_toko, session):
         "bid_id": v.get("bid_id") or None, "cspu_id": v.get("cspu_id") or None,
         "current_price": v.get("current_price", 0) or 0,
         "bid_price": v.get("bid_price", 0) or 0,
+        "best_price": v.get("best_price", 0) or 0,
         "stok": v.get("stok", 0) or 0,
     } for (item, model), v in ongoing.items()]
     n = SQL.simpan_fakta_garansi(nama_toko, baris)
@@ -178,18 +179,19 @@ def _norm_voucher(v):
 
 
 def fakta_voucher(nama_toko, session):
-    """voucher.list_vouchers -> harga_fakta_voucher. Return jumlah voucher."""
+    """voucher.list_vouchers -> harga_fakta_voucher. HANYA voucher BERJALAN (promotion_type=2)
+    + AKAN DATANG (promotion_type=1) — yg BERAKHIR di-skip. Return jumlah voucher."""
     from modules import voucher
-    raw = voucher.list_vouchers(session) or []
-    baris = []
-    for v in raw:
-        if not isinstance(v, dict):
-            continue
-        b = _norm_voucher(v)
-        if b["voucher_id"]:
-            baris.append(b)
-    n = SQL.simpan_fakta_voucher(nama_toko, baris)
-    _log(nama_toko, f"Voucher: {n}", colorama.Fore.LIGHTGREEN_EX)
+    seen = {}
+    for pt in (2, 1):   # 2=berjalan, 1=akan datang (0=semua termasuk berakhir -> TIDAK dipakai)
+        for v in (voucher.list_vouchers(session, promotion_type=pt) or []):
+            if not isinstance(v, dict):
+                continue
+            b = _norm_voucher(v)
+            if b["voucher_id"]:
+                seen[b["voucher_id"]] = b
+    n = SQL.simpan_fakta_voucher(nama_toko, list(seen.values()))
+    _log(nama_toko, f"Voucher: {n} (berjalan+akan datang)", colorama.Fore.LIGHTGREEN_EX)
     return n
 
 

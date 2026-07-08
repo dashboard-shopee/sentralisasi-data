@@ -646,7 +646,7 @@ export default function HargaPage() {
           )}
         </div>
         {garansi.length > 0 && (
-          <div className="text-[11px] text-[#047857]">🛡️ Garansi Harga Terbaik — bid {formatRp(garansi[0].bidPrice)} · harga kini {formatRp(garansi[0].currentPrice)}</div>
+          <div className="text-[11px] text-[#047857]">🛡️ Garansi Harga Terbaik — Harga Kini {formatRp(garansi[0].currentPrice)} · Harga Terbaik {formatRp(garansi[0].bestPrice)} · Harga Program {formatRp(garansi[0].bidPrice)}</div>
         )}
         {komisi.length > 0 && (
           <div>
