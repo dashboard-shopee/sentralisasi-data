@@ -49,10 +49,10 @@
 | DETEKSI/diagnosa (kasus tanpa_target/sesuai/koreksi_turun/harga_dasar + cek semua promo) | ✅ (read-only) |
 | Guard promo tak-dikenal "Tipe 1" (hold ≥target-500, flag <target-500) | ✅ |
 | **3a Eksekusi Promo Toko** (lifecycle buat/duplikat + set/daftar) | ✅ DRY-RUN |
-| **4 Harga Dasar** (takedown semua promo → ubah base → pasang lagi paket+voucher) | ⏳ **(next)** |
+| **4 Harga Dasar** | ✅ core (garansi withdraw + reuse edit_harga_dasar: takedown promo toko/flash/campaign→ubah base). Paket/voucher takedown+re-add = provisioning ⏳. Tes DRY penuh di Beverra (7 kasus) belum. |
 | 3b Takedown Garansi (best<target-500 / margin@best<7%) | ✅ logika (margin@best wired, sumber FAKTA+bid_id). Modul garansi penuh ⏳ |
-| 3c Takedown Flash (flash<target-10 / stok 0) | ⏳ |
-| 3d Takedown Campaign (price<target*98.5% / stok<30 / stok<penjualan/hari) | ⏳ |
+| **3c Takedown Flash** (flash<target-10 / stok 0) | ⏳ **(next)** |
+| **3d Takedown Campaign** (price<target*98.5% / stok<30 / stok<penjualan/hari) | ⏳ **(next)** |
 
 ### Provisioning (poin 5)
 | Modul | Cadence | Status |
