@@ -516,6 +516,52 @@ def prune_fakta_yatim(maks_umur_hari=35):
     return total
 
 
+# ══════════════════════════════════════════════════════════════════
+#  FASE 2 (MASALAH+SOLUSI) — reader pendukung diagnosa harga poin 1-4.
+# ══════════════════════════════════════════════════════════════════
+
+def baca_penjualan_per_hari(item_ids):
+    """{item_id: rata2 unit TERJUAL per hari (30 hari terakhir)} dari fact_penjualan
+    (Shopee — produk_id = item_id; metrik unit_pesanan). BUKAN data ERP."""
+    ids = [int(i) for i in item_ids if i]
+    if not ids:
+        return {}
+    with get_engine().connect() as c:
+        rows = c.execute(text("""
+            select produk_id item_id, sum(coalesce(unit_pesanan,0))::numeric / 30.0 per_hari
+            from fact_penjualan
+            where periode = 'harian'
+              and periode_mulai >= now() - interval '30 days'
+              and produk_id = any(:ids)
+            group by produk_id
+        """), {"ids": ids}).fetchall()
+    return {int(r.item_id): float(r.per_hari) for r in rows}
+
+
+def baca_promo_detail(toko):
+    """{(item_id, model_id): [{jenis, harga_promo, status, stok}]} — SEMUA promo yg variasi
+    ikuti (dari konteks, di-grab per-jam). Dipakai Fase 2 buat cek takedown per-promo."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select item_id, model_id, jenis, harga_promo, status, stok
+                                 from harga_promo_konteks where toko = :t"""), {"t": toko}).fetchall()
+    out = {}
+    for r in rows:
+        out.setdefault((int(r.item_id), int(r.model_id)), []).append({
+            "jenis": r.jenis, "harga_promo": int(r.harga_promo or 0),
+            "status": r.status, "stok": int(r.stok or 0),
+        })
+    return out
+
+
+def baca_garansi_best(toko):
+    """{(item_id, model_id): {best, bid_id}} harga terbaik garansi + bid_id (dari fakta garansi)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select item_id, model_id, best_price, bid_id
+                                 from harga_fakta_garansi where toko = :t"""), {"t": toko}).fetchall()
+    return {(int(r.item_id), int(r.model_id)): {"best": int(r.best_price or 0), "bid_id": r.bid_id}
+            for r in rows}
+
+
 def catat_riwayat(entri):
     """Audit ke harga_riwayat_update. entri = list of
     {sku, aksi, nilai_lama, nilai_baru, username}."""
