@@ -129,12 +129,13 @@ export async function GET(req: Request) {
       let order = "coalesce(ss.parent_qty, 0) desc, ho.toko asc, ho.item_id asc, ho.model_id asc";
       if (sortCol) {
         const allowed = ["toko", "item_id", "model_id", "ptag", "sku", "nama_variasi", "nama_produk", "harga_awal", "harga_pancing", "harga_akhir_target", "harga_tampil", "selisih", "sumber_harga", "alasan", "diperbarui_pada"];
-        if (allowed.includes(sortCol)) order = `ho.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
+        if (sortCol === "margin_persen") order = `"marginPersen" ${sortDir === "asc" ? "asc" : "desc"} nulls last`;
+        else if (allowed.includes(sortCol)) order = `ho.${sortCol} ${sortDir === "asc" ? "asc" : "desc"}`;
       }
       params.push(size, offset);
       const rows = await q<any>(`
         with parent_sales as (
-          select 
+          select
             coalesce(nullif(e2.parent_sku, ''), e2.sku) as parent_group,
             sum(coalesce(sm.total_qty, 0)) as parent_qty
           from erp_sku_list e2
@@ -142,19 +143,40 @@ export async function GET(req: Request) {
           group by coalesce(nullif(e2.parent_sku, ''), e2.sku)
         ),
         sku_sales as (
-          select 
+          select
             e2.sku as sales_sku,
             coalesce(ps.parent_qty, 0) as parent_qty
           from erp_sku_list e2
           left join parent_sales ps on coalesce(nullif(e2.parent_sku, ''), e2.sku) = ps.parent_group
+        ),
+        kalk as (
+          select
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_packing_fee'), 400) as packing_fee,
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_service_fee'), 1250) as service_fee,
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_admin_fee_pct'), 0.16) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_discount_ads_pct'), 0.06) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_salary_pct'), 0.08) +
+            coalesce((select value::numeric from kalkulator_settings where key = 'batch_commission_pct'), 0.0) as total_pct_biaya
+        ),
+        sku_cost as (
+          select upper(h.sku) as sku_u,
+            coalesce(e.hpp, 0)::numeric as hpp,
+            k.total_pct_biaya,
+            (k.packing_fee + (case when coalesce(sm.total_qty, 0) > 0 then k.service_fee * coalesce(sm.total_orders, 0) / sm.total_qty else k.service_fee end))::numeric as biaya_tetap_adjusted
+          from harga_all_produk h
+          left join erp_sku_list e on h.sku = e.sku
+          left join erp_shopee_metrics sm on h.sku = sm.sku
+          cross join kalk k
         )
         select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal",
-          coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), 0) "hargaPancing", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0), 0) "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diproses_pada "diprosesPada", ho.diperbarui_pada "diperbaruiPada"
+          coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), 0) "hargaPancing", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0), 0) "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diproses_pada "diprosesPada", ho.diperbarui_pada "diperbaruiPada",
+          (case when ho.harga_tampil > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(ho.harga_tampil, 0)) else null end)::numeric "marginPersen"
         from harga_olah_data ho
         left join sku_sales ss on ho.sku = ss.sales_sku
         left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
-        where ${W} 
-        order by ${order} 
+        left join sku_cost sc on sc.sku_u = upper(ho.sku)
+        where ${W}
+        order by ${order}
         limit $${params.length - 1} offset $${params.length}
       `, params);
       const countParams = [...params]; countParams.splice(countParams.length - 2, 2);

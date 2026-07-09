@@ -33,6 +33,7 @@ interface OlahDataRow {
   hargaPancing: number;
   hargaAkhirTarget: number;
   hargaTampil: number;
+  marginPersen: number | null;
   selisih: number;
   sumberHarga: string | null;
   alasan: string | null;
@@ -698,6 +699,9 @@ export default function HargaPage() {
               <th onClick={() => handleSort("harga_tampil")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px] text-right font-bold text-[#16b8a6]">
                 Harga Real {sortCol === "harga_tampil" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
+              <th onClick={() => handleSort("margin_persen")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[80px] text-right" title="Margin dihitung dari Harga Real (harga live Shopee)">
+                Margin {sortCol === "margin_persen" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
               <th onClick={() => handleSort("selisih")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[80px] text-right">
                 Selisih {sortCol === "selisih" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
@@ -747,6 +751,13 @@ export default function HargaPage() {
                   <td className="p-3.5 text-right text-[#6b7180]">{formatRp(r.hargaPancing)}</td>
                   <td className="p-3.5 text-right font-bold text-[#ee4d2d] bg-[#fff1ed]/20">{formatRp(r.hargaAkhirTarget)}</td>
                   <td className="p-3.5 text-right font-bold text-[#16b8a6] bg-[#e7f7f4]/20">{formatRp(r.hargaTampil)}</td>
+                  <td className="p-3.5 text-right font-bold" title="Margin dari Harga Real">
+                    {r.marginPersen !== null && r.marginPersen !== undefined ? (
+                      <span className={r.marginPersen >= 0.12 ? "text-[#047857]" : r.marginPersen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
+                        {(r.marginPersen * 100).toFixed(1)}%
+                      </span>
+                    ) : <span className="text-[#c3c6d1]">-</span>}
+                  </td>
                   <td className={`p-3.5 text-right font-semibold ${hasDiff ? "text-[#e11d48]" : "text-[#8a90a2]"}`}>
                     {hasDiff ? `-${formatRp(absSelisih)}` : "0"}
                   </td>
@@ -769,7 +780,7 @@ export default function HargaPage() {
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={13} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
+                    <td colSpan={14} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
                       {renderPromoDetail(rowKey)}
                     </td>
                   </tr>
