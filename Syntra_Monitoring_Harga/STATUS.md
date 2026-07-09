@@ -2,7 +2,20 @@
 
 > **Baca file ini dulu tiap mulai kerja.** Legenda: ✅ selesai · 🔧 lagi dikerjain · ⏳ belum · ⏸️ ditunda/PR.
 > Arsitektur **3 fase**: 1=Fakta · 2=Masalah+Solusi · 3=Laporan. **Cadence per-MODUL** (bukan per-fase).
-> Spec detail: `RENCANA_FASE1.md`, `RENCANA_FASE2.md`. Update terakhir: **9 Jul 2026**.
+> Spec detail: `RENCANA_FASE1.md`, `RENCANA_FASE2.md`. Update terakhir: **10 Jul 2026**.
+
+## ▶️ MULAI DARI SINI (next session)
+Lagi di tengah **Fase 2 modul HARGA**. Yang UDAH jadi (DRY-RUN): diagnosa poin 1–4 + eksekusi
+Promo Toko (3a) + Harga Dasar (4) + takedown Garansi logika (3b) + margin garansi. Bisa dites:
+**`python run.py fase2`** (grab fresh→diagnosa→eksekusi, DRY-RUN dipaksa, 0 perubahan nyata).
+
+**Pilihan lanjut (user condong #2):**
+1. **3c/3d Takedown Flash & Campaign** — lengkapin poin 1–4. ⚠️ untested (skrg flash 0 sesi, campaign 0 nominasi) + endpoint takedown flash pernah bermasalah (`SKIP_FLASH_TAKEDOWN`). Butuh wiring ID aksi (flash_sale_id/nomination_id) dari fakta.
+2. **Provisioning (poin 5)** — daftar produk: paket diskon / voucher (harian) dulu (gak butuh data existing), lalu garansi/campaign/flash. Modul upsell udah ADA (`paket_diskon.py`/`voucher.py`/`campaign.py`/`garansi.py`/`flash_sale.py`), tinggal dijahit ke orkestrasi.
+
+**PENTING sebelum ngoding:** ⚠️ Fase 2 WAJIB di data grab FRESH (jangan DB basi). ⚠️ `config.MODE_LIVE=True` (DRY_RUN=False=LIVE) → tes SELALU paksa `config.DRY_RUN=True`. Kolom margin garansi (display) udah dikerjain USER — API+render ada.
+
+**Commands:** `run.py` (scheduler Fase 1) · `grab`/`grab full` (Fase 1 1x) · `kategori` (isi kategori) · `fase2` (Fase 2 Harga DRY) · `rubah`/`verifikasi`/`fase4` (legacy).
 
 ---
 
