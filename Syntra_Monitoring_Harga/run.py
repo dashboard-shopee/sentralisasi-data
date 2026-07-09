@@ -16,6 +16,7 @@ Pemakaian:
   python run.py grab           # tes 1 siklus Fase 1 SEKARANG (tier ikut jam saat ini)
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan+bulanan)
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
+  python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
@@ -122,6 +123,33 @@ def siklus_fase1(paksa_semua=False):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  FASE 2 (MASALAH+SOLUSI) modul HARGA — per-toko: grab FRESH -> diagnosa -> eksekusi.
+#  ⚠️ v1 DRY-RUN DIPAKSA (belum diverifikasi live). Hapus paksa kalau udah yakin.
+# ══════════════════════════════════════════════════════════════════
+def jalankan_fase2():
+    config.DRY_RUN = True   # PAKSA simulasi — v1 belum diverifikasi live (config MODE_LIVE bisa True)
+    from modules import fase2_harga as F2
+    jam_siklus.kunci()
+    toko = config.daftar_toko_aktif()
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (HARGA) — {len(toko)} toko — DRY-RUN (paksa) ===" + colorama.Style.RESET_ALL)
+    for username, info in toko.items():
+        nama = info["name"]
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            fakta.fakta_produk(username, nama, session)          # grab FRESH (wajib sebelum diagnosa)
+            d = F2.diagnosa_toko(nama)
+            kasus, aksi = F2.ringkas(d)
+            print(colorama.Fore.WHITE + f"[{_t()}] [{nama}] diagnosa: {kasus} | aksi {aksi}" + colorama.Style.RESET_ALL)
+            _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
+            _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
+        except Exception as e:
+            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+        close_session()
+    catat_fase("rubah_harga", keterangan="Fase 2 v1 (promo toko + harga dasar, DRY-RUN paksa)")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  KATEGORI — isi awal SEMUA produk yg belum punya kategori (bulk, incremental).
 #  Aman diulang (cuma yg belum). Per toko harvest 1x lalu grab kategori sampai habis.
 # ══════════════════════════════════════════════════════════════════
@@ -223,6 +251,8 @@ if __name__ == "__main__":
         siklus_fase1(paksa_semua=paksa)
     elif arg in ("kategori", "category"):
         jalankan_kategori()
+    elif arg in ("fase2", "rubah2"):
+        jalankan_fase2()
     elif arg in ("rubah", "rubah_harga", "2"):
         _legacy_jalankan([2])
     elif arg in ("verifikasi", "verif", "3"):
