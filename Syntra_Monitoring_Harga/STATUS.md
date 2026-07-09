@@ -67,7 +67,8 @@
 ### Wiring
 | Item | Status |
 |---|---|
-| Jahit Fase 2 ke `run.py` (per-toko: grab→diagnosa→eksekusi) | ⏳ (masih modul terpisah, blm di run.py) |
+| Command `python run.py fase2` (grab→diagnosa→eksekusi promo toko+harga dasar, DRY-RUN paksa) | ✅ |
+| Masuk SCHEDULER otomatis (per-jam) | ⏳ (nunggu verifikasi live + takedown 3c/3d) |
 
 ---
 
