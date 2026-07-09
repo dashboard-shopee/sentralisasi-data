@@ -64,6 +64,22 @@ export async function GET(req: Request) {
       return NextResponse.json({ shopWide: false, produk });
     }
 
+    // PRODUK dalam 1 Promo Toko (expand-row tab Promo Toko).
+    if (tab === "promo_toko_produk") {
+      const pid = p.get("promotion_id");
+      const tk = p.get("toko");
+      if (!pid || !tk) return NextResponse.json({ error: "promotion_id & toko wajib" }, { status: 400 });
+      const produk = await q<Record<string, unknown>>(
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+                o.nama_variasi "namaVariasi", i.harga_promo "hargaPromo"
+         from harga_fakta_promo_toko_item i
+         left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
+         where i.toko=$1 and i.promotion_id=$2 order by i.item_id limit 1000`,
+        [tk, pid]
+      );
+      return NextResponse.json({ produk });
+    }
+
     const tokos = await q<{ username: string; nama: string }>(
       `select username, nama from dim_toko order by shop_index`
     );
@@ -86,15 +102,13 @@ export async function GET(req: Request) {
     let order = "";
 
     if (tab === "promo_toko") {
-      cols = `s.toko, s.item_id "itemId", s.model_id "modelId", o.sku, o.nama_produk "namaProduk",
-              o.nama_variasi "namaVariasi", s.harga_promo "hargaPromo", s.status, s.stok,
+      // Entity promo toko (berjalan + akan datang). Klik -> produk (tab=promo_toko_produk).
+      cols = `s.toko, s.promotion_id "promotionId", s.nama, s.status, s.item_count "itemCount",
               s.mulai, s.berakhir, s.diperbarui_pada "diperbaruiPada"`;
-      base = `from harga_promo_konteks s
-              left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id`;
-      where.push(`s.jenis = 'Promo Toko'`);
+      base = `from harga_fakta_promo_toko s`;
       if (filterToko) eqToko("s.toko");
-      if (search) like(["o.sku", "o.nama_produk", "s.item_id::text"]);
-      order = `s.toko asc, s.item_id asc`;
+      if (search) like(["s.nama"]);
+      order = `s.status asc, s.berakhir asc`;
     } else if (tab === "garansi") {
       // Margin per-variasi (rumus identik All Produk): 1 - %biaya - (HPP + biaya_tetap)/harga.
       // Dihitung utk 3 harga garansi: Harga Kini / Terbaik / Program.

@@ -500,13 +500,31 @@ def simpan_kategori(toko, baris):
     return len(params)
 
 
+def simpan_fakta_promo_toko(toko, baris):
+    """baris = list {promotion_id, nama, status, mulai, berakhir, item_count} (waktu ISO/None)."""
+    return _snapshot_toko(
+        "harga_fakta_promo_toko", toko,
+        ["toko", "promotion_id", "nama", "status", "mulai", "berakhir", "item_count"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "promotion_id"))
+
+
+def simpan_fakta_promo_toko_item(toko, baris):
+    """baris = list {promotion_id, item_id, model_id, harga_promo}."""
+    return _snapshot_toko(
+        "harga_fakta_promo_toko_item", toko,
+        ["toko", "promotion_id", "item_id", "model_id", "harga_promo"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "promotion_id", "item_id", "model_id"))
+
+
 def prune_fakta_yatim(maks_umur_hari=35):
     """Housekeeping (tier bulanan): buang baris fakta yg TIDAK ke-refresh > maks_umur_hari
     (mis. toko/sesi yg sudah hilang). Aman: baris yg masih di-grab rutin selalu fresh.
     Return total baris terhapus."""
     tabel = ["harga_fakta_garansi", "harga_fakta_campaign_sesi", "harga_fakta_campaign_item",
              "harga_fakta_flash_sesi", "harga_fakta_flash_item", "harga_fakta_voucher",
-             "harga_fakta_paket"]
+             "harga_fakta_paket", "harga_fakta_promo_toko", "harga_fakta_promo_toko_item"]
     total = 0
     with get_engine().begin() as c:
         for t in tabel:

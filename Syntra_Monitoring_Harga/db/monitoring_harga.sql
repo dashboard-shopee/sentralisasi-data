@@ -260,3 +260,31 @@ create table if not exists harga_produk_kategori (
     primary key (toko, item_id)
 );
 create index if not exists idx_produk_kategori_toko on harga_produk_kategori(toko);
+
+-- 16. FAKTA PROMO TOKO — entity promo (berjalan + akan datang), buat Pusat Promosi master-detail.
+--     Sumber: discount_util.grab_semua_promo + grab_promo_detail. Cadence: harian.
+create table if not exists harga_fakta_promo_toko (
+    toko             text   not null,
+    promotion_id     bigint not null,
+    nama             text,
+    status           text,               -- 'berjalan' / 'akan datang'
+    mulai            timestamptz,
+    berakhir         timestamptz,
+    item_count       integer default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, promotion_id)
+);
+create index if not exists idx_fakta_promo_toko_toko on harga_fakta_promo_toko(toko);
+
+-- 17. FAKTA PROMO TOKO — produk di tiap promo (buat expand klik->produk). Sumber: grab_item_promo.
+create table if not exists harga_fakta_promo_toko_item (
+    toko             text   not null,
+    promotion_id     bigint not null,
+    item_id          bigint not null,
+    model_id         bigint not null,
+    harga_promo      numeric default 0,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, promotion_id, item_id, model_id)
+);
+create index if not exists idx_fakta_pt_item_toko on harga_fakta_promo_toko_item(toko);
+create index if not exists idx_fakta_pt_item_promo on harga_fakta_promo_toko_item(toko, promotion_id);

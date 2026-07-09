@@ -220,6 +220,43 @@ def fakta_paket(nama_toko, session):
     return n
 
 
+# ── PROMO TOKO entity (tier harian) — buat Pusat Promosi master-detail ──
+def fakta_promo_toko(username, nama_toko, session):
+    """grab_semua_promo (berjalan+akan datang) + detail + item -> harga_fakta_promo_toko(+_item).
+    Return (n_promo, n_item)."""
+    from modules.discount_util import grab_semua_promo, grab_promo_detail, grab_item_promo
+    promos = grab_semua_promo(username, session)
+    ent, items = [], []
+    for p in promos:
+        pid = p.get("promotion_id")
+        if not pid:
+            continue
+        status = "berjalan" if p.get("time_status") == 2 else "akan datang"
+        det = grab_promo_detail(session, pid) or {}
+        try:
+            itlist = grab_item_promo(username, session, pid)
+        except Exception as e:
+            _log(nama_toko, f"grab_item_promo {pid} gagal: {type(e).__name__}", colorama.Fore.RED)
+            itlist = []
+        n_item = len({it.get("item_id") for it in itlist if it.get("item_id")})
+        ent.append({
+            "promotion_id": int(pid), "nama": (p.get("name") or None), "status": status,
+            "mulai": _iso(det.get("start_time")), "berakhir": _iso(det.get("end_time")),
+            "item_count": n_item,
+        })
+        for it in itlist:
+            if it.get("item_id"):
+                items.append({
+                    "promotion_id": int(pid), "item_id": int(it["item_id"]),
+                    "model_id": int(it.get("model_id") or 0),
+                    "harga_promo": int(it.get("promotion_price", 0) or 0) // config.FAKTOR_HARGA,
+                })
+    ns = SQL.simpan_fakta_promo_toko(nama_toko, ent)
+    ni = SQL.simpan_fakta_promo_toko_item(nama_toko, items)
+    _log(nama_toko, f"Promo Toko: {ns} promo (berjalan+akan datang), {ni} produk", colorama.Fore.LIGHTGREEN_EX)
+    return ns, ni
+
+
 # ── KATEGORI produk (incremental, tier mingguan / command khusus) ──
 def fakta_kategori(nama_toko, session, limit=None):
     """Grab kategori Shopee utk produk yg BELUM punya kategori (incremental). Cap `limit`

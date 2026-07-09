@@ -81,6 +81,7 @@ def siklus_fase1(paksa_semua=False):
             if due_harian:
                 _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
                 _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
+                _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
             # ── TIER MINGGUAN ──
             if due_mingguan:
                 _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))

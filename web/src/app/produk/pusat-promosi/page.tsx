@@ -21,10 +21,9 @@ const TABS = [
 type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" | "margin" };
 const COLS: Record<string, Col[]> = {
   promo_toko: [
-    { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
-    { k: "namaVariasi", t: "Variasi" }, { k: "hargaPromo", t: "Harga Promo", f: "rp" },
-    { k: "status", t: "Status", f: "status" }, { k: "stok", t: "Stok", f: "num" },
-    { k: "berakhir", t: "Berakhir", f: "dt" },
+    { k: "toko", t: "Toko" }, { k: "nama", t: "Nama Promo" },
+    { k: "status", t: "Status", f: "status" }, { k: "itemCount", t: "Jml Produk", f: "num" },
+    { k: "mulai", t: "Mulai", f: "dt" }, { k: "berakhir", t: "Berakhir", f: "dt" },
   ],
   paket: [
     { k: "toko", t: "Toko" }, { k: "bundleDealId", t: "ID" }, { k: "name", t: "Nama" },
@@ -125,24 +124,28 @@ export default function PusatPromosiPage() {
   const cols = COLS[tab] || [];
   const totalPages = Math.max(1, Math.ceil(total / size));
 
-  // Expand-row: produk dalam promo. Untuk sekarang baru tab Voucher (item 5-7 nyusul).
-  const DETAIL_TABS: Record<string, boolean> = { voucher: true };
-  const bisaDetail = DETAIL_TABS[tab] || false;
+  // Expand-row: klik promo -> produk di dalamnya. Config per tab yg support detail.
+  const DETAIL_CFG: Record<string, { idField: string; detailTab: string; idParam: string; priceField: string; judul: string }> = {
+    voucher: { idField: "voucherId", detailTab: "voucher_produk", idParam: "voucher_id", priceField: "hargaTampil", judul: "voucher" },
+    promo_toko: { idField: "promotionId", detailTab: "promo_toko_produk", idParam: "promotion_id", priceField: "hargaPromo", judul: "promo toko" },
+  };
+  const cfg = DETAIL_CFG[tab];
+  const bisaDetail = !!cfg;
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, { shopWide?: boolean; produk?: Row[] }>>({});
   const [detailLoading, setDetailLoading] = useState(false);
 
   const toggleRow = async (row: Row) => {
-    if (!bisaDetail) return;
-    const key = String(row.voucherId);
+    if (!cfg) return;
+    const key = String(row[cfg.idField]);
     if (expanded === key) { setExpanded(null); return; }
     setExpanded(key);
     if (!detail[key]) {
       setDetailLoading(true);
       try {
         const u = new URL("/api/produk/pusat-promosi", window.location.origin);
-        u.searchParams.set("tab", "voucher_produk");
-        u.searchParams.set("voucher_id", String(row.voucherId));
+        u.searchParams.set("tab", cfg.detailTab);
+        u.searchParams.set(cfg.idParam, String(row[cfg.idField]));
         u.searchParams.set("toko", String(row.toko));
         const r = await fetch(u.toString(), { cache: "no-store" });
         const d = await r.json();
@@ -152,14 +155,15 @@ export default function PusatPromosiPage() {
     }
   };
 
-  const renderVoucherProduk = (key: string) => {
+  const renderProdukDetail = (key: string) => {
     const dd = detail[key];
     if (!dd) return <div className="p-3 text-xs text-[#8a90a2]">{detailLoading ? "Memuat produk…" : "—"}</div>;
-    if (dd.shopWide) return <div className="p-3 text-[12px] text-[#6b7180]">🏷️ Voucher ini berlaku untuk <b>semua produk</b> toko.</div>;
+    if (dd.shopWide) return <div className="p-3 text-[12px] text-[#6b7180]">🏷️ Berlaku untuk <b>semua produk</b> toko.</div>;
     const produk = dd.produk || [];
+    const pf = cfg?.priceField || "hargaTampil";
     return (
       <div className="p-3">
-        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam voucher ({produk.length})</div>
+        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {cfg?.judul} ({produk.length})</div>
         {produk.length === 0 ? (
           <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
         ) : (
@@ -168,7 +172,7 @@ export default function PusatPromosiPage() {
               <div key={i} className="flex items-center gap-2 text-[12px]">
                 <span className="font-semibold text-[#4b5563] w-[130px] truncate">{String(pr.sku ?? "-")}</span>
                 <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(pr.namaProduk ?? "")}>{String(pr.namaProduk ?? "-")}</span>
-                <span className="text-[#16b8a6] font-semibold shrink-0">{rp(pr.hargaTampil)}</span>
+                <span className="text-[#16b8a6] font-semibold shrink-0">{rp((pr as Record<string, unknown>)[pf])}</span>
               </div>
             ))}
           </div>
@@ -245,7 +249,7 @@ export default function PusatPromosiPage() {
                 <tr><td colSpan={cols.length} className="px-3 py-8 text-center text-[#9aa0b2]">Belum ada data. Bot Fase 1 mengisi tab ini otomatis (harian/mingguan).</td></tr>
               ) : (
                 rows.map((row, i) => {
-                  const key = bisaDetail ? String(row.voucherId) : String(i);
+                  const key = cfg ? String(row[cfg.idField]) : String(i);
                   const isOpen = bisaDetail && expanded === key;
                   return (
                   <Fragment key={key}>
@@ -261,8 +265,10 @@ export default function PusatPromosiPage() {
                         {c.f === "status" ? (
                           <span className={
                             "px-2 py-0.5 rounded-full text-[11px] font-semibold " +
-                            (String(row[c.k]).toLowerCase().includes("aktif") || Number(row[c.k]) === 1
-                              ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500")
+                            (/aktif|berjalan/.test(String(row[c.k]).toLowerCase()) || Number(row[c.k]) === 1
+                              ? "bg-green-50 text-green-600"
+                              : String(row[c.k]).toLowerCase().includes("datang")
+                                ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-500")
                           }>
                             {fmt(row[c.k])}
                           </span>
@@ -288,7 +294,7 @@ export default function PusatPromosiPage() {
                   {isOpen && (
                     <tr>
                       <td colSpan={cols.length} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
-                        {renderVoucherProduk(key)}
+                        {renderProdukDetail(key)}
                       </td>
                     </tr>
                   )}
