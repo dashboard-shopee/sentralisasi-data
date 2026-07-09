@@ -223,3 +223,46 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     print(f"[promo toko] [{nama_toko}] ({mode}) set={n_set} daftar={n_daftar} -> {terkirim} entri terkirim, {gagal} gagal")
     return {"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "promo_toko": len(pids)}
+
+
+def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
+    """SOLUSI kasus 4 (Target >= Harga Awal). Takedown SEMUA promo lalu ubah harga dasar:
+      1. Garansi withdraw (bid_id dari fakta) — BARU.
+      2. edit_harga_dasar (reuse): takedown Promo Toko + Flash + Campaign -> ubah harga dasar.
+    Paket/Voucher takedown + RE-ADD (poin 5 provisioning) belum — di-flag oleh edit_harga_dasar.
+    DRY-RUN aware. Return ringkasan."""
+    from modules.discount_util import grab_semua_promo, grab_item_promo
+    from modules.update_harga import edit_harga_dasar
+    from modules import garansi as G
+
+    hd = [d for d in diagnosa if d["kasus"] == "harga_dasar"]
+    if not hd:
+        return {"harga_dasar": 0}
+
+    # 1) TAKEDOWN GARANSI (variasi harga-dasar yg ada di fakta garansi) — DRY_RUN aware di modul.
+    gar = SQL.baca_garansi_best(nama_toko)
+    bids = [gar[(d["item_id"], d["model_id"])]["bid_id"] for d in hd
+            if (d["item_id"], d["model_id"]) in gar and gar[(d["item_id"], d["model_id"])].get("bid_id")]
+    if bids:
+        try:
+            G.withdraw(session, bids)
+        except Exception as e:
+            print(f"[harga dasar] [{nama_toko}] withdraw garansi gagal: {type(e).__name__}")
+
+    # 2) Bangun daftar (baris + in_promos) buat edit_harga_dasar (reuse).
+    baris_map = {(b["item_id"], b["model_id"]): b for b in SQL.baca_baris_rubah(nama_toko)}
+    promos = grab_semua_promo(shop, session)
+    peta = {}
+    for p in promos:
+        pid = p["promotion_id"]
+        for it in grab_item_promo(shop, session, pid):
+            if it.get("item_id"):
+                peta.setdefault((int(it["item_id"]), int(it["model_id"])), {})[pid] = int(it["promotion_price"]) // config.FAKTOR_HARGA
+    daftar = [(baris_map[(d["item_id"], d["model_id"])], peta.get((d["item_id"], d["model_id"]), {}))
+              for d in hd if (d["item_id"], d["model_id"]) in baris_map]
+
+    # 3) EDIT HARGA DASAR (reuse: takedown promo toko/flash/campaign + ubah base; paket/garansi flag).
+    alasan = edit_harga_dasar(shop, session, daftar, nama_toko=nama_toko)
+    mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    print(f"[harga dasar] [{nama_toko}] ({mode}) {len(daftar)} variasi, garansi withdraw {len(bids)}")
+    return {"harga_dasar": len(daftar), "garansi_takedown": len(bids), "alasan": len(alasan)}
