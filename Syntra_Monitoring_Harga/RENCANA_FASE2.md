@@ -8,6 +8,12 @@
 **Definisi tetap:** Target = `pancing` kalau ada, else **Harga Diskon** (stored per-SKU).
 Real = `harga_tampil` (Fase 1). Margin (olah data) = basis Harga Real.
 
+> ⚠️ **WAJIB — diagnosa/aksi Fase 2 HANYA valid di atas data grab FRESH.** Urutan per-toko:
+> **grab (Fase 1) dulu → diagnosa → eksekusi**, pakai sesi & data yg sama-sama baru. JANGAN
+> diagnosa di DB basi (contoh nyata 9 Jul: promo "Tipe 1" yg udah berakhir 8 Jul masih
+> keliatan di DB basi → 28 variasi salah dicap bermasalah; setelah grab fresh → 0). Promo
+> berjadwal yg sudah lewat harus hilang dari konteks fresh dulu.
+
 ---
 
 ## Cadence per-modul (Fase 1 grab ⟷ Fase 2 aksi selaras)
