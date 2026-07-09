@@ -24,9 +24,18 @@ CAMPAIGN_STOK_MIN = 30           # stok < 30 -> takedown campaign
 _JENIS_DIKENAL = {"Promo Toko", "Garansi Harga Terbaik", "Flash Sale", "Campaign"}
 
 
-def _cek_koreksi_turun(target, real, stok, pjh, promos, gar):
+def _margin(harga, cost):
+    """margin(harga) = 1 - pct - (hpp+biaya)/harga. None kalau harga/cost kosong.
+    Rumus & basis IDENTIK kolom margin dashboard."""
+    if not harga or harga <= 0 or not cost:
+        return None
+    return 1.0 - cost["pct"] - (cost["hpp"] + cost["biaya"]) / harga
+
+
+def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
     """Target < Harga Awal. Cek Promo Toko (set/daftar) + takedown per-promo (garansi/flash/campaign).
-    Return list aksi (dict). promos = list {jenis, harga_promo, status, stok} dari konteks."""
+    Return list aksi (dict). promos = list {jenis, harga_promo, status, stok} dari konteks.
+    cost = {hpp,pct,biaya} SKU ini (buat margin@best garansi)."""
     aksi = []
     by_jenis = {p["jenis"]: p for p in promos}
 
@@ -37,14 +46,17 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar):
     elif pt["harga_promo"] != target:
         aksi.append({"promo": "Promo Toko", "aksi": "set_harga", "dari": pt["harga_promo"], "ke": target})
 
-    # 3b — GARANSI HARGA TERBAIK (kondisi pakai BEST price dari fakta garansi)
-    if "Garansi Harga Terbaik" in by_jenis:
-        best = (gar or {}).get("best", 0)
+    # 3b — GARANSI HARGA TERBAIK. Sumber = FAKTA (get_ongoing_list) krn di situ ada bid_id
+    #      (buat takedown) + best_price. Konteks campaign_type=11 TIDAK dipakai (0 overlap dgn
+    #      fakta — beda set; nyangkut ke PR "detail garansi").
+    if gar:
+        best = gar.get("best", 0)
         sebab = []
         if best and best < target - GARANSI_SELISIH:
             sebab.append(f"best {best} < target-{GARANSI_SELISIH}")
-        # margin@best < 7% -> DETAIL PENDING (dihitung pas modul garansi; user mau presisi)
-        # sebab.append("margin@best <7%")  # <-- nanti
+        m = _margin(best, cost)                       # margin@best (rumus sama dashboard)
+        if m is not None and m < GARANSI_MARGIN_MIN:
+            sebab.append(f"margin@best {m*100:.1f}% < {GARANSI_MARGIN_MIN*100:.0f}%")
         if sebab:
             aksi.append({"promo": "Garansi", "aksi": "takedown", "sebab": " & ".join(sebab),
                          "bid_id": (gar or {}).get("bid_id")})
@@ -97,6 +109,7 @@ def diagnosa_toko(nama_toko):
     promo = SQL.baca_promo_detail(nama_toko)
     garansi = SQL.baca_garansi_best(nama_toko)
     penjualan = SQL.baca_penjualan_per_hari([b["item_id"] for b in baris])
+    biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
 
     out = []
     for b in baris:
@@ -110,7 +123,8 @@ def diagnosa_toko(nama_toko):
             kasus, aksi = "sesuai", []
         elif H and target < H:
             kasus = "koreksi_turun"
-            aksi = _cek_koreksi_turun(target, real, stok, pjh, promo.get(key, []), garansi.get(key))
+            cost = biaya.get((b["sku"] or "").strip().upper())
+            aksi = _cek_koreksi_turun(target, real, stok, pjh, promo.get(key, []), garansi.get(key), cost)
         else:   # target >= harga awal (atau harga awal 0)
             kasus = "harga_dasar"
             aksi = [{"aksi": "ubah_harga_dasar", "ke": target,

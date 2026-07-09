@@ -571,6 +571,35 @@ def baca_promo_detail(toko):
     return out
 
 
+def baca_biaya_sku(skus):
+    """{SKU_UPPER: {hpp, pct, biaya}} komponen biaya per SKU — buat hitung margin di harga MANA PUN:
+    margin(harga) = 1 - pct - (hpp + biaya)/harga. Rumus & basis IDENTIK kolom margin dashboard
+    (kalkulator_settings + erp_sku_list.hpp + erp_shopee_metrics)."""
+    ss = [s.strip().upper() for s in skus if s and s.strip()]
+    if not ss:
+        return {}
+    with get_engine().connect() as c:
+        rows = c.execute(text("""
+            with kalk as (
+              select
+                coalesce((select value::numeric from kalkulator_settings where key='batch_packing_fee'),400) packing_fee,
+                coalesce((select value::numeric from kalkulator_settings where key='batch_service_fee'),1250) service_fee,
+                coalesce((select value::numeric from kalkulator_settings where key='batch_admin_fee_pct'),0.16)
+                 + coalesce((select value::numeric from kalkulator_settings where key='batch_discount_ads_pct'),0.06)
+                 + coalesce((select value::numeric from kalkulator_settings where key='batch_salary_pct'),0.08)
+                 + coalesce((select value::numeric from kalkulator_settings where key='batch_commission_pct'),0.0) total_pct_biaya)
+            select upper(h.sku) sku_u, coalesce(e.hpp,0)::numeric hpp, k.total_pct_biaya pct,
+              (k.packing_fee + (case when coalesce(sm.total_qty,0) > 0
+                 then k.service_fee * coalesce(sm.total_orders,0) / sm.total_qty else k.service_fee end))::numeric biaya
+            from harga_all_produk h
+            left join erp_sku_list e on h.sku = e.sku
+            left join erp_shopee_metrics sm on h.sku = sm.sku
+            cross join kalk k
+            where upper(h.sku) = any(:skus)
+        """), {"skus": ss}).fetchall()
+    return {r.sku_u: {"hpp": float(r.hpp), "pct": float(r.pct), "biaya": float(r.biaya)} for r in rows}
+
+
 def baca_garansi_best(toko):
     """{(item_id, model_id): {best, bid_id}} harga terbaik garansi + bid_id (dari fakta garansi)."""
     with get_engine().connect() as c:
