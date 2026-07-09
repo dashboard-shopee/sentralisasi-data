@@ -49,6 +49,51 @@ DRY_RUN = not (MODE_LIVE or os.getenv("HARGA_LIVE", "0") == "1")
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║           KPI PER-MODUL — PASANG & TAKEDOWN (EDIT DI SINI)         ║
+# ║  SATU-SATUNYA sumber ambang bisnis Fase 2. Tiap modul BACA dari    ║
+# ║  sini (jangan hardcode di modul). "target" = Harga Diskon/pancing  ║
+# ║  per-SKU. "pjh" = penjualan/hari (rata2 30 hr). Ref: RENCANA_FASE2.║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+# ── HARGA / poin 1–4 — ambang TAKEDOWN per-jam (fase2_harga._cek_koreksi_turun) ──
+KPI_GARANSI_SELISIH    = 500     # takedown garansi bila best  < target − ini (rupiah)
+KPI_GARANSI_MARGIN_MIN = 0.07    # takedown/jangan-pasang garansi bila margin@best < ini (7%)
+KPI_FLASH_SELISIH      = 10      # takedown flash bila flash    < target − ini (rupiah)
+KPI_CAMPAIGN_FAKTOR    = 0.985   # takedown campaign bila harga < target × ini (di bawah 98,5%)
+KPI_CAMPAIGN_STOK_MIN  = 30      # takedown campaign bila stok  < ini
+# (campaign JUGA di-takedown bila stok < pjh — tanpa konstanta, murni banding)
+
+# ── PASANG GARANSI (provisioning harian) — kebalikan ambang takedown di atas:
+#    pasang HANYA jika best ≥ target−KPI_GARANSI_SELISIH DAN margin@best ≥ KPI_GARANSI_MARGIN_MIN.
+
+# ── PASANG CAMPAIGN (provisioning mingguan) ──
+KPI_CAMPAIGN_PASANG_FAKTOR     = 0.985  # harga potongan campaign MAKS target × ini
+KPI_CAMPAIGN_PASANG_STOK_MIN   = 50     # syarat pasang: stok > ini
+KPI_CAMPAIGN_PASANG_STOK_X_PJH = 10     # DAN stok > ini × pjh
+
+# ── PASANG PAKET DISKON (provisioning harian) ──
+KPI_PAKET_TIER        = [(2, 1), (3, 2), (7, 3)]  # (min_qty, diskon%): beli 2→1%, 3→2%, 7→3%
+KPI_PAKET_USAGE_LIMIT = 100000                    # kuota pemakaian paket
+
+# ── PASANG VOUCHER (provisioning harian) ──
+KPI_VOUCHER_DISKON_PCT      = 2       # diskon voucher default (%)
+KPI_VOUCHER_MINPRICE_FAKTOR = 2.0     # min_price = faktor × AOV (Shopee batasi ≤ 2× AOV)
+KPI_VOUCHER_MINPRICE_BUFFER = 0.97    # buffer < 1 biar aman DI BAWAH batas Shopee
+KPI_VOUCHER_AOV_WINDOW_HARI = 30      # jendela hari hitung AOV
+KPI_VOUCHER_BAND_LEBAR      = 20000   # lebar band harga voucher produk (per 20rb)
+KPI_VOUCHER_BAND1_MAKS      = 14999   # band pertama: 1 .. ini
+KPI_VOUCHER_USAGE_QTY       = 100000  # kuota pemakaian voucher
+
+# ── PASANG FLASH SALE (provisioning mingguan) ──
+KPI_FLASH_MAKS_PRODUK_PER_SESI = 50   # maks produk per sesi flash
+KPI_FLASH_MAKS_STOK            = 350  # stok promo maks per item (aturan Shopee)
+KPI_FLASH_POTONG_HARGA         = 10   # harga flash = harga_diskon − ini
+KPI_FLASH_SLOT_HARI            = 7    # ambil slot s/d berapa hari ke depan
+KPI_FLASH_PASANG_STOK_MIN      = 50   # syarat pasang: stok > ini
+KPI_FLASH_PASANG_STOK_X_PJH    = 10   # ATAU stok > ini × pjh
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║        SCHEDULER 24 JAM — FASE 1 (pola sama Syntra_Iklan)          ║
 # ║  Bot nyala terus, detak tiap 3 detik (tanpa log), nembak 1×/jam    ║
 # ║  di menit MENIT_RUNNING. Tiap tier fakta dipicu by JAM/HARI/TGL.   ║

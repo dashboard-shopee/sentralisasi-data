@@ -10,14 +10,16 @@ tiap promo punya kondisi takedown sendiri (spec RENCANA_FASE2.md poin 3).
 Target = pancing/Harga Diskon (baca_baris_rubah). Real = harga_tampil (Fase 1).
 Penjualan/hari = rata2 30 hari unit terjual (fact_penjualan Shopee).
 """
+import config
 from modules import sql_harga as SQL
 
-# Ambang (dari spec; taruh konstanta biar gampang di-tuning nanti).
-GARANSI_MARGIN_MIN = 0.07        # margin@best < 7% -> takedown / jangan pasang
-GARANSI_SELISIH = 500            # best < target-500 -> takedown
-FLASH_SELISIH = 10               # flash harusnya target-10; < itu -> takedown
-CAMPAIGN_FAKTOR = 0.985          # campaign harusnya <= target*98.5%; < itu -> takedown
-CAMPAIGN_STOK_MIN = 30           # stok < 30 -> takedown campaign
+# Ambang KPI takedown — SATU sumber di config (jangan hardcode di sini). Alias biar
+# ringkas + kalau config di-tuning, cukup ubah di config.py.
+GARANSI_MARGIN_MIN = config.KPI_GARANSI_MARGIN_MIN   # margin@best < ini -> takedown / jangan pasang
+GARANSI_SELISIH   = config.KPI_GARANSI_SELISIH       # best < target-ini -> takedown
+FLASH_SELISIH     = config.KPI_FLASH_SELISIH         # flash < target-ini -> takedown
+CAMPAIGN_FAKTOR   = config.KPI_CAMPAIGN_FAKTOR       # campaign < target*ini -> takedown
+CAMPAIGN_STOK_MIN = config.KPI_CAMPAIGN_STOK_MIN     # stok < ini -> takedown campaign
 
 
 # Jenis promo yg PUNYA handler di modul harga (sisanya = "tak dikenal" -> di-flag).
@@ -148,7 +150,6 @@ def ringkas(diagnosa):
 #  SOLUSI — EKSEKUSI (poin 3a Promo Toko). DRY-RUN aware (config.DRY_RUN).
 #  Urutan: lifecycle promo toko (buat/duplikat) -> set harga / daftar variasi.
 # ══════════════════════════════════════════════════════════════════
-import config  # noqa: E402
 
 
 def _chunks(lst, n):
@@ -226,18 +227,24 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
 
 
 def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
-    """SOLUSI kasus 4 (Target >= Harga Awal). Takedown SEMUA promo lalu ubah harga dasar:
-      1. Garansi withdraw (bid_id dari fakta) — BARU.
-      2. edit_harga_dasar (reuse): takedown Promo Toko + Flash + Campaign -> ubah harga dasar.
-    Paket/Voucher takedown + RE-ADD (poin 5 provisioning) belum — di-flag oleh edit_harga_dasar.
+    """SOLUSI kasus 4 (Target >= Harga Awal). Harga dasar TAK BISA diubah selama produk masih
+    nyangkut promosi APA PUN -> takedown SEMUA promo dulu, ubah base, lalu PASANG LAGI paket +
+    voucher (2 ini WAJIB selalu aktif per produk). Urutan:
+      1. Garansi withdraw (bid_id dari fakta).
+      2. Paket Diskon takedown + Voucher takedown (item-level; deal/voucher dari fakta).
+      3. edit_harga_dasar (reuse): takedown Promo Toko + Flash + Campaign -> ubah harga dasar.
+      4. RE-ADD paket + voucher utk item yg tadi dikeluarin (ke deal utama / voucher yg sama).
     DRY-RUN aware. Return ringkasan."""
     from modules.discount_util import grab_semua_promo, grab_item_promo
     from modules.update_harga import edit_harga_dasar
     from modules import garansi as G
+    from modules import paket_diskon as PD
+    from modules import voucher as V
 
     hd = [d for d in diagnosa if d["kasus"] == "harga_dasar"]
     if not hd:
         return {"harga_dasar": 0}
+    hd_items = {d["item_id"] for d in hd}   # paket/voucher = level ITEM (bukan variasi)
 
     # 1) TAKEDOWN GARANSI (variasi harga-dasar yg ada di fakta garansi) — DRY_RUN aware di modul.
     gar = SQL.baca_garansi_best(nama_toko)
@@ -249,7 +256,29 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
         except Exception as e:
             print(f"[harga dasar] [{nama_toko}] withdraw garansi gagal: {type(e).__name__}")
 
-    # 2) Bangun daftar (baris + in_promos) buat edit_harga_dasar (reuse).
+    # 2a) TAKEDOWN PAKET DISKON — item yg ikut paket (konteks) keluar dari SEMUA deal aktif.
+    paket_aktif = SQL.baca_paket_aktif(nama_toko)
+    deal_ids = [p["bundle_deal_id"] for p in paket_aktif]
+    tgt_paket = sorted(hd_items & SQL.baca_item_di_paket(nama_toko))
+    if tgt_paket and deal_ids:
+        try:
+            PD.keluarkan_item(session, deal_ids, tgt_paket)
+        except Exception as e:
+            print(f"[harga dasar] [{nama_toko}] takedown paket gagal: {type(e).__name__}")
+
+    # 2b) TAKEDOWN VOUCHER PRODUK — item yg ada di item_scope voucher, keluar per voucher.
+    vouch_item = SQL.baca_voucher_item(nama_toko)                 # {item_id: [voucher_id]}
+    vouch_grup = {}                                               # {voucher_id: [item_id]}
+    for iid in hd_items:
+        for vid in vouch_item.get(iid, []):
+            vouch_grup.setdefault(vid, []).append(iid)
+    for vid, items in vouch_grup.items():
+        try:
+            V.keluarkan_item(session, vid, items)
+        except Exception as e:
+            print(f"[harga dasar] [{nama_toko}] takedown voucher {vid} gagal: {type(e).__name__}")
+
+    # 3) Bangun daftar (baris + in_promos) + EDIT HARGA DASAR (takedown promo toko/flash/campaign + ubah base).
     baris_map = {(b["item_id"], b["model_id"]): b for b in SQL.baca_baris_rubah(nama_toko)}
     promos = grab_semua_promo(shop, session)
     peta = {}
@@ -260,9 +289,83 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
                 peta.setdefault((int(it["item_id"]), int(it["model_id"])), {})[pid] = int(it["promotion_price"]) // config.FAKTOR_HARGA
     daftar = [(baris_map[(d["item_id"], d["model_id"])], peta.get((d["item_id"], d["model_id"]), {}))
               for d in hd if (d["item_id"], d["model_id"]) in baris_map]
-
-    # 3) EDIT HARGA DASAR (reuse: takedown promo toko/flash/campaign + ubah base; paket/garansi flag).
     alasan = edit_harga_dasar(shop, session, daftar, nama_toko=nama_toko)
+
+    # 4) RE-ADD paket + voucher (WAJIB selalu aktif). Paket -> deal UTAMA (deal aktif pertama;
+    #    kalau toko belum punya deal, provisioning yg bikin -> ⏳, di sini di-skip + catat).
+    readd_paket = readd_voucher = 0
+    if tgt_paket:
+        if paket_aktif:
+            utama = paket_aktif[0]
+            try:
+                ok, _ = PD.masukkan_item(session, utama["bundle_deal_id"], tgt_paket, utama["start"], utama["end"])
+                readd_paket = ok
+            except Exception as e:
+                print(f"[harga dasar] [{nama_toko}] re-add paket gagal: {type(e).__name__}")
+        else:
+            print(f"[harga dasar] [{nama_toko}] ⚠️ {len(tgt_paket)} item perlu re-add paket TAPI toko belum punya deal aktif (provisioning ⏳)")
+    for vid, items in vouch_grup.items():
+        try:
+            if V.masukkan_item(session, vid, items):
+                readd_voucher += len(items)
+        except Exception as e:
+            print(f"[harga dasar] [{nama_toko}] re-add voucher {vid} gagal: {type(e).__name__}")
+
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    print(f"[harga dasar] [{nama_toko}] ({mode}) {len(daftar)} variasi, garansi withdraw {len(bids)}")
-    return {"harga_dasar": len(daftar), "garansi_takedown": len(bids), "alasan": len(alasan)}
+    print(f"[harga dasar] [{nama_toko}] ({mode}) {len(daftar)} variasi | garansi withdraw {len(bids)} | "
+          f"paket takedown {len(tgt_paket)}->re-add {readd_paket} | voucher {len(vouch_grup)} voucher->re-add {readd_voucher} item")
+    return {"harga_dasar": len(daftar), "garansi_takedown": len(bids), "alasan": len(alasan),
+            "paket_takedown": len(tgt_paket), "paket_readd": readd_paket,
+            "voucher_takedown": sum(len(v) for v in vouch_grup.values()), "voucher_readd": readd_voucher}
+
+
+def _kunci_takedown(diagnosa, promo):
+    """set (item_id, model_id) variasi 'koreksi_turun' yg diagnosa flag takedown utk `promo`."""
+    return {(d["item_id"], d["model_id"]) for d in diagnosa
+            for a in d["aksi"] if a.get("promo") == promo and a.get("aksi") == "takedown"}
+
+
+def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
+    """SOLUSI poin 3c. Keluarkan variasi 'koreksi_turun' yg flash-nya < target-10 (atau stok
+    real 0) dari SEMUA flash sale aktif. flash_sale_id di-resolve on-demand oleh takedown_items
+    (peta_item). DRY-RUN aware.
+    ⚠️ config.SKIP_FLASH_TAKEDOWN=True -> di-skip di modul (endpoint set-item ditolak Shopee
+    code 1001; PR flash sale). Balikin False setelah endpoint per-item dibenerin."""
+    from modules import flash_sale as FS
+
+    kunci = _kunci_takedown(diagnosa, "Flash Sale")
+    if not kunci:
+        return {"flash_takedown": 0, "flash_target": 0}
+    n = FS.takedown_items(session, shop, kunci)
+    mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    print(f"[flash takedown] [{nama_toko}] ({mode}) {len(kunci)} variasi target -> {n} ter-takedown")
+    return {"flash_takedown": n, "flash_target": len(kunci)}
+
+
+def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
+    """SOLUSI poin 3d. Keluarkan variasi 'koreksi_turun' yg campaign-nya < target*98.5% (atau
+    stok<30 / stok<penjualan-hari) dari campaign Shopee. GANTI `takedown_campaign` lama
+    (browser-context) -> `campaign.takedown` (requests + nomination_id, spec RENCANA_FASE2).
+    session_id+nomination_id di-resolve on-demand: sesi BERJALAN (window='sesi', bukan nominasi —
+    produk bisa masih jalan walau nominasi tutup) -> get_nominated per sesi -> cocokin (item,model).
+    DRY-RUN aware."""
+    from modules import campaign as C
+
+    # get_nominated pakai key STRING (item_id/model_id string) -> samakan bentuk kunci.
+    kunci = {(str(i), str(m)) for (i, m) in _kunci_takedown(diagnosa, "Campaign")}
+    if not kunci:
+        return {"campaign_takedown": 0, "campaign_target": 0, "sesi": 0}
+
+    sesi = C.open_sessions(session, window="sesi")   # sesi berjalan (buat takedown)
+    total = 0
+    for s in sesi:
+        sid = s["session_id"]
+        nominated = C.get_nominated(session, sid)    # {(iid,mid): {nomination_id,...}}
+        nom_ids = [v["nomination_id"] for k, v in nominated.items()
+                   if k in kunci and v.get("nomination_id")]
+        if nom_ids:
+            total += C.takedown(session, sid, nom_ids)
+    mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    print(f"[campaign takedown] [{nama_toko}] ({mode}) {len(kunci)} variasi target, "
+          f"{len(sesi)} sesi berjalan -> {total} ter-takedown")
+    return {"campaign_takedown": total, "campaign_target": len(kunci), "sesi": len(sesi)}

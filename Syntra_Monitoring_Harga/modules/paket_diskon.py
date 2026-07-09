@@ -32,8 +32,8 @@ URL_ITEM = _BASE + "item/"
 URL_OP = _BASE + "operation/"
 
 # Tier upsell DEFAULT: (min_amount, discount_percentage). Elemen [0] = tier dasar,
-# sisanya jadi additional_tiers. (beli >=2 -> 1%, >=3 -> 2%, >=7 -> 3%)
-TIER_DEFAULT = [(2, 1), (3, 2), (7, 3)]
+# sisanya jadi additional_tiers. KPI dari config (jangan hardcode).
+TIER_DEFAULT = config.KPI_PAKET_TIER
 
 STATUS_MASUK = 1
 STATUS_KELUAR = 2      # TERVERIFIKASI: hapus produk dari paket = status 2 (bukan 0)
@@ -77,7 +77,7 @@ def list_deals(session):
 
 
 # ── CREATE ──
-def buat_deal(session, name, start_time, end_time, tiers=TIER_DEFAULT, usage_limit=100000):
+def buat_deal(session, name, start_time, end_time, tiers=TIER_DEFAULT, usage_limit=config.KPI_PAKET_USAGE_LIMIT):
     """Buat paket diskon (aturan tier saja, belum ada produk). Return bundle_deal_id.
     tiers = list (min_amount, discount_percentage); [0]=dasar, sisanya additional_tiers."""
     m0, p0 = tiers[0]
@@ -144,6 +144,30 @@ def stop_deal(session, bundle_deal_id):
         print(colorama.Fore.YELLOW + f"[paket diskon] (DRY) stop {bundle_deal_id}" + colorama.Style.RESET_ALL); return
     _call("POST", URL_OP, session, {"bundle_deal_id": bundle_deal_id, "action": "stop"})
     print(colorama.Fore.CYAN + f"[paket diskon] paket {bundle_deal_id} DIHENTIKAN" + colorama.Style.RESET_ALL)
+
+
+# ── FASE 2 kasus 4: takedown item dari paket (harga dasar mau diubah) + re-add ──
+def keluarkan_item(session, bundle_deal_ids, item_ids):
+    """Keluarkan item dari SEMUA deal aktif (PUT status=2). Konteks tak simpan deal-id per item,
+    jadi coba keluarin dari tiap deal (Shopee no-op kalau item tak di deal itu). Return jumlah OK."""
+    if not bundle_deal_ids or not item_ids:
+        return 0
+    total = 0
+    for bid in bundle_deal_ids:
+        ok, _ = attach_items(session, bid, item_ids, status=STATUS_KELUAR)
+        total += ok
+    return total
+
+
+def masukkan_item(session, bundle_deal_id, item_ids, start_time, end_time):
+    """Re-add item ke 1 deal (validate dulu, lalu PUT status=1). Buat 'pasang lagi' setelah
+    harga dasar diubah (paket WAJIB selalu aktif). Return (ok, gagal)."""
+    if not bundle_deal_id or not item_ids:
+        return 0, 0
+    valid = validate_items(session, item_ids, start_time, end_time, bundle_deal_id)
+    if not valid:
+        return 0, 0
+    return attach_items(session, bundle_deal_id, valid, status=STATUS_MASUK)
 
 
 # ── ORKESTRATOR: masukin SEMUA produk ke 1 paket ──

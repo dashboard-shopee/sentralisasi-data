@@ -609,6 +609,44 @@ def baca_garansi_best(toko):
             for r in rows}
 
 
+def baca_item_di_paket(toko):
+    """set(item_id) yg lagi ikut PAKET DISKON (dari konteks jenis='Paket Diskon'). Konteks TIDAK
+    simpan bundle_deal_id (ongoing_campaigns ct=3 promotion_id kosong) -> cukup tau item-nya
+    ikut paket; deal-id di-resolve dari fakta paket saat takedown/re-add."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select distinct item_id from harga_promo_konteks
+                                 where toko = :t and jenis = 'Paket Diskon'"""), {"t": toko}).fetchall()
+    return {int(r.item_id) for r in rows}
+
+
+def baca_paket_aktif(toko):
+    """list {bundle_deal_id, start, end} paket toko (dari fakta, epoch detik). Buat iterasi
+    takedown (PUT status=2 ke tiap deal) + pilih deal utama buat re-add."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select bundle_deal_id,
+                                        extract(epoch from start_time)::bigint st,
+                                        extract(epoch from end_time)::bigint et
+                                 from harga_fakta_paket where toko = :t"""), {"t": toko}).fetchall()
+    return [{"bundle_deal_id": int(r.bundle_deal_id), "start": int(r.st or 0), "end": int(r.et or 0)}
+            for r in rows]
+
+
+def baca_voucher_item(toko):
+    """{item_id: [voucher_id,...]} — voucher PRODUK yg memuat tiap item (dari item_scope fakta).
+    voucher shop-wide (item_scope null) DILEWATI (tak nempel produk tertentu -> tak blokir harga dasar)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select voucher_id, item_scope from harga_fakta_voucher
+                                 where toko = :t and item_scope is not null"""), {"t": toko}).fetchall()
+    out = {}
+    for r in rows:
+        for iid in (r.item_scope or []):
+            try:
+                out.setdefault(int(iid), []).append(int(r.voucher_id))
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
 def catat_riwayat(entri):
     """Audit ke harga_riwayat_update. entri = list of
     {sku, aksi, nilai_lama, nilai_baru, username}."""

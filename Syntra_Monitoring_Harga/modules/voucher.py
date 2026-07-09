@@ -73,15 +73,18 @@ def _chunks(lst, n):
         yield lst[i:i + n]
 
 
-# ── BAND HARGA: band pertama 1-14.999, sisanya per 20.000, band terakhir mentok di harga termahal ──
+# ── BAND HARGA: band pertama 1..BAND1_MAKS, sisanya per BAND_LEBAR, terakhir mentok di harga termahal ──
 def bands_harga(max_price):
-    """Return list (low, high) inklusif. Contoh max 50rb -> [(1,14999),(15000,34999),(35000,50000)]."""
+    """Return list (low, high) inklusif. Lebar band = KPI config. Contoh (band1=14999, lebar=20000)
+    max 50rb -> [(1,14999),(15000,34999),(35000,50000)]."""
     max_price = int(max_price)
-    bands = [(1, 14999)]
-    start = 15000
+    b1 = int(config.KPI_VOUCHER_BAND1_MAKS)
+    lebar = int(config.KPI_VOUCHER_BAND_LEBAR)
+    bands = [(1, b1)]
+    start = b1 + 1
     while start <= max_price:
-        bands.append((start, min(start + 19999, max_price)))
-        start += 20000
+        bands.append((start, min(start + lebar - 1, max_price)))
+        start += lebar
     return bands
 
 
@@ -126,9 +129,9 @@ def get_voucher(session, voucher_id):
 
 
 # ── BUAT ──
-def _payload_voucher(name, code, start_time, end_time, discount=2, min_price=0,
-                     max_value=None, usage_quantity=100000, limit_per_user=1,
-                     item_ids=None, choose_users=None, landing_page=1,
+def _payload_voucher(name, code, start_time, end_time, discount=config.KPI_VOUCHER_DISKON_PCT,
+                     min_price=0, max_value=None, usage_quantity=config.KPI_VOUCHER_USAGE_QTY,
+                     limit_per_user=1, item_ids=None, choose_users=None, landing_page=1,
                      display_voucher_early=False, display_from=None):
     rule = {
         "usage_limit_per_user": limit_per_user,
@@ -177,6 +180,43 @@ def perpanjang_voucher(session, voucher_id, end_time_baru, voucher_detail=None):
     return True
 
 
+# ── FASE 2 kasus 4: edit daftar item voucher PRODUK (takedown + re-add) ──
+#    Harga dasar tak bisa diubah kalau produk masih nyangkut voucher produk -> keluarin dulu,
+#    ubah harga dasar, lalu masukin lagi (voucher WAJIB selalu aktif). Pakai PUT voucher/ (jalur
+#    sama perpanjang_voucher). ⚠️ BELUM diverifikasi live apakah voucher AKTIF boleh diedit
+#    item-nya (Shopee kadang kunci item voucher berjalan) -> PR verifikasi.
+def _set_item_voucher(session, voucher_id, item_ids, tambah, detail=None):
+    """Ubah rule.items voucher: tambah=True -> tambahin item, False -> keluarin. Return bool."""
+    ids = {int(i) for i in item_ids if i}
+    if not ids:
+        return False
+    detail = detail or get_voucher(session, voucher_id)
+    body = dict(detail)
+    body["voucher_id"] = voucher_id
+    rule = dict(body.get("rule") or {})
+    sekarang = {int(x.get("itemid")) for x in (rule.get("items") or []) if isinstance(x, dict) and x.get("itemid")}
+    baru = (sekarang | ids) if tambah else (sekarang - ids)
+    rule["items"] = [{"itemid": i} for i in sorted(baru)]
+    body["rule"] = rule
+    aksi = "tambah" if tambah else "keluarkan"
+    if getattr(config, "DRY_RUN", False):
+        print(colorama.Fore.YELLOW + f"[voucher] (DRY) {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
+        return True
+    _call("PUT", URL_VOUCHER, session, body)
+    print(colorama.Fore.MAGENTA + f"[voucher] {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
+    return True
+
+
+def keluarkan_item(session, voucher_id, item_ids, detail=None):
+    """Keluarin item dari 1 voucher produk (rule.items minus item)."""
+    return _set_item_voucher(session, voucher_id, item_ids, tambah=False, detail=detail)
+
+
+def masukkan_item(session, voucher_id, item_ids, detail=None):
+    """Masukin lagi item ke 1 voucher produk (rule.items plus item)."""
+    return _set_item_voucher(session, voucher_id, item_ids, tambah=True, detail=detail)
+
+
 # ── VALIDATE item (voucher produk) ──
 def validate_items(session, item_ids, chunk=50, **extra):
     valid = []
@@ -194,7 +234,7 @@ def validate_items(session, item_ids, chunk=50, **extra):
 
 
 # ── AOV per toko (fact_pesanan) -> min_price voucher (aturan Shopee: <= 2x AOV) ──
-def aov_toko(toko, window_hari=30):
+def aov_toko(toko, window_hari=config.KPI_VOUCHER_AOV_WINDOW_HARI):
     """Rata-rata Pembelian (omzet/pesanan) 1 toko dari fact_pesanan.
     toko = nama tampilan / username (dicocokkan ke dim_toko)."""
     from sqlalchemy import text
@@ -211,7 +251,9 @@ def aov_toko(toko, window_hari=30):
         return float(c.execute(sql, {"t": toko, "w": window_hari}).scalar() or 0)
 
 
-def min_price_toko(toko, faktor=2.0, buffer=0.97, window_hari=30):
+def min_price_toko(toko, faktor=config.KPI_VOUCHER_MINPRICE_FAKTOR,
+                   buffer=config.KPI_VOUCHER_MINPRICE_BUFFER,
+                   window_hari=config.KPI_VOUCHER_AOV_WINDOW_HARI):
     """min_price voucher = faktor x AOV x buffer. buffer<1 biar aman DI BAWAH batas
     Shopee (2x AOV) walau AOV kita beda tipis dari hitungan Shopee. Return int rupiah."""
     return int(aov_toko(toko, window_hari) * faktor * buffer)

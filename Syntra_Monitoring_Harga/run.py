@@ -142,10 +142,12 @@ def jalankan_fase2():
             print(colorama.Fore.WHITE + f"[{_t()}] [{nama}] diagnosa: {kasus} | aksi {aksi}" + colorama.Style.RESET_ALL)
             _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
             _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
+            _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
+            _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
         close_session()
-    catat_fase("rubah_harga", keterangan="Fase 2 v1 (promo toko + harga dasar, DRY-RUN paksa)")
+    catat_fase("rubah_harga", keterangan="Fase 2 v1 (promo toko + harga dasar + takedown flash/campaign, DRY-RUN paksa)")
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
 
 

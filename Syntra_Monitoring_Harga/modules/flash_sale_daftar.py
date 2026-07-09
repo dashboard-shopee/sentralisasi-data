@@ -29,9 +29,10 @@ URL_SELECTOR = "https://seller.shopee.co.id/api/marketing/v4/public/get_product_
 
 STATUS_MASUK = 1
 STATUS_KELUAR = 0
-MAKS_PRODUK_PER_SESI = 50
-MAKS_STOK = 350
-POTONG_HARGA = 10        # harga flash = harga_diskon - 10
+# KPI pasang flash — SATU sumber di config (jangan hardcode di sini).
+MAKS_PRODUK_PER_SESI = config.KPI_FLASH_MAKS_PRODUK_PER_SESI
+MAKS_STOK = config.KPI_FLASH_MAKS_STOK
+POTONG_HARGA = config.KPI_FLASH_POTONG_HARGA   # harga flash = harga_diskon - ini
 _TO = (15, 60)
 
 
@@ -54,7 +55,7 @@ def _chunks(lst, n):
 
 
 # ── SLOT & SESI ──
-def slot_waktu(session, hari=7):
+def slot_waktu(session, hari=config.KPI_FLASH_SLOT_HARI):
     """Slot flash sale yang tersedia `hari` ke depan -> list {timeslot_id, start_time, end_time}."""
     now = int(time.time())
     return _req("GET", session, URL_SLOT, extra_params={"start_time": now, "end_time": now + hari * 86400}) or []
@@ -192,7 +193,7 @@ def daftar_mingguan(session, nama_toko, maks_sesi=None):
     """Grab slot seminggu, bikin sesi tiap slot, daftarin SEMUA produk bergilir (maks 50/sesi).
     maks_sesi = batasi jumlah sesi (None = semua slot). Return ringkasan."""
     produk = siapkan_produk(session, nama_toko)
-    slots = slot_waktu(session, hari=7)
+    slots = slot_waktu(session)   # hari ke depan = config.KPI_FLASH_SLOT_HARI
     if maks_sesi:
         slots = slots[:maks_sesi]
     if not produk or not slots:

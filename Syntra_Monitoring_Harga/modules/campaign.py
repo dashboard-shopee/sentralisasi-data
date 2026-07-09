@@ -32,10 +32,13 @@ def _chunks(lst, n):
         yield lst[i:i + n]
 
 
-# ── BACA: sesi campaign yang lagi BUKA nominasi ──
-def open_sessions(session, keywords=None):
-    """Return list dict sesi yg window nominasinya aktif (now di antara start-end).
-    keywords (list) opsional -> filter nama campaign; None = semua."""
+# ── BACA: sesi campaign (window nominasi ATAU sesi berjalan) ──
+def open_sessions(session, keywords=None, window="nominasi"):
+    """Return list dict sesi campaign yg aktif. keywords (list) opsional -> filter nama
+    campaign; None = semua.
+    window="nominasi" (default) -> sesi yg WINDOW NOMINASI-nya buka (buat DAFTAR produk).
+    window="sesi"                -> sesi yg lagi BERJALAN (buat TAKEDOWN; nominasi bisa udah
+                                    tutup tapi produk masih jalan di campaign & perlu di-opt-out)."""
     H = config.grab_headers(session); P = session["params"]
     now = int(time.time())
     try:
@@ -59,15 +62,16 @@ def open_sessions(session, keywords=None):
             continue   # campaign non-produk (err 1671500008) dll -> skip
         for s in (((r.get("data") or {}).get("general") or {}).get("product_session") or []):
             ns, ne = int(s.get("nomination_start_time", 0)), int(s.get("nomination_end_time", 0))
-            if ns <= now <= ne:
+            ss, se = int(s.get("session_start_time", 0)), int(s.get("session_end_time", 0))
+            aktif = (ns <= now <= ne) if window == "nominasi" else (ss <= now <= se)
+            if aktif:
                 hasil.append({
                     "campaign_id": str(cid), "campaign_name": cname,
                     "session_id": str(s.get("session_id")), "session_name": str(s.get("session_name", "")).strip(),
-                    "session_start": int(s.get("session_start_time", 0)),
-                    "session_end": int(s.get("session_end_time", 0)),
-                    "nomination_end": ne,
+                    "session_start": ss, "session_end": se, "nomination_end": ne,
                 })
-    print(colorama.Fore.WHITE + f"[campaign] {len(hasil)} sesi buka nominasi" + colorama.Style.RESET_ALL)
+    label = "buka nominasi" if window == "nominasi" else "sesi berjalan"
+    print(colorama.Fore.WHITE + f"[campaign] {len(hasil)} {label}" + colorama.Style.RESET_ALL)
     return hasil
 
 
