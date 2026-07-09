@@ -20,7 +20,11 @@ CAMPAIGN_FAKTOR = 0.985          # campaign harusnya <= target*98.5%; < itu -> t
 CAMPAIGN_STOK_MIN = 30           # stok < 30 -> takedown campaign
 
 
-def _cek_koreksi_turun(target, stok, pjh, promos, gar):
+# Jenis promo yg PUNYA handler di modul harga (sisanya = "tak dikenal" -> di-flag).
+_JENIS_DIKENAL = {"Promo Toko", "Garansi Harga Terbaik", "Flash Sale", "Campaign"}
+
+
+def _cek_koreksi_turun(target, real, stok, pjh, promos, gar):
     """Target < Harga Awal. Cek Promo Toko (set/daftar) + takedown per-promo (garansi/flash/campaign).
     Return list aksi (dict). promos = list {jenis, harga_promo, status, stok} dari konteks."""
     aksi = []
@@ -69,6 +73,16 @@ def _cek_koreksi_turun(target, stok, pjh, promos, gar):
         if sebab:
             aksi.append({"promo": "Campaign", "aksi": "takedown", "sebab": " & ".join(sebab)})
 
+    # PROMO TAK DIKENAL yg NYETEL harga tampil (real) & nindih target -> FLAG (belum ada handler,
+    # mis. "Tipe 1"). Cuma yg AKTIF & harganya = real (yg bener2 muncul ke customer).
+    if not aksi or real != target:
+        for p in promos:
+            if (p["jenis"] not in _JENIS_DIKENAL and p.get("status") == "aktif"
+                    and p["harga_promo"] and p["harga_promo"] <= target):
+                aksi.append({"promo": p["jenis"], "aksi": "flag_tak_dikenal",
+                             "sebab": f"promo '{p['jenis']}' @{p['harga_promo']} nindih target (belum ada handler)"})
+                break
+
     return aksi
 
 
@@ -92,7 +106,7 @@ def diagnosa_toko(nama_toko):
             kasus, aksi = "sesuai", []
         elif H and target < H:
             kasus = "koreksi_turun"
-            aksi = _cek_koreksi_turun(target, stok, pjh, promo.get(key, []), garansi.get(key))
+            aksi = _cek_koreksi_turun(target, real, stok, pjh, promo.get(key, []), garansi.get(key))
         else:   # target >= harga awal (atau harga awal 0)
             kasus = "harga_dasar"
             aksi = [{"aksi": "ubah_harga_dasar", "ke": target,
