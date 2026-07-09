@@ -73,15 +73,19 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar):
         if sebab:
             aksi.append({"promo": "Campaign", "aksi": "takedown", "sebab": " & ".join(sebab)})
 
-    # PROMO TAK DIKENAL yg NYETEL harga tampil (real) & nindih target -> FLAG (belum ada handler,
-    # mis. "Tipe 1"). Cuma yg AKTIF & harganya = real (yg bener2 muncul ke customer).
-    if not aksi or real != target:
-        for p in promos:
-            if (p["jenis"] not in _JENIS_DIKENAL and p.get("status") == "aktif"
-                    and p["harga_promo"] and p["harga_promo"] <= target):
+    # PROMO TAK DIKENAL yg nindih harga tampil (mis. "Tipe 1"). Aturan user (sama garansi):
+    #   - HOLD (biarin) kalau harga >= target-500 DAN margin >= 7% -> gak apa-apa.
+    #   - FLAG (perlu takedown, belum ada handler) kalau harga < target-500 (ATAU margin<7% [PENDING]).
+    for p in promos:
+        if (p["jenis"] not in _JENIS_DIKENAL and p.get("status") == "aktif"
+                and p["harga_promo"] and p["harga_promo"] <= target):
+            if p["harga_promo"] < target - GARANSI_SELISIH:   # <target-500 -> masalah
                 aksi.append({"promo": p["jenis"], "aksi": "flag_tak_dikenal",
-                             "sebab": f"promo '{p['jenis']}' @{p['harga_promo']} nindih target (belum ada handler)"})
-                break
+                             "sebab": f"'{p['jenis']}' @{p['harga_promo']} < target-{GARANSI_SELISIH} (belum ada handler; PR: identifikasi)"})
+            else:                                              # dalam toleransi -> hold
+                aksi.append({"promo": p["jenis"], "aksi": "hold",
+                             "sebab": f"'{p['jenis']}' @{p['harga_promo']} masih >= target-{GARANSI_SELISIH} (dibiarkan)"})
+            break
 
     return aksi
 

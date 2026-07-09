@@ -89,7 +89,16 @@ promo** yg variasi ikuti (dari `harga_promo_konteks`) + tiap promo punya kondisi
 3. Paket Diskon + Voucher provisioning (harian)
 4. Campaign + Flash provisioning (mingguan)
 
+## PR — identifikasi "Tipe 1" (campaign_type=1)
+Promo tak dikenal: `campaign_type=1`, `promotion_id` KOSONG, berjadwal ~13 hari (contoh
+25 Jun–8 Jul), nyetel harga tampil & nindih promo toko, langka (Kimmio 28 + Beverra 7).
+Belum bisa di-sniff (udah berakhir saat dicek 9 Jul; `found campaign_type=1: 0`).
+**Aturan sementara (dari user, sama garansi):** HOLD kalau harga `≥ target−500` **DAN**
+margin `≥ 7%`; FLAG "perlu takedown (belum ada handler)" kalau `< target−500` (atau margin<7%).
+**TODO:** sniff pas Tipe 1 aktif lagi → tau itu promo apa → bikin handler takedown.
+
 ## Item "nanti bahas detail" (jangan lupa)
 - Garansi: kondisi "perlu ditinjau" → batalkan; margin@best price presisi (user mau harga PAS)
+- **Margin<7% guard** (garansi + promo tak dikenal) — hitung margin@harga-promo, masih STUB
 - Paket/Voucher: aturan enroll detail
 - Campaign/Flash: pemilihan produk per-kategori × penjualan tertinggi
