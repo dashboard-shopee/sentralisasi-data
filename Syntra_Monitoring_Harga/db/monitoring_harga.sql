@@ -246,3 +246,17 @@ create table if not exists harga_fakta_paket (
     primary key (toko, bundle_deal_id)
 );
 create index if not exists idx_fakta_paket_toko on harga_fakta_paket(toko);
+
+-- 15. KATEGORI Shopee per produk (Fase 1, incremental). Grain: item (bukan variasi).
+--     Sumber: get_product_info (category_path + category_path_name_list). UPSERT (bukan
+--     snapshot) — diisi bertahap cuma utk produk yg belum punya kategori.
+create table if not exists harga_produk_kategori (
+    toko             text   not null,
+    item_id          bigint not null,
+    kategori_id      bigint,             -- id kategori daun (paling spesifik)
+    kategori_leaf    text,               -- nama kategori daun (mis. 'Tempat Pensil')
+    kategori_full    text,               -- path lengkap ('Buku & Alat Tulis > ... > Tempat Pensil')
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, item_id)
+);
+create index if not exists idx_produk_kategori_toko on harga_produk_kategori(toko);

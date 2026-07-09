@@ -220,6 +220,30 @@ def fakta_paket(nama_toko, session):
     return n
 
 
+# ── KATEGORI produk (incremental, tier mingguan / command khusus) ──
+def fakta_kategori(nama_toko, session, limit=None):
+    """Grab kategori Shopee utk produk yg BELUM punya kategori (incremental). Cap `limit`
+    (default config.MAKS_KATEGORI_PER_RUN). Return jumlah produk berhasil diisi."""
+    from modules import kategori
+    lim = int(limit if limit is not None else getattr(config, "MAKS_KATEGORI_PER_RUN", 800))
+    item_ids = SQL.baca_item_tanpa_kategori(nama_toko, lim)
+    if not item_ids:
+        return 0
+    baris, gagal = [], 0
+    for iid in item_ids:
+        try:
+            k = kategori.ambil_kategori(session, iid)
+            # Sukses (ada/tidak-ada kategori) -> simpan (item ditandai 'udah diproses' biar
+            # tak dicek ulang). Kalau None (draft/tanpa kategori) -> row kategori null.
+            baris.append({"item_id": iid, **(k or {"kategori_id": None, "leaf": None, "full": None})})
+        except Exception:
+            gagal += 1   # error transien/hard -> skip (di-retry siklus berikutnya)
+    n = SQL.simpan_kategori(nama_toko, baris)
+    ada = sum(1 for b in baris if b.get("full"))
+    _log(nama_toko, f"Kategori: +{n} diproses ({ada} ada kategori), {gagal} skip-retry", colorama.Fore.LIGHTGREEN_EX)
+    return n
+
+
 # ── TIER BULANAN: housekeeping ──
 def housekeeping():
     """Prune baris fakta yatim (tak ke-refresh > FAKTA_MAKS_UMUR_HARI). Return jumlah terhapus."""

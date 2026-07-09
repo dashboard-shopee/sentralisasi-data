@@ -24,6 +24,7 @@ const KATALOG = [
     label: "Syntra Monitoring Harga",
     pemicu: [
       { key: "grab", label: "Log Ambil Produk & Konteks (Fase 1 — tiap jam)" },
+      { key: "kategori", label: "Log Ambil Kategori Produk" },
       { key: "fakta_harian", label: "Log Fakta Harian (Garansi + Campaign)" },
       { key: "fakta_mingguan", label: "Log Fakta Mingguan (Flash + Voucher + Paket)" },
       { key: "fakta_bulanan", label: "Log Housekeeping Bulanan" },

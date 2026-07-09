@@ -170,11 +170,13 @@ export async function GET(req: Request) {
         )
         select ho.toko, ho.item_id "itemId", ho.model_id "modelId", ho.ptag, ho.sku, ho.nama_variasi "namaVariasi", ho.nama_produk "namaProduk", ho.harga_awal "hargaAwal",
           coalesce(ap.custom_harga_diskon, ap.harga_diskon) "hargaDiskonDb", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), 0) "hargaPancing", coalesce(nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0), nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0), 0) "hargaAkhirTarget", ho.harga_tampil "hargaTampil", ho.selisih, ho.sumber_harga "sumberHarga", ho.alasan, ho.diproses_pada "diprosesPada", ho.diperbarui_pada "diperbaruiPada",
-          (case when ho.harga_tampil > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(ho.harga_tampil, 0)) else null end)::numeric "marginPersen"
+          (case when ho.harga_tampil > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(ho.harga_tampil, 0)) else null end)::numeric "marginPersen",
+          pk.kategori_full "kategori"
         from harga_olah_data ho
         left join sku_sales ss on ho.sku = ss.sales_sku
         left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
         left join sku_cost sc on sc.sku_u = upper(ho.sku)
+        left join harga_produk_kategori pk on pk.toko = ho.toko and pk.item_id = ho.item_id
         where ${W}
         order by ${order}
         limit $${params.length - 1} offset $${params.length}

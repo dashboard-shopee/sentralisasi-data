@@ -466,6 +466,40 @@ def simpan_fakta_paket(toko, baris):
         pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers",))
 
 
+def baca_item_tanpa_kategori(toko, limit):
+    """item_id (unik) di 1 toko yg BELUM punya kategori (incremental grab). Return list int."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("""
+            select distinct ho.item_id
+            from harga_olah_data ho
+            left join harga_produk_kategori k on k.toko = ho.toko and k.item_id = ho.item_id
+            where ho.toko = :t and k.item_id is null
+            limit :lim
+        """), {"t": toko, "lim": int(limit)}).fetchall()
+    return [int(r.item_id) for r in rows]
+
+
+def simpan_kategori(toko, baris):
+    """UPSERT kategori per item. baris = list {item_id, kategori_id, leaf, full}.
+    GUARD: toko di luar 10 toko resmi ditolak."""
+    if not config.is_toko_resmi(toko) or not baris:
+        return 0
+    params = [{"t": toko, "i": int(b["item_id"]), "kid": b.get("kategori_id"),
+               "leaf": b.get("leaf"), "full": b.get("full")} for b in baris]
+    with get_engine().begin() as c:
+        c.execute(text("""
+            insert into harga_produk_kategori
+                (toko, item_id, kategori_id, kategori_leaf, kategori_full, diperbarui_pada)
+            values (:t, :i, :kid, :leaf, :full, now())
+            on conflict (toko, item_id) do update set
+                kategori_id = excluded.kategori_id,
+                kategori_leaf = excluded.kategori_leaf,
+                kategori_full = excluded.kategori_full,
+                diperbarui_pada = now()
+        """), params)
+    return len(params)
+
+
 def prune_fakta_yatim(maks_umur_hari=35):
     """Housekeeping (tier bulanan): buang baris fakta yg TIDAK ke-refresh > maks_umur_hari
     (mis. toko/sesi yg sudah hilang). Aman: baris yg masih di-grab rutin selalu fresh.

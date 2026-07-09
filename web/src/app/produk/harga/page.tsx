@@ -39,6 +39,7 @@ interface OlahDataRow {
   alasan: string | null;
   diprosesPada: string | null;
   diperbaruiPada: string;
+  kategori: string | null;
 }
 
 interface KomisiRow {
@@ -745,6 +746,7 @@ export default function HargaPage() {
                   <td className="p-3.5 text-xs max-w-[220px]">
                     <div className="font-semibold text-[#161a27] truncate" title={r.namaProduk || ""}>{r.namaProduk}</div>
                     {r.namaVariasi && <div className="text-[10px] text-[#8a90a2] mt-0.5 font-medium bg-[#f3f4f6] px-1.5 py-0.5 rounded w-max">{r.namaVariasi}</div>}
+                    {r.kategori && <div className="text-[10px] text-[#0369a1] mt-0.5 truncate max-w-[210px]" title={r.kategori}>🏷️ {r.kategori}</div>}
                   </td>
                   <td className="p-3.5 text-right text-[#6b7180]">{formatRp(r.hargaAwal)}</td>
                   <td className="p-3.5 text-right text-[#6b7180]">{formatRp(r.hargaDiskonDb)}</td>

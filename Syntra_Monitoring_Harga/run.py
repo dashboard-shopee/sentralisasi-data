@@ -15,6 +15,7 @@ Pemakaian:
   python run.py                # SCHEDULER 24 jam (Fase 1) — produksi
   python run.py grab           # tes 1 siklus Fase 1 SEKARANG (tier ikut jam saat ini)
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan+bulanan)
+  python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
@@ -85,6 +86,7 @@ def siklus_fase1(paksa_semua=False):
                 _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
                 _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
                 _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
+                _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))  # incremental (capped)
             print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] --- SELESAI ---" + colorama.Style.RESET_ALL)
         except Exception as e:
             T["gagal"] += 1
@@ -116,6 +118,29 @@ def siklus_fase1(paksa_semua=False):
         catat_fase("fakta_bulanan", keterangan="housekeeping (prune fakta yatim)")
 
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 1 (FAKTA) SELESAI — tier: {tier} ===" + colorama.Style.RESET_ALL)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  KATEGORI — isi awal SEMUA produk yg belum punya kategori (bulk, incremental).
+#  Aman diulang (cuma yg belum). Per toko harvest 1x lalu grab kategori sampai habis.
+# ══════════════════════════════════════════════════════════════════
+def jalankan_kategori():
+    jam_siklus.kunci()
+    toko = config.daftar_toko_aktif()
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === ISI KATEGORI — {len(toko)} toko (incremental) ===" + colorama.Style.RESET_ALL)
+    total = 0
+    for username, info in toko.items():
+        nama = info["name"]
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            n = fakta.fakta_kategori(nama, session, limit=100000)   # semua yg belum, 1 pass
+            total += n
+            print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] kategori terisi +{n}" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+        close_session()
+    catat_fase("kategori", keterangan=f"{total} produk diproses, {len(toko)} toko")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === KATEGORI SELESAI ({total} produk) ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -195,6 +220,8 @@ if __name__ == "__main__":
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)
+    elif arg in ("kategori", "category"):
+        jalankan_kategori()
     elif arg in ("rubah", "rubah_harga", "2"):
         _legacy_jalankan([2])
     elif arg in ("verifikasi", "verif", "3"):

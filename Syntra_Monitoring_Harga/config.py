@@ -73,6 +73,10 @@ HARI_ID = {
 # Umur maksimum baris fakta sebelum dianggap yatim & di-prune housekeeping (hari).
 FAKTA_MAKS_UMUR_HARI = 35
 
+# KATEGORI produk (Shopee) — di-grab per-produk (get_product_info), incremental (cuma yg
+# belum punya kategori). Batas per toko per siklus mingguan biar gak marathon.
+MAKS_KATEGORI_PER_RUN = 800
+
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║                    DAFTAR 10 TOKO (urutan = tombol "Detail")       ║
@@ -165,6 +169,9 @@ UPDATE_HARGA_TERVERIFIKASI = True  # kunci pengaman Fase 2 (sudah diverifikasi -
 
 # ── Endpoint API Shopee (terverifikasi DevTools/sniff) ──
 URL_GRAB_PRODUK = "https://seller.shopee.co.id/api/v3/opt/mpsku/list/v2/search_product_list"
+# Detail produk (buat KATEGORI). Param: product_id + is_draft=false. Response:
+# data.product_info.category_path (ID) + category_path_name_list (nama). Verified 9 Jul.
+URL_GET_PRODUCT_INFO = "https://seller.shopee.co.id/api/v3/product/get_product_info"
 URL_CEK_BLOKIR = "https://seller.shopee.co.id/api/v3/opt/product/get_campaign_info_by_item_list/"
 URL_FLASH_LIST = "https://seller.shopee.co.id/api/marketing/v4/shop_flash_sale/get_shop_flash_sale_list/"
 URL_FLASH_ITEMS = "https://seller.shopee.co.id/api/marketing/v4/shop_flash_sale/get_shop_flash_sale_item/"
