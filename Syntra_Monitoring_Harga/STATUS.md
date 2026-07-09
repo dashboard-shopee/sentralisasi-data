@@ -31,9 +31,12 @@
 | 3 | Garansi 3 harga (Kini/Terbaik/Program) | ✅ |
 | 4 | Flash fix (end_time>=now, buang over-fetch Yarra) | ✅ |
 | 8 | Urutan tab by cadence | ✅ |
-| **5** | **Promo Toko master-detail** (aktif+akan datang → klik→produk) | ⏳ **(lagi dibahas)** |
+| **5** | **Promo Toko master-detail** (berjalan+akan datang → klik→produk) | ✅ (grab harian + dashboard) |
 | 6 | Paket Diskon master-detail + KPI (aktif+akan datang → klik→produk) | ⏳ |
 | 7 | Campaign rework (running+upcoming → klik→produk; cek nominasi=0) | ⏳ |
+
+> Detail-mechanism dashboard digeneralisasi (`DETAIL_CFG` di page.tsx) — dukung voucher + promo_toko; tinggal daftarin utk paket/campaign nanti.
+> ⚠️ **Garansi margin display (WIP user):** page.tsx tab Garansi udah ada 3 kolom margin (marginCurrent/Best/Program, `f:"margin"`) TAPI API `pusat-promosi` belum return field margin + `fmt` belum handle "margin" → nyambung ke item "margin@best" (hitung margin@harga-promo). Perlu dituntasin bareng modul garansi.
 
 > Pattern master-detail udah ADA & reusable (dibangun utk Voucher): `DETAIL_TABS`+`toggleRow`+expand-row di `web/.../pusat-promosi/page.tsx`, API `tab=<x>_produk`.
 
