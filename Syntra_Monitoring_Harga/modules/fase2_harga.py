@@ -128,3 +128,84 @@ def ringkas(diagnosa):
     kasus = Counter(d["kasus"] for d in diagnosa)
     aksi = Counter(a.get("promo", a.get("aksi")) for d in diagnosa for a in d["aksi"])
     return dict(kasus), dict(aksi)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  SOLUSI — EKSEKUSI (poin 3a Promo Toko). DRY-RUN aware (config.DRY_RUN).
+#  Urutan: lifecycle promo toko (buat/duplikat) -> set harga / daftar variasi.
+# ══════════════════════════════════════════════════════════════════
+import config  # noqa: E402
+
+
+def _chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
+    """SOLUSI poin 3a. Lifecycle promo toko dulu (buat baru kalau ga ada / duplikat kalau H-1,
+    reuse duplikat_promo — perpanjang di-SKIP: promo toko tak bisa extend), lalu set harga=target
+    / daftar variasi 'koreksi_turun' ke promo utama. DRY-RUN aware. Return ringkasan."""
+    from modules.discount_util import grab_semua_promo, grab_item_promo
+    from modules.update_harga import _entry, grab_payload
+    from modules.duplikat_promo import proses_duplikat_promo
+    from modules.api_util import api_post
+    from modules.sql_harga import baca_baris_rubah
+
+    aksi_pt = [(d, a) for d in diagnosa for a in d["aksi"] if a.get("promo") == "Promo Toko"]
+
+    # 1) LIFECYCLE — pastikan promo toko valid (no promo->buat dari 0; H-1->duplikat; masih lama->noop).
+    baris = baca_baris_rubah(nama_toko)
+    try:
+        proses_duplikat_promo(shop, session, baris)
+    except Exception as e:
+        print(f"[promo toko] [{nama_toko}] lifecycle gagal: {type(e).__name__}: {e}")
+
+    if not aksi_pt:
+        return {"set": 0, "daftar": 0, "terkirim": 0, "promo_toko": 0}
+
+    # 2) Peta promo toko sekarang: {(item,model): {pid: harga}} + tentukan promo UTAMA.
+    promos = grab_semua_promo(shop, session)
+    if not promos:
+        print(f"[promo toko] [{nama_toko}] belum ada promo toko (mungkin baru dibuat/DRY) — set/daftar ditunda.")
+        return {"set": 0, "daftar": 0, "terkirim": 0, "promo_toko": 0, "catatan": "promo toko belum ada"}
+    pids = [p["promotion_id"] for p in promos]
+    primary = next((p["promotion_id"] for p in promos
+                    if config.NAMA_PROMO.lower() in str(p.get("name", "")).lower()), pids[0])
+    peta = {}
+    for pid in pids:
+        for it in grab_item_promo(shop, session, pid):
+            if it.get("status") == config.STATUS_AKTIF and it.get("item_id"):
+                k = (int(it["item_id"]), int(it["model_id"]))
+                peta.setdefault(k, {})[pid] = int(it["promotion_price"]) // config.FAKTOR_HARGA
+
+    # 3) Susun update per promo.
+    upd_by_pid = {pid: [] for pid in pids}
+    n_set = n_daftar = 0
+    for d, a in aksi_pt:
+        key = (d["item_id"], d["model_id"]); target = d["target"]
+        if a["aksi"] == "set_harga":
+            target_pids = list(peta.get(key, {}).keys()) or [primary]; n_set += 1
+        else:   # daftar_promo_utama
+            target_pids = [primary]; n_daftar += 1
+        for pid in target_pids:
+            if peta.get(key, {}).get(pid) == target:
+                continue   # udah pas
+            upd_by_pid[pid].append(_entry(d["item_id"], d["model_id"], target, config.STATUS_AKTIF))
+
+    # 4) Kirim (DRY-RUN aware, per chunk 50, 1 chunk gagal tak gugurkan lainnya).
+    terkirim = gagal = 0
+    for pid, entries in upd_by_pid.items():
+        for ch in _chunks(entries, 50):
+            if config.DRY_RUN:
+                terkirim += len(ch); continue
+            try:
+                api_post(config.URL_UPDATE_HARGA, config.grab_headers(session), session["params"],
+                         grab_payload(pid, ch), kunci="data")
+                terkirim += len(ch)
+            except Exception as e:
+                gagal += len(ch)
+                print(f"[promo toko] [{nama_toko}] chunk {pid} gagal ({len(ch)}): {type(e).__name__}")
+    mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    print(f"[promo toko] [{nama_toko}] ({mode}) set={n_set} daftar={n_daftar} -> {terkirim} entri terkirim, {gagal} gagal")
+    return {"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "promo_toko": len(pids)}
