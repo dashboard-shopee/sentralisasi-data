@@ -18,7 +18,7 @@ const TABS = [
 ];
 
 // Kolom per tab: [key, judul, tipe]. tipe: text | rp | dt | num | status
-type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" };
+type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" | "margin" };
 const COLS: Record<string, Col[]> = {
   promo_toko: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
@@ -43,8 +43,10 @@ const COLS: Record<string, Col[]> = {
   ],
   garansi: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
-    { k: "namaVariasi", t: "Variasi" }, { k: "currentPrice", t: "Harga Kini", f: "rp" },
-    { k: "bestPrice", t: "Harga Terbaik", f: "rp" }, { k: "bidPrice", t: "Harga Program", f: "rp" },
+    { k: "namaVariasi", t: "Variasi" },
+    { k: "currentPrice", t: "Harga Kini", f: "rp" }, { k: "marginCurrent", t: "Margin Kini", f: "margin" },
+    { k: "bestPrice", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
+    { k: "bidPrice", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
     { k: "stok", t: "Stok", f: "num" },
   ],
   flash: [
@@ -264,6 +266,17 @@ export default function PusatPromosiPage() {
                           }>
                             {fmt(row[c.k])}
                           </span>
+                        ) : c.f === "margin" ? (
+                          row[c.k] === null || row[c.k] === undefined || row[c.k] === "" ? (
+                            <span className="text-[#c3c6d1]">-</span>
+                          ) : (
+                            <span className={
+                              "font-bold " +
+                              (Number(row[c.k]) >= 0.12 ? "text-[#047857]" : Number(row[c.k]) >= 0 ? "text-[#eab308]" : "text-[#e11d48]")
+                            }>
+                              {(Number(row[c.k]) * 100).toFixed(1)}%
+                            </span>
+                          )
                         ) : (
                           <span className={c.k === "namaProduk" ? "block max-w-[240px] truncate" : ""} title={c.k === "namaProduk" ? String(row[c.k] ?? "") : undefined}>
                             {fmt(row[c.k], c.f)}
