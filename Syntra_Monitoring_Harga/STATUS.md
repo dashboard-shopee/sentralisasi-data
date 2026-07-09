@@ -50,7 +50,7 @@
 | Guard promo tak-dikenal "Tipe 1" (hold ≥target-500, flag <target-500) | ✅ |
 | **3a Eksekusi Promo Toko** (lifecycle buat/duplikat + set/daftar) | ✅ DRY-RUN |
 | **4 Harga Dasar** (takedown semua promo → ubah base → pasang lagi paket+voucher) | ⏳ **(next)** |
-| 3b Takedown Garansi (best<target-500 / margin<7%) | ⏳ (margin@best detail pending) |
+| 3b Takedown Garansi (best<target-500 / margin@best<7%) | ✅ logika (margin@best wired, sumber FAKTA+bid_id). Modul garansi penuh ⏳ |
 | 3c Takedown Flash (flash<target-10 / stok 0) | ⏳ |
 | 3d Takedown Campaign (price<target*98.5% / stok<30 / stok<penjualan/hari) | ⏳ |
 
@@ -80,7 +80,9 @@
 
 ## ⏸️ PR / DITUNDA (jangan lupa)
 - ⏸️ **Identifikasi "Tipe 1"** (campaign_type=1) — sniff pas aktif lagi (udah berakhir 8 Jul). Sementara: guard hold/flash.
-- ⏸️ **Margin<7% guard** (garansi + promo tak dikenal) — hitung margin@harga-promo, masih STUB.
+- ✅ **Margin garansi** — display dashboard (3 kolom, rumus identik) + Fase 2 `_margin`/`baca_biaya_sku` (bot). Temuan: "Harga Terbaik" Shopee sering margin NEGATIF (jual rugi) → takedown bener.
+- ⏸️ **Garansi konteks vs fakta 0 overlap** — konteks `campaign_type=11` (86 var Alialia) TIDAK sama dgn fakta `get_ongoing_list` (46 var). Fase 2 pakai FAKTA. **PR: investigasi campaign_type=11 itu apa** + konsistensi.
+- ⏸️ **Margin<7% guard promo tak-dikenal (Tipe 1)** — masih pakai best only, margin belum (butuh harga promo Tipe 1).
 - ⏸️ **Perpanjang promo toko** — dianggap tak bisa extend (temuan lama) → duplikat. Verifikasi endpoint kalau perlu.
 - ⏸️ Garansi "perlu ditinjau" → batalkan (detail pas modul garansi).
 - ⏸️ Paket/Voucher aturan enroll detail; Campaign/Flash pemilihan produk per-kategori.
