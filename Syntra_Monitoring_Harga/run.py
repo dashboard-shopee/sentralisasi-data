@@ -632,6 +632,67 @@ def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=30):
     return {"error": "timeout", "kicked": kicked, "after_kick": after, "fetch_hook": hook}
 
 
+def sniff_garansi():
+    """SNIFF halaman Garansi Harga Terbaik (Nominasi Produk). Listen SEMUA `mkt/bidding` (+ mkt).
+    USER navigate ke-4 tab (Rekomendasi/Belum-daftar · Terbaik · Perlu-Ditinjau) + coba Nominasikan &
+    Batalkan 1 produk. Rekam url+method+body+response tiap request. Dump __garansi_sniff_<toko>.json
+    biar gua tau: endpoint REKOMENDASI (belum-didaftar), field status sub-tab, payload enroll/withdraw.
+    Shop default 'alialiastore' (punya garansi); override: python run.py garansi_sniff <username>."""
+    import json as J
+    from modules import session as S
+    shop = sys.argv[2].lower() if len(sys.argv) > 2 else "alialiastore"
+    info = config.SHOP_DATABASE.get(shop)
+    if not info:
+        print(colorama.Fore.RED + f"[garansi sniff] toko '{shop}' ga ada di SHOP_DATABASE" + colorama.Style.RESET_ALL); return
+    nama = info["name"]
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === SNIFF GARANSI — {nama} ({shop}) ===" + colorama.Style.RESET_ALL)
+    rec = []
+    try:
+        page = S.buka_page_toko(shop=shop, i=info["i"])
+        page.listen.start("seller.shopee.co.id/api/mkt")   # bidding + mkt lain
+        print(colorama.Fore.LIGHTYELLOW_EX + """
+================================================================
+  Buka halaman GARANSI HARGA TERBAIK (Nominasi Produk). Lakukan:
+    1. Tab 'Pendaftaran Program > Produk Rekomendasi' (belum didaftar)
+    2. Tab 'Dinominasikan' > sub-tab 'Terbaik' lalu 'Perlu Ditinjau Ulang'
+    3. Coba NOMINASIKAN 1 produk (belum didaftar) sampai berhasil
+    4. Coba BATALKAN 1 produk (dinominasi) sampai berhasil
+  Semua request mkt/bidding kerekam. Kelar -> ENTER.
+================================================================""" + colorama.Style.RESET_ALL)
+        try:
+            input(colorama.Fore.LIGHTYELLOW_EX + "[garansi sniff] >>> ENTER kalau udah selesai navigate + nominasi/batalkan... " + colorama.Style.RESET_ALL)
+        except EOFError:
+            page.wait(120)
+        for p in page.listen.steps(timeout=8):
+            url = getattr(p, "url", "")
+            if "/api/mkt/" not in url:
+                continue
+            postdata = getattr(getattr(p, "request", None), "postData", None)
+            body = postdata
+            try:
+                body = J.loads(postdata) if isinstance(postdata, str) else postdata
+            except Exception:
+                pass
+            rec.append({"url": url, "method": getattr(p, "method", ""),
+                        "request_body": body,
+                        "response": getattr(getattr(p, "response", None), "body", None)})
+        out = f"__garansi_sniff_{shop}.json"
+        with open(out, "w", encoding="utf-8") as f:
+            J.dump(rec, f, ensure_ascii=False, indent=2, default=str)
+        print(colorama.Fore.LIGHTGREEN_EX + f"[garansi sniff] {len(rec)} request mkt direkam -> {out}" + colorama.Style.RESET_ALL)
+        seen = set()
+        for r in rec:
+            u = r["url"].split("?")[0].split("/api/")[-1]
+            if u not in seen:
+                seen.add(u)
+                print(colorama.Fore.WHITE + f"  {r['method']} /{u}" + colorama.Style.RESET_ALL)
+    except Exception as e:
+        print(colorama.Fore.RED + f"[garansi sniff] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+    finally:
+        S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SNIFF GARANSI SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 def sniff_set_komisi_produk():
     """SNIFF set komisi dari HALAMAN PRODUK (Produk Saya, filter komisi) — bukan halaman affiliate.
     Listen SEMUA /api (broad). User SET komisi 1 produk manual (sampai notif berhasil). Rekam req
@@ -932,6 +993,8 @@ if __name__ == "__main__":
         sniff_komisi_write()
     elif arg in ("komisi_sniff_produk", "sniff_produk", "komisisniffproduk"):
         sniff_set_komisi_produk()
+    elif arg in ("garansi_sniff", "sniff_garansi", "garansisniff"):
+        sniff_garansi()
     elif arg in ("komisi_apitest", "komisi_test", "komisiapitest"):
         test_komisi_api_via_browser()
     elif arg in ("komisi_apollo", "apollo_probe", "komisiapollo"):

@@ -16,3 +16,4 @@ __komisi_sniff_*.json
 __komisi_apitest_*.json
 __jubelio_token.json
 __komisi_sniff_produk_*.json
+__garansi_sniff_*.json
