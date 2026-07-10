@@ -22,8 +22,16 @@ _B = "https://seller.shopee.co.id/api/mkt/bidding/"
 URL_ONGOING = _B + "get_ongoing_list"
 URL_WITHDRAW = _B + "seller_withdraw"
 URL_SUBMIT = _B + "submit_bidding_online"
+# ── Endpoint provisioning (sniff 11 Jul, halaman Nominasi Produk) ──
+URL_MATCH = _B + "get_item_match_list"        # produk REKOMENDASI (belum-didaftar)
+URL_ITEM_ONGOING = _B + "get_item_ongoing_list"  # dinominasi + bid_status per model
+URL_STATS = _B + "get_ongoing_statistics"     # count per tab
 
 FAKTOR = 100000   # harga bidding = rupiah × 100000
+# bid_status (get_item_ongoing_list): 30 = Terbaik (winning, muncul ke customer),
+#                                     40 = Perlu Ditinjau Ulang (belum kompetitif / stok rendah).
+BID_STATUS_TERBAIK = 30
+BID_STATUS_PERLU_TINJAU = 40
 
 
 def _chunks(lst, n):
@@ -69,6 +77,92 @@ def list_ongoing(session, page_size=100, maks_halaman=50):
         page += 1
     print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} variasi lagi ikut Garansi (ongoing)" + colorama.Style.RESET_ALL)
     return hasil
+
+
+# ── REKOMENDASI (belum-didaftar) — get_item_match_list ──
+def list_rekomendasi(session, page_size=100, maks_halaman=50):
+    """Produk REKOMENDASI garansi (belum-didaftar) → list {item_id, item_name, floor, ceiling, stok,
+    models:[{model_id, model_name, cspu_id}]}. floor=best/Harga Terbaik, ceiling=Harga Program (rupiah).
+    floor & ceiling per-ITEM (item_floor_price/item_ceiling_price)."""
+    H = config.grab_headers(session); P = session["params"]
+    hasil = []; page = 1
+    while page <= maks_halaman:
+        try:
+            r = api_post(URL_MATCH, H, P,
+                {"filter": {}, "page_info": {"page_num": page, "page_size": page_size},
+                 "option": {"with_performance": True}}, kunci="data")
+        except Exception as e:
+            print(colorama.Fore.RED + f"[garansi] get_item_match_list hal {page} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            break
+        lst = (r.get("data") or {}).get("list") or []
+        for it in lst:
+            floor = int((it.get("item_floor_price") or {}).get("lower_value") or 0) // FAKTOR
+            ceil = int((it.get("item_ceiling_price") or {}).get("lower_value") or 0) // FAKTOR
+            models = []
+            for m in (it.get("model_list") or []):
+                pi = m.get("product_info") or {}; ci = m.get("cspu_info") or {}
+                if ci.get("cspu_id"):
+                    models.append({"model_id": str(pi.get("model_id", "")),
+                                   "model_name": pi.get("model_name", ""),
+                                   "cspu_id": str(ci.get("cspu_id", ""))})
+            hasil.append({"item_id": int(it.get("item_id") or 0), "item_name": it.get("item_name", ""),
+                          "floor": floor, "ceiling": ceil,
+                          "stok": int(it.get("item_current_stock") or 0), "models": models})
+        if len(lst) < page_size:
+            break
+        page += 1
+    print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} produk rekomendasi (belum-didaftar)" + colorama.Style.RESET_ALL)
+    return hasil
+
+
+# ── DINOMINASI + bid_status — get_item_ongoing_list (semua page_tab, dedup bid_id) ──
+def list_ongoing_status(session, page_size=100, maks_halaman=50):
+    """Produk DINOMINASI per MODEL → list {item_id, item_name, model_id, model_name, bid_id,
+    bid_status, stok, floor, ceiling, cspu_id}. floor=best/Harga Terbaik, ceiling=Harga Program
+    (rupiah, per-ITEM). bid_status 30=Terbaik / 40=Perlu-Ditinjau. Iterasi page_tab 1-3 + dedup bid_id."""
+    H = config.grab_headers(session); P = session["params"]
+    hasil = {}
+    for page_tab in (1, 2, 3):
+        page = 1
+        while page <= maks_halaman:
+            try:
+                r = api_post(URL_ITEM_ONGOING, H, P,
+                    {"filter": {"page_tab": page_tab}, "page_info": {"page_num": page, "page_size": page_size},
+                     "option": {"with_performance": True}}, kunci="data")
+            except Exception:
+                break
+            lst = (r.get("data") or {}).get("list") or []
+            for it in lst:
+                iid = int(it.get("item_id") or 0); stok = int(it.get("item_current_stock") or 0)
+                floor = int((it.get("item_floor_price") or {}).get("lower_value") or 0) // FAKTOR
+                ceil = int((it.get("item_ceiling_price") or {}).get("lower_value") or 0) // FAKTOR
+                iname = it.get("item_name", "")
+                for m in (it.get("model_list") or []):
+                    bi = m.get("bidding_info") or {}; pi = m.get("product_info") or {}; ci = m.get("cspu_info") or {}
+                    bid_id = str(bi.get("bid_id", ""))
+                    if not bid_id:
+                        continue
+                    hasil[bid_id] = {"item_id": iid, "item_name": iname,
+                                     "model_id": str(pi.get("model_id", "")), "model_name": pi.get("model_name", ""),
+                                     "bid_id": bid_id, "bid_status": bi.get("bid_status"), "stok": stok,
+                                     "floor": floor, "ceiling": ceil, "cspu_id": str(ci.get("cspu_id", ""))}
+            if len(lst) < page_size:
+                break
+            page += 1
+    print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} model dinominasi (ongoing)" + colorama.Style.RESET_ALL)
+    return list(hasil.values())
+
+
+def entri_enroll(item_id, item_name, model_id, model_name, cspu_id, floor_rp, ceiling_rp, bid_stock=0):
+    """Bangun 1 entri cspu_product utk submit_bidding_online. bid_price = ceiling (Harga Program),
+    floor/ceiling dari rekomendasi. Harga ×FAKTOR (string)."""
+    return {
+        "cspu_id": str(cspu_id), "item_id": str(item_id), "item_name": item_name,
+        "model_id": str(model_id), "model_name": model_name,
+        "bid_price": str(int(ceiling_rp) * FAKTOR), "floor_price": str(int(floor_rp) * FAKTOR),
+        "ceiling_price": str(int(ceiling_rp) * FAKTOR), "bid_stock": str(bid_stock),
+        "bid_source": 0, "accept_rebate": 1,
+    }
 
 
 # ── OPT-OUT: withdraw pakai bid_id ──

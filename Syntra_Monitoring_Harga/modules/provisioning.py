@@ -133,3 +133,60 @@ def flash(shop, nama_toko, session):
     r = FSD.daftar_mingguan(session, nama_toko)
     print(colorama.Fore.CYAN + f"[prov flash] [{nama_toko}] → {r}" + colorama.Style.RESET_ALL)
     return {"flash_sesi": r.get("sesi", 0), **r}
+
+
+def garansi(shop, nama_toko, session):
+    """Garansi Harga Terbaik harian. qualify = best(floor) ≥ target−500 DAN margin@best ≥ 7%.
+      (a) REKOMENDASI (belum-didaftar): qualify & stok>0 → DAFTAR (enroll).
+      (b) TERBAIK (bid_status 30): TIDAK qualify → TAKEDOWN (withdraw). qualify → biarin.
+      (c) PERLU-DITINJAU (bid_status 40): qualify & stok>0 → RE-DAFTAR (enroll ulang); selain itu →
+          TAKEDOWN (refresh balik ke belum-didaftar). DRY_RUN-aware (modul garansi handle)."""
+    from modules import garansi as G
+    from modules import sql_harga as SQL
+    from modules.fase2_harga import _margin, GARANSI_SELISIH, GARANSI_MARGIN_MIN
+
+    baris = SQL.baca_baris_rubah(nama_toko)
+    tgt = {(b["item_id"], b["model_id"]): b for b in baris}          # target (harga_akhir) + sku per (item,model)
+    biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
+
+    def qualify(best, item_id, model_id):
+        """None=ga ada target (skip). True/False=lolos kondisi."""
+        b = tgt.get((int(item_id), int(model_id)))
+        if not b or not b.get("harga_akhir") or best <= 0:
+            return None
+        if best < b["harga_akhir"] - GARANSI_SELISIH:
+            return False
+        m = _margin(best, biaya.get((b["sku"] or "").strip().upper()))
+        if m is not None and m < GARANSI_MARGIN_MIN:
+            return False
+        return True
+
+    # (a) REKOMENDASI → enroll yg qualify & stok>0
+    entri = []
+    for it in G.list_rekomendasi(session):
+        if it["stok"] <= 0:
+            continue
+        for m in it["models"]:
+            if qualify(it["floor"], it["item_id"], m["model_id"]) is True:
+                entri.append(G.entri_enroll(it["item_id"], it["item_name"], m["model_id"], m["model_name"],
+                                            m["cspu_id"], it["floor"], it["ceiling"]))
+    ok_daftar = G.enroll(session, entri)[0] if entri else 0
+
+    # (b)/(c) ONGOING
+    withdraw_ids, redaftar = [], []
+    for o in G.list_ongoing_status(session):
+        q = qualify(o["floor"], o["item_id"], o["model_id"])
+        if o["bid_status"] == G.BID_STATUS_TERBAIK:
+            if q is False:                                  # (b) NOT qualify → takedown
+                withdraw_ids.append(o["bid_id"])
+        elif o["bid_status"] == G.BID_STATUS_PERLU_TINJAU:
+            if q is True and o["stok"] > 0 and o["cspu_id"]:  # (c) qualify → re-daftar in-place
+                redaftar.append(G.entri_enroll(o["item_id"], o["item_name"], o["model_id"], o["model_name"],
+                                               o["cspu_id"], o["floor"], o["ceiling"]))
+            else:                                            # (c) selain itu → takedown (refresh)
+                withdraw_ids.append(o["bid_id"])
+
+    ok_redaftar = G.enroll(session, redaftar)[0] if redaftar else 0
+    ok_takedown = G.withdraw(session, withdraw_ids)[0] if withdraw_ids else 0
+    print(colorama.Fore.CYAN + f"[prov garansi] [{nama_toko}] daftar {ok_daftar} + re-daftar {ok_redaftar} + takedown {ok_takedown}" + colorama.Style.RESET_ALL)
+    return {"daftar": ok_daftar, "redaftar": ok_redaftar, "takedown": ok_takedown}

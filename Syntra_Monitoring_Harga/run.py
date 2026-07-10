@@ -184,6 +184,8 @@ def jalankan_provisioning(modul=("paket",)):
                 _aman(nama, "prov campaign", lambda: P.campaign(username, nama, session))
             if "flash" in modul:
                 _aman(nama, "prov flash", lambda: P.flash(username, nama, session))
+            if "garansi" in modul:
+                _aman(nama, "prov garansi", lambda: P.garansi(username, nama, session))
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL provisioning: {e}" + colorama.Style.RESET_ALL)
         close_session()

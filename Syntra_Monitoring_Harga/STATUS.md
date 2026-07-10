@@ -104,7 +104,7 @@ garansi withdraw → paket takedown (`PD.keluarkan_item` semua deal) + voucher t
 |---|---|---|
 | **Komisi** — set/takedown **MANUAL** (dashboard #9 nuntun; API mustahil) + **rubah harga OTOMATIS** (Anchor A) | harian | ✅ (grab+banding+anchor auto; enroll manual) |
 | Promo Toko (buat/duplikat + daftar produk baru) | jam | ✅ (bagian eksekusi 3a) |
-| Garansi (daftar, kondisi best/margin, batalkan "perlu ditinjau") | harian | ⏳ |
+| Garansi (daftar, kondisi best/margin, batalkan "perlu ditinjau") | harian | 🔧 **DRY sebagian** (`provisioning.garansi`). ✅ (a) enroll rekomendasi (qualify=best≥target−500 & margin@best≥7%, stok>0) VALIDATED Alialia 10→4. Endpoint: `get_item_match_list` (rekomendasi), `get_item_ongoing_list` (bid_status 30=Terbaik/40=Perlu-Ditinjau), `submit_bidding_online`, `seller_withdraw` — `page_info` pagination. ⚠️ **(b)/(c) PERLU REVIEW**: cuma 76 ongoing ke-fetch (hrsnya 171 — page_tab mapping blm pas, Perlu-Ditinjau kemungkinan kelewat) + withdraw 72/76 (rate tinggi, validasi bener/ngga). Untested LIVE. |
 | Paket Diskon (buat/enroll semua) | harian | ✅ **DRY** (`provisioning.paket` — idempotent `UPSELL <toko>`, buat/reuse + `enroll_semua`. Verified DRY Kimmioshop 221 produk, tier 2→1/3→2/7→3%). Untested LIVE. |
 | Voucher (buat/enroll semua) | harian | ✅ **DRY** (`provisioning.voucher` — idempotent kode `UP*`, ikuti_toko shop-wide, auto-perpanjang H-1 / buat baru. min_price=2×AOV. Verified DRY Kimmioshop). ⚠️ tipe ikuti_toko dulu (voucher PRODUK per-band nyusul); durasi reuse DURASI_PROMO_HARI (180d, verif live). |
 | Campaign (daftar, harga≤target*98.5%, stok>50 & >10×penjualan/hari) | mingguan | ✅ **DRY** (`provisioning.campaign` — filter stok>50 & >10×pjh via `baca_stok_per_item`+pjh, nominasi ke sesi buka window, skip yg udah ternominasi. Verified kriteria Kimmioshop 221→185 lolos). ⚠️ harga≤target×0.985 = requirement Shopee saat aktivasi (verif live). |
@@ -200,8 +200,7 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
 **FASE 2 — MASALAH + SOLUSI** (deteksi PER-MODUL: per-jam / harian / mingguan)  ◀ **KITA DI SINI**
 0. ✅ **KOMISI SELESAI** — harga komisi = PATOKAN (Anchor A, per-jam) → bot **otomatis rubah harga** produk komisi ke harga komisi (verified). Set/takedown komisi = **MANUAL** (dashboard #9 nuntun; API mustahil). Grab Shopee + banding = auto.
 1. ✅ **Harga poin 1–4 (DRY)** — 3a promo toko, 4 harga dasar (+paket/voucher takedown+re-add), 3b garansi, 3c flash, 3d campaign. **Verifikasi LIVE ⏳** (+ benerin endpoint flash). ✅ target udah ikut komisi (poin 0 anchor).
-2. 🔧 **Provisioning poin 5** (`modules/provisioning.py` + `run.py provisioning [paket voucher campaign flash]`, DRY paksa): ✅ **Paket · Voucher · Campaign · Flash (DRY)** · ⏳ **Garansi**. Untested LIVE.
-3. ⏳ **Garansi provisioning** (harian) — pasang jika best≥target−500 & margin@best≥7%; 3 kondisi (belum-daftar/dinominasi-terbaik/**perlu-ditinjau→batalin**) + tuntasin margin@best display. **BUTUH BAHAS DETAIL.**
+2. 🔧 **Provisioning poin 5** (`modules/provisioning.py` + `run.py provisioning [paket voucher campaign flash garansi]`, DRY paksa): ✅ Paket · Voucher · Campaign · Flash (DRY) · 🔧 **Garansi** ((a) enroll ✅, (b)/(c) ongoing perlu review: page_tab fetch 76/171 + takedown rate). Untested LIVE.
 
 **FASE 3 — LAPORAN** (verdict + audit hasil aksi ke dashboard)
 - ⏳ Belum mulai (nunggu Fase 2 jalan live).
