@@ -382,6 +382,13 @@ def grab_komisi_browser():
             print(warna + f"[komisi grab] [{nama}] {len(raw)} respons gql ditangkap, {len(items)} item komisi terparse -> {out}" + colorama.Style.RESET_ALL)
             for it in list(items.values())[:8]:
                 print(f"    item {it['item_id']} komisi {it['persen']}% status {it['status']} commId {it['commission_id']} | {it['item_name'][:35]}")
+            # SIMPAN ke fakta HANYA kalau ada hasil (jangan ngosongin tabel kalau grab meleset).
+            if items:
+                from modules.sql_harga import simpan_fakta_komisi
+                n = simpan_fakta_komisi(nama, list(items.values()))
+                print(colorama.Fore.CYAN + f"[komisi grab] [{nama}] {n} item komisi disimpan ke harga_fakta_komisi" + colorama.Style.RESET_ALL)
+            else:
+                print(colorama.Fore.YELLOW + f"[komisi grab] [{nama}] 0 item -> TIDAK disimpan (tabel fakta dibiarin, cek URL/scroll)" + colorama.Style.RESET_ALL)
         except Exception as e:
             print(colorama.Fore.RED + f"[komisi grab] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
         finally:

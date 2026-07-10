@@ -247,6 +247,22 @@ create table if not exists harga_fakta_paket (
 );
 create index if not exists idx_fakta_paket_toko on harga_fakta_paket(toko);
 
+-- 14b. FAKTA KOMISI AFFILIATE Shopee (harian). Grain: item. Sumber: BROWSER grab
+--      (run.py komisi_grab -> GetOpenCampaignProducts, bypass anti-bot gql). Komisi AKTIF =
+--      commissionStatus 'CommissionStatusOngoing' + commission_id valid. Dibanding vs
+--      harga_komisi_toko (Syntra "harusnya") di dashboard #9. persen: 10000/1000 = 10.0.
+create table if not exists harga_fakta_komisi (
+    toko             text   not null,
+    item_id          bigint not null,
+    commission_id    text,
+    persen           numeric default 0,
+    status           text,
+    item_name        text,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, item_id)
+);
+create index if not exists idx_fakta_komisi_toko on harga_fakta_komisi(toko);
+
 -- 15. KATEGORI Shopee per produk (Fase 1, incremental). Grain: item (bukan variasi).
 --     Sumber: get_product_info (category_path + category_path_name_list). UPSERT (bukan
 --     snapshot) — diisi bertahap cuma utk produk yg belum punya kategori.

@@ -143,9 +143,10 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
 
 ### Progres & langkah
 - ✅ **A (Anchor) SELESAI (DRY)** — `diagnosa_toko` + `SQL.baca_komisi_patokan` + `config.username_dari_nama`. Verified Yarra 47 variasi.
-- ✅ **B (READ Shopee) TERBUKTI via browser** — `run.py komisi_grab` (buka `/portal/web-seller-affiliate/open_campaign` → `page.listen` tangkap `GetOpenCampaignProducts` → parse 6 item aktif Yarra). Dump `__komisi_shopee_<toko>.json`.
-- ⏳ **NEXT-B:** dari `komisi_grab`, simpan hasil ke **tabel fakta `harga_fakta_komisi`** (item_id, commission_id, persen, status) → **dashboard #9 tab Komisi: 2 tabel banding** (Syntra `harga_komisi_toko` vs Shopee) → tandai harusnya-komisi/belum/harusnya-ngga-tapi-aktif.
-- ⏳ **C (set/takedown browser)** — pola sama B (navigate halaman komisi + klik tombol set/hapus biar SDK nandatangan). Nyusul.
+- ✅ **B (READ Shopee) TERBUKTI via browser** — `run.py komisi_grab` (buka `/portal/web-seller-affiliate/open_campaign` → `page.listen` tangkap `GetOpenCampaignProducts` → parse item aktif). Dump `__komisi_shopee_<toko>.json` + **SIMPAN ke `harga_fakta_komisi`** (snapshot per toko). Verified Yarra 6 item.
+- ✅ **BANDING (#9 data-layer)** — `SQL.banding_komisi(nama_toko)`: Syntra (`harga_komisi_toko`) vs Shopee (`harga_fakta_komisi`) per item → verdict `sesuai`/`belum_dikomisikan`/`harusnya_dicabut`. Verified Yarra: **6 sesuai, 4 belum_dikomisikan, 0 dicabut**. ⚠️ LIMITASI: peta SKU→item_id via olah_data (stok-filtered) → 43/58 SKU ke-map (SKU stok-0 hilang). PR: peta SKU→item lengkap.
+- ⏳ **NEXT-B (dashboard #9):** render tab Komisi = 2 tabel banding di SYNTRA (Next.js) pakai `banding_komisi`. + putusin GRAIN (per-item vs per-SKU) & cadence auto-grab (browser, harian?).
+- ⏳ **C (set/takedown browser)** — pola sama B (navigate halaman komisi + klik set/hapus biar SDK nandatangan). Nyusul.
 
 ---
 

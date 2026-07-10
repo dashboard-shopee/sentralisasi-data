@@ -454,6 +454,18 @@ def simpan_fakta_voucher(toko, baris):
         pk=("toko", "voucher_id"), jsonb_cols=("item_scope",))
 
 
+def simpan_fakta_komisi(toko, baris):
+    """baris = list {item_id, commission_id, persen, status, item_name} — komisi AFFILIATE
+    AKTIF di Shopee (grab BROWSER `komisi_grab`). Snapshot per toko (delete+insert).
+    toko = NAMA display (konsisten fakta lain). Kosong -> tabel toko dikosongin (hati2 panggil
+    hanya kalau grab sukses)."""
+    return _snapshot_toko(
+        "harga_fakta_komisi", toko,
+        ["toko", "item_id", "commission_id", "persen", "status", "item_name"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "item_id"))
+
+
 def simpan_fakta_paket(toko, baris):
     """baris = list {bundle_deal_id, name, status, start_time, end_time, tiers(list/None)}."""
     for b in baris:
@@ -623,6 +635,43 @@ def baca_komisi_patokan(username_toko):
                          {"u": username_toko}).fetchall()
     return {r.sku_u: {"harga_jual": int(r.harga_jual or 0), "persen": float(r.komisi_persen or 0)}
             for r in rows}
+
+
+def banding_komisi(nama_toko):
+    """#9 — banding komisi SYNTRA ("harusnya", `harga_komisi_toko`) vs SHOPEE ("aktual",
+    `harga_fakta_komisi`) per ITEM. SKU Syntra dipetakan ke item_id via `harga_olah_data`.
+    Return list {item_id, item_name, syntra_komisi, syntra_persen, shopee_komisi, shopee_persen, verdict}.
+    verdict: 'sesuai' (dua-dua aktif) / 'belum_dikomisikan' (Syntra ya, Shopee belum) /
+    'harusnya_dicabut' (Shopee aktif, Syntra ngga).
+    ⚠️ LIMITASI: peta SKU->item_id lewat `harga_olah_data` yg STOK-FILTERED (variasi stok 0 tak
+    ke-grab) -> SKU komisi yg semua variasinya stok 0 TIDAK muncul (contoh Yarra: 43/58 SKU ke-map
+    -> 10 item). Belum ada peta SKU->item lengkap di DB (harga_all_produk tanpa item_id). PR."""
+    username = config.username_dari_nama(nama_toko)
+    with get_engine().connect() as c:
+        # SYNTRA: item_id yg punya >=1 SKU harga_jual>0 (petakan sku->item_id via olah_data)
+        syntra = c.execute(text("""
+            select o.item_id, max(k.komisi_persen) persen
+            from harga_komisi_toko k
+            join harga_olah_data o on upper(o.sku) = upper(k.sku) and o.toko = :nama
+            where lower(k.username_toko) = lower(:u) and k.harga_jual > 0
+            group by o.item_id
+        """), {"nama": nama_toko, "u": username or nama_toko}).fetchall()
+        shopee = c.execute(text("""select item_id, persen, item_name
+                                   from harga_fakta_komisi where toko = :nama"""),
+                           {"nama": nama_toko}).fetchall()
+    syntra_map = {int(r.item_id): float(r.persen or 0) for r in syntra}
+    shopee_map = {int(r.item_id): {"persen": float(r.persen or 0), "name": r.item_name} for r in shopee}
+    out = []
+    for iid in sorted(set(syntra_map) | set(shopee_map)):
+        s_ada, p_ada = iid in syntra_map, iid in shopee_map
+        verdict = "sesuai" if (s_ada and p_ada) else ("belum_dikomisikan" if s_ada else "harusnya_dicabut")
+        out.append({
+            "item_id": iid, "item_name": shopee_map.get(iid, {}).get("name", ""),
+            "syntra_komisi": s_ada, "syntra_persen": syntra_map.get(iid),
+            "shopee_komisi": p_ada, "shopee_persen": shopee_map.get(iid, {}).get("persen"),
+            "verdict": verdict,
+        })
+    return out
 
 
 def baca_item_di_paket(toko):
