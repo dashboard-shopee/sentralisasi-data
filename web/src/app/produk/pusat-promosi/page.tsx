@@ -18,7 +18,7 @@ const TABS = [
 ];
 
 // Kolom per tab: [key, judul, tipe]. tipe: text | rp | dt | num | status
-type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" | "margin" };
+type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" | "margin" | "verdict" };
 const COLS: Record<string, Col[]> = {
   promo_toko: [
     { k: "toko", t: "Toko" }, { k: "nama", t: "Nama Promo" },
@@ -54,9 +54,11 @@ const COLS: Record<string, Col[]> = {
     { k: "endTime", t: "Berakhir", f: "dt" },
   ],
   komisi: [
-    { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "parentSku", t: "Parent SKU" },
-    { k: "category", t: "Kategori" }, { k: "komisiPersen", t: "Komisi %", f: "num" },
-    { k: "hargaJual", t: "Harga Jual", f: "rp" },
+    { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" },
+    { k: "verdict", t: "Status Komisi", f: "verdict" },
+    { k: "syntraPersen", t: "Komisi Syntra %", f: "num" },
+    { k: "shopeePersen", t: "Komisi Shopee %", f: "num" },
+    { k: "jmlSku", t: "Jml SKU", f: "num" },
   ],
 };
 
@@ -128,6 +130,7 @@ export default function PusatPromosiPage() {
   const DETAIL_CFG: Record<string, { idField: string; detailTab: string; idParam: string; priceField: string; judul: string }> = {
     voucher: { idField: "voucherId", detailTab: "voucher_produk", idParam: "voucher_id", priceField: "hargaTampil", judul: "voucher" },
     promo_toko: { idField: "promotionId", detailTab: "promo_toko_produk", idParam: "promotion_id", priceField: "hargaPromo", judul: "promo toko" },
+    komisi: { idField: "itemId", detailTab: "komisi_produk", idParam: "item_id", priceField: "hargaJual", judul: "komisi (SKU variasi)" },
   };
   const cfg = DETAIL_CFG[tab];
   const bisaDetail = !!cfg;
@@ -272,6 +275,17 @@ export default function PusatPromosiPage() {
                           }>
                             {fmt(row[c.k])}
                           </span>
+                        ) : c.f === "verdict" ? (
+                          <span className={
+                            "px-2 py-0.5 rounded-full text-[11px] font-semibold " +
+                            (row[c.k] === "sesuai" ? "bg-green-50 text-green-600"
+                              : row[c.k] === "belum_dikomisikan" ? "bg-amber-50 text-amber-600"
+                              : "bg-red-50 text-red-600")
+                          }>
+                            {row[c.k] === "sesuai" ? "✅ Sesuai"
+                              : row[c.k] === "belum_dikomisikan" ? "⚠️ Belum dikomisikan"
+                              : "❌ Harusnya dicabut"}
+                          </span>
                         ) : c.f === "margin" ? (
                           row[c.k] === null || row[c.k] === undefined || row[c.k] === "" ? (
                             <span className="text-[#c3c6d1]">-</span>
@@ -284,7 +298,7 @@ export default function PusatPromosiPage() {
                             </span>
                           )
                         ) : (
-                          <span className={c.k === "namaProduk" ? "block max-w-[240px] truncate" : ""} title={c.k === "namaProduk" ? String(row[c.k] ?? "") : undefined}>
+                          <span className={c.k === "namaProduk" || c.k === "itemName" ? "block max-w-[240px] truncate" : ""} title={c.k === "namaProduk" || c.k === "itemName" ? String(row[c.k] ?? "") : undefined}>
                             {fmt(row[c.k], c.f)}
                           </span>
                         )}

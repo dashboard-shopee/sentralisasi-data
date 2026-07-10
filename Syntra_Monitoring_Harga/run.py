@@ -97,6 +97,11 @@ def siklus_fase1(paksa_semua=False):
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
     close_session()
 
+    # ── TIER HARIAN: GRAB KOMISI Shopee via BROWSER (bypass anti-bot). Jalan SETELAH loop +
+    #    close_session() (port 9556 bebas). unattended -> interaktif=False (no input()).
+    if due_harian:
+        _aman("-", "komisi (browser)", lambda: grab_komisi_browser(interaktif=False))
+
     # Pass akhir (butuh data semua toko): isi Harga Diskon utk SKU baru yg kosong.
     try:
         nd = isi_harga_diskon_kosong()
@@ -316,11 +321,13 @@ def _parse_komisi_list(body, acc):
             }
 
 
-def grab_komisi_browser():
+def grab_komisi_browser(interaktif=True):
     """GRAB komisi Shopee lewat BROWSER (bypass anti-bot: JS halaman yg nandatangan gql).
-    Buka halaman komisi → tangkap SEMUA response `affiliateplatform/gql` → parse item komisi +
-    DUMP MENTAH ke __komisi_shopee_<toko>.json (biar keliatan struktur asli, gak nebak).
-    READ-ONLY (cuma navigate + scroll). Cuma toko komisi-aktif (skrg Yarra)."""
+    Buka halaman komisi → tangkap response `affiliateplatform/gql` (GetOpenCampaignProducts) →
+    parse item komisi aktif → SIMPAN ke harga_fakta_komisi + dump __komisi_shopee_<toko>.json.
+    READ-ONLY di Shopee (navigate + scroll). Cuma toko komisi-aktif (skrg Yarra).
+    interaktif=True (CLI): kasih jeda ENTER buat navigate manual kalau auto-nav meleset.
+    interaktif=False (SCHEDULER): TANPA input() — auto-nav + wait aja (biar gak ngeblok)."""
     import json as J
     from modules import session as S
     from modules.sql_harga import baca_komisi_patokan
@@ -351,14 +358,17 @@ def grab_komisi_browser():
                         page.wait(1)
                 except Exception as e:
                     print(colorama.Fore.YELLOW + f"[komisi grab] nav gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
-            # JEDA MANUAL: kalau auto-nav meleset, buka halaman Komisi manual di Chrome yg kebuka,
-            # scroll sampai semua produk komisi keliatan. Paket gql ke-BUFFER selama ini.
-            print(colorama.Fore.LIGHTYELLOW_EX + "\n[komisi grab] >>> Kalau tabel komisi BELUM kebuka: buka manual di Chrome ini "
-                  "(menu Affiliate/Komisi atau Produk Saya filter komisi), SCROLL sampai habis." + colorama.Style.RESET_ALL)
-            try:
-                input(colorama.Fore.LIGHTYELLOW_EX + "[komisi grab] >>> Tekan ENTER di sini kalau udah keliatan semua produk komisi... " + colorama.Style.RESET_ALL)
-            except EOFError:
-                page.wait(5)
+            # JEDA MANUAL (CLI): kalau auto-nav meleset, buka halaman Komisi manual di Chrome +
+            # scroll. Paket gql ke-BUFFER selama ini. SCHEDULER (interaktif=False): skip, wait aja.
+            if interaktif:
+                print(colorama.Fore.LIGHTYELLOW_EX + "\n[komisi grab] >>> Kalau tabel komisi BELUM kebuka: buka manual di Chrome ini "
+                      "(menu Affiliate/Komisi), SCROLL sampai habis." + colorama.Style.RESET_ALL)
+                try:
+                    input(colorama.Fore.LIGHTYELLOW_EX + "[komisi grab] >>> Tekan ENTER kalau udah keliatan semua produk komisi... " + colorama.Style.RESET_ALL)
+                except EOFError:
+                    page.wait(5)
+            else:
+                page.wait(5)   # unattended: kasih waktu gql kepanggil
             # drain paket ke-capture (berhenti kalau 8s ga ada request baru)
             try:
                 for p in page.listen.steps(timeout=8):

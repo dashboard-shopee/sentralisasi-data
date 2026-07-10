@@ -80,6 +80,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ produk });
     }
 
+    // SKU variasi dalam 1 item komisi (expand-row tab Komisi). Sisi SYNTRA (harga_komisi_toko).
+    if (tab === "komisi_produk") {
+      const item = p.get("item_id");
+      const tk = p.get("toko");
+      if (!item || !tk) return NextResponse.json({ error: "item_id & toko wajib" }, { status: 400 });
+      const produk = await q<Record<string, unknown>>(
+        `select o.sku, max(o.nama_produk) "namaProduk",
+                max(k.komisi_persen) "komisiPersen", max(k.harga_jual) "hargaJual"
+         from harga_olah_data o
+         join dim_toko d on d.nama = o.toko
+         join harga_komisi_toko k on k.username_toko = d.username and upper(k.sku) = upper(o.sku)
+         where o.toko=$1 and o.item_id=$2 and coalesce(k.harga_jual,0) > 0
+         group by o.sku order by o.sku`,
+        [tk, item]
+      );
+      return NextResponse.json({ produk });
+    }
+
     const tokos = await q<{ username: string; nama: string }>(
       `select username, nama from dim_toko order by shop_index`
     );
@@ -174,17 +192,35 @@ export async function GET(req: Request) {
       if (search) like(["s.name"]);
       order = `s.toko asc, s.end_time asc`;
     } else if (tab === "komisi") {
-      // Komisi = harga_komisi_toko (source of truth dashboard), bukan grab Shopee. AKTIF = harga_jual>0.
-      cols = `d.nama "toko", s.username_toko "usernameToko", s.sku, p.parent_sku "parentSku",
-              p.category, s.komisi_persen "komisiPersen", s.harga_jual "hargaJual",
-              s.diperbarui_pada "diperbaruiPada"`;
-      base = `from harga_komisi_toko s
-              left join harga_komisi_produk p on p.sku = s.sku
-              left join dim_toko d on d.username = s.username_toko`;
-      where.push(`coalesce(s.harga_jual,0) > 0`);
-      if (filterToko) eqToko("d.nama");
-      if (search) like(["s.sku", "p.parent_sku", "p.category"]);
-      order = `d.nama asc, s.sku asc`;
+      // #9 BANDING per ITEM: SYNTRA ("harusnya", harga_komisi_toko harga_jual>0) vs SHOPEE
+      // ("aktual", harga_fakta_komisi = grab browser). Master per item; klik -> detail SKU (komisi_produk).
+      // verdict: sesuai (dua-dua) / belum_dikomisikan (Syntra ya, Shopee belum) / harusnya_dicabut (Shopee aktif, Syntra ngga).
+      cols = `s."toko", s."itemId", s."itemName", s."verdict", s."syntraPersen", s."shopeePersen", s."jmlSku"`;
+      base = `from (
+        select coalesce(sy.toko, sh.toko) "toko",
+               coalesce(sy.item_id, sh.item_id) "itemId",
+               coalesce(sh.item_name, sy.nama_produk) "itemName",
+               sy.persen "syntraPersen", sh.persen "shopeePersen",
+               coalesce(sy.jml_sku, 0) "jmlSku",
+               case when sy.item_id is not null and sh.item_id is not null then 'sesuai'
+                    when sy.item_id is not null then 'belum_dikomisikan'
+                    else 'harusnya_dicabut' end "verdict"
+        from (
+          select o.toko, o.item_id, max(o.nama_produk) nama_produk,
+                 max(k.komisi_persen) persen, count(distinct k.sku) jml_sku
+          from harga_komisi_toko k
+          join dim_toko d on d.username = k.username_toko
+          join harga_olah_data o on o.toko = d.nama and upper(o.sku) = upper(k.sku)
+          where coalesce(k.harga_jual,0) > 0
+          group by o.toko, o.item_id
+        ) sy
+        full outer join (
+          select toko, item_id, persen, item_name from harga_fakta_komisi
+        ) sh on sh.toko = sy.toko and sh.item_id = sy.item_id
+      ) s`;
+      if (filterToko) eqToko(`s."toko"`);
+      if (search) like([`s."itemName"`]);
+      order = `s."verdict" asc, s."itemName" asc`;
     } else {
       return NextResponse.json({ error: "Tab tidak dikenal" }, { status: 400 });
     }

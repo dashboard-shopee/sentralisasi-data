@@ -77,7 +77,7 @@ garansi withdraw → paket takedown (`PD.keluarkan_item` semua deal) + voucher t
 | **5** | **Promo Toko master-detail** (promo-level aktif+akan datang → klik→produk, grab `get_discount_list`) | ✅ (grab harian + dashboard, dikonfirmasi user 10 Jul) |
 | 6 | Paket Diskon master-detail + KPI (aktif+akan datang → klik→produk; item per bundle) | ⏳ |
 | 7 | Campaign rework (running+upcoming → klik→produk; cek kenapa nominasi 0) | ⏳ |
-| **9** | **Komisi tab**: 2 tabel banding — data halaman Komisi (Syntra) vs data Shopee (grab semua toko `komisi_api.baca_komisi_aktif`) → biar tau mana **harusnya dikomisikan**, mana **belum**, mana **harusnya-nggak-tapi-udah-aktif** | ⏳ |
+| **9** | **Komisi tab banding** — master per-ITEM (verdict Syntra vs Shopee) → klik detail SKU. Sumber Shopee = browser grab (bypass anti-bot). | ✅ (dashboard + jadwal harian; verifikasi visual user) |
 
 > Detail-mechanism dashboard digeneralisasi (`DETAIL_CFG` di page.tsx) — dukung voucher + promo_toko; tinggal daftarin utk paket/campaign nanti.
 > ⚠️ **Garansi margin display (WIP user):** page.tsx tab Garansi udah ada 3 kolom margin (marginCurrent/Best/Program, `f:"margin"`) TAPI API `pusat-promosi` belum return field margin + `fmt` belum handle "margin" → nyambung ke item "margin@best" (hitung margin@harga-promo). Perlu dituntasin bareng modul garansi.
@@ -144,8 +144,9 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
 ### Progres & langkah
 - ✅ **A (Anchor) SELESAI (DRY)** — `diagnosa_toko` + `SQL.baca_komisi_patokan` + `config.username_dari_nama`. Verified Yarra 47 variasi.
 - ✅ **B (READ Shopee) TERBUKTI via browser** — `run.py komisi_grab` (buka `/portal/web-seller-affiliate/open_campaign` → `page.listen` tangkap `GetOpenCampaignProducts` → parse item aktif). Dump `__komisi_shopee_<toko>.json` + **SIMPAN ke `harga_fakta_komisi`** (snapshot per toko). Verified Yarra 6 item.
-- ✅ **BANDING (#9 data-layer)** — `SQL.banding_komisi(nama_toko)`: Syntra (`harga_komisi_toko`) vs Shopee (`harga_fakta_komisi`) per item → verdict `sesuai`/`belum_dikomisikan`/`harusnya_dicabut`. Verified Yarra: **6 sesuai, 4 belum_dikomisikan, 0 dicabut**. ⚠️ LIMITASI: peta SKU→item_id via olah_data (stok-filtered) → 43/58 SKU ke-map (SKU stok-0 hilang). PR: peta SKU→item lengkap.
-- ⏳ **NEXT-B (dashboard #9):** render tab Komisi = 2 tabel banding di SYNTRA (Next.js) pakai `banding_komisi`. + putusin GRAIN (per-item vs per-SKU) & cadence auto-grab (browser, harian?).
+- ✅ **BANDING (#9 data-layer)** — `SQL.banding_komisi(nama_toko)` (bot) + SQL identik di dashboard API. Verdict `sesuai`/`belum_dikomisikan`/`harusnya_dicabut`. Verified Yarra: **6 sesuai, 4 belum_dikomisikan, 0 dicabut**. ⚠️ LIMITASI: peta SKU→item_id via olah_data (stok-filtered) → 43/58 SKU ke-map (SKU stok-0 hilang). PR: peta SKU→item lengkap.
+- ✅ **DASHBOARD #9 (tab Komisi)** — `web/.../pusat-promosi`: master **per-ITEM** (verdict badge ✅/⚠️/❌ + komisi Syntra% vs Shopee% + jml SKU) → klik **expand → detail SKU variasi** (`komisi_produk`). Grain per-item, verified SQL live + `tsc` clean. Verifikasi visual: user (butuh login).
+- ✅ **JADWAL HARIAN** — `grab_komisi_browser(interaktif=False)` masuk scheduler tier HARIAN (abis loop fase1, browser bebas). CLI `komisi_grab` tetap interaktif (jeda manual).
 - ⏳ **C (set/takedown browser)** — pola sama B (navigate halaman komisi + klik set/hapus biar SDK nandatangan). Nyusul.
 
 ---
