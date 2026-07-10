@@ -17,7 +17,8 @@ Pemakaian:
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan+bulanan)
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
-  python run.py komisi_cek     # VERIF READ komisi Shopee (anti-bot?) — read-only, toko komisi-aktif
+  python run.py komisi_cek     # VERIF READ komisi Shopee via requests (kena anti-bot 403) — read-only
+  python run.py komisi_grab    # GRAB komisi Shopee via BROWSER (tangkap gql ber-SDK) -> dump __komisi_shopee_<toko>.json
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
@@ -282,12 +283,122 @@ def cek_komisi_shopee():
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === CEK KOMISI SELESAI ===" + colorama.Style.RESET_ALL)
 
 
+def _parse_komisi_list(body, acc):
+    """Ekstrak item komisi (yg ada `commissionRate`) dari response gql `GetOpenCampaignProducts`/
+    `QueryItemsOpenCampaign` (data.<Op>.itemList atau .list). acc keyed by item_id ->
+    {item_id, commission_id, persen, status, item_name}. rate 10000 -> 10%. Buang noise
+    (AutoAddProducts/orderTarget dll yg ga punya commissionRate)."""
+    if not isinstance(body, dict):
+        return
+    data = body.get("data")
+    if not isinstance(data, dict):
+        return
+    for blk in data.values():
+        if not isinstance(blk, dict):
+            continue
+        lst = blk.get("itemList") or blk.get("list")
+        if not isinstance(lst, list):
+            continue
+        for it in lst:
+            if not (isinstance(it, dict) and it.get("itemId") and "commissionRate" in it):
+                continue
+            commid = str(it.get("commissionId") or "")
+            if commid in ("", "0"):
+                continue   # commId 0 = daftar REKOMENDASI (belum aktif), bukan komisi aktif -> skip
+            iid = str(it["itemId"])
+            rate = it.get("commissionRate") or 0
+            acc[iid] = {
+                "item_id": int(iid),
+                "commission_id": str(it.get("commissionId") or ""),
+                "persen": round(rate / 1000, 3),      # 10000 -> 10.0 (FAKTOR_KOMISI=1000)
+                "status": it.get("commissionStatus"),  # str "CommissionStatusOngoing" / int 2
+                "item_name": it.get("itemName", ""),
+            }
+
+
+def grab_komisi_browser():
+    """GRAB komisi Shopee lewat BROWSER (bypass anti-bot: JS halaman yg nandatangan gql).
+    Buka halaman komisi → tangkap SEMUA response `affiliateplatform/gql` → parse item komisi +
+    DUMP MENTAH ke __komisi_shopee_<toko>.json (biar keliatan struktur asli, gak nebak).
+    READ-ONLY (cuma navigate + scroll). Cuma toko komisi-aktif (skrg Yarra)."""
+    import json as J
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    # URL halaman komisi (dikonfirmasi user 10 Jul). Page JS manggil gql GetOpenCampaignProducts
+    # (itemList komisi aktif: itemId, commissionId, commissionRate 10000=10%, commissionStatus).
+    KOMISI_URLS = [
+        "https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign",
+    ]
+    toko = config.daftar_toko_aktif()
+    ada = False
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        ada = True
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === GRAB KOMISI BROWSER — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        raw, items = [], {}
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.listen.start("affiliateplatform/gql")
+            for url in KOMISI_URLS:
+                try:
+                    print(colorama.Fore.WHITE + f"[komisi grab] navigate: {url.split('?')[0].split('/portal/')[-1]}" + colorama.Style.RESET_ALL)
+                    page.get(url); page.wait(3)
+                    for _ in range(12):     # scroll biar lazy-load / pagination kepanggil
+                        try: page.scroll.to_bottom()
+                        except Exception: pass
+                        page.wait(1)
+                except Exception as e:
+                    print(colorama.Fore.YELLOW + f"[komisi grab] nav gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            # JEDA MANUAL: kalau auto-nav meleset, buka halaman Komisi manual di Chrome yg kebuka,
+            # scroll sampai semua produk komisi keliatan. Paket gql ke-BUFFER selama ini.
+            print(colorama.Fore.LIGHTYELLOW_EX + "\n[komisi grab] >>> Kalau tabel komisi BELUM kebuka: buka manual di Chrome ini "
+                  "(menu Affiliate/Komisi atau Produk Saya filter komisi), SCROLL sampai habis." + colorama.Style.RESET_ALL)
+            try:
+                input(colorama.Fore.LIGHTYELLOW_EX + "[komisi grab] >>> Tekan ENTER di sini kalau udah keliatan semua produk komisi... " + colorama.Style.RESET_ALL)
+            except EOFError:
+                page.wait(5)
+            # drain paket ke-capture (berhenti kalau 8s ga ada request baru)
+            try:
+                for p in page.listen.steps(timeout=8):
+                    body = getattr(getattr(p, "response", None), "body", None)
+                    postdata = getattr(getattr(p, "request", None), "postData", None)
+                    op = ""
+                    try:
+                        rj = J.loads(postdata) if isinstance(postdata, str) else postdata
+                        op = (rj or {}).get("operationName", "")
+                    except Exception:
+                        pass
+                    raw.append({"url": p.url, "op": op,
+                                "response": body if isinstance(body, (dict, list)) else str(body)[:3000]})
+                    _parse_komisi_list(body, items)
+            except Exception as e:
+                print(colorama.Fore.YELLOW + f"[komisi grab] drain gagal: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+            out = f"__komisi_shopee_{username}.json"
+            with open(out, "w", encoding="utf-8") as f:
+                J.dump({"raw": raw, "items": list(items.values())}, f, ensure_ascii=False, indent=2)
+            warna = colorama.Fore.LIGHTGREEN_EX if items else colorama.Fore.YELLOW
+            print(warna + f"[komisi grab] [{nama}] {len(raw)} respons gql ditangkap, {len(items)} item komisi terparse -> {out}" + colorama.Style.RESET_ALL)
+            for it in list(items.values())[:8]:
+                print(f"    item {it['item_id']} komisi {it['persen']}% status {it['status']} commId {it['commission_id']} | {it['item_name'][:35]}")
+        except Exception as e:
+            print(colorama.Fore.RED + f"[komisi grab] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    if not ada:
+        print(colorama.Fore.YELLOW + "[komisi grab] tak ada toko komisi aktif di harga_komisi_toko." + colorama.Style.RESET_ALL)
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === GRAB KOMISI BROWSER SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1].lower() if len(sys.argv) > 1 else ""
     if arg == "login":
         buka_login()
     elif arg in ("komisi_cek", "cek_komisi", "komisicek"):
         cek_komisi_shopee()
+    elif arg in ("komisi_grab", "grab_komisi", "komisigrab"):
+        grab_komisi_browser()
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)

@@ -124,22 +124,28 @@ garansi withdraw → paket takedown (`PD.keluarkan_item` semua deal) + voucher t
 - **SYNTRA = patokan "harusnya"**: SQL `harga_komisi_toko` (sku, username_toko, harga_saat_ini, komisi_persen, **harga_jual**). **Komisi aktif = `harga_jual > 0`**. Diedit di dashboard SYNTRA. → nentuin produk mana HARUSNYA dikomisikan + harga komisi (=harga_jual) + persen. **NO anti-bot (SQL murni).**
 - **SHOPEE = kenyataan "aktual"**: `komisi_api.baca_komisi_aktif`/`baca_komisi_items` (gql) → item yg BENERAN aktif komisi (item_id, commission_id, persen, status).
 
-### ⚠️ KENDALA ANTI-BOT (KRITIS — verified live 3 Jul, di `komisi_api.py`)
-Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cuma ke-generate pas klik tombol ASLI).
-- **WRITE (set/takedown komisi): DEFINITIF BLOCKED** via API (403 err 90309999). `requests` & browser-fetch dua-duanya gagal. **Satu-satunya jalan = UI-AUTOMATION (DrissionPage)** → rencana lama: TOOL MANUAL, bukan bot otomatis.
-- **READ (grab komisi Shopee): 403 KONFIRMASI** (dites `run.py komisi_cek` 10 Jul 11:04 — err 90309999, SAMA kaya write). `requests`/session-grab MUSTAHIL. → **harus lewat BROWSER** (buka halaman komisi, baca via konteks ber-SDK / scrape DOM). Jadi **B & C dua-duanya butuh browser** (DrissionPage), bukan requests.
+### ⚠️ KENDALA ANTI-BOT (verified) + ✅ SOLUSI BROWSER-LISTEN (TERBUKTI 10 Jul)
+Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cuma ke-generate pas halaman ASLI kebuka).
+- **`requests`/session-grab: 403 KONFIRMASI** (`komisi_cek` 10 Jul, err 90309999) — READ **&** WRITE dua-duanya mustahil via requests.
+- ✅ **SOLUSI: browser-listen** (`komisi_grab`, TERBUKTI 10 Jul) — buka halaman komisi **`/portal/web-seller-affiliate/open_campaign`**, JS-nya manggil gql ber-SDK sendiri, `page.listen` tangkap **response**-nya (bypass anti-bot, no perlu tanda tangan sendiri). **READ KOMISI SHOPEE ✅ JALAN.**
+
+### Struktur data komisi Shopee (dari `komisi_grab`, VERIFIED)
+- Op **`GetOpenCampaignProducts`** → `data.GetOpenCampaignProducts.{itemList, totalCount, cursor, modelsMap}`.
+- Item AKTIF: `{itemId, itemName, commissionId, commissionStatus:"CommissionStatusOngoing", commissionRate:10000 (=10%), period...}`. commId `0`/status Unknown = daftar rekomendasi (belum aktif) → di-skip.
+- 🔎 **Temuan Yarra: Shopee cuma 6 item komisi AKTIF, Syntra `harga_komisi_toko` 58 SKU** → gap gede (harusnya dikomisikan tapi belum). INI yg #9 mau tampilin.
 
 ### Pecahan modul + kelayakan
 | Bagian | Sumber | Anti-bot? | Kelayakan |
 |---|---|---|---|
 | **A. Anchor harga** (poin 3·0): komisi aktif → target = harga komisi (patokan semua promo) | `harga_komisi_toko` (SQL) | TIDAK | ✅ **DONE (DRY, 10 Jul)** — verified Yarra 47 variasi |
-| **B. Grab Shopee aktual + dashboard banding** (#9) | `komisi_api` (gql read) | **403 KONFIRMASI** | ❌ requests mustahil → **BROWSER** (halaman komisi) |
-| **C. Sync otomatis** (set/takedown komisi ikut Syntra) | `komisi_api` (gql write) | **403 BLOCKED** | ❌ API mustahil → **BROWSER/UI-automation** (DrissionPage) |
+| **B. Grab Shopee aktual + dashboard banding** (#9) | browser-listen `komisi_grab` | ✅ bypass | ✅ **READ TERBUKTI** (6 item Yarra) — tinggal simpan ke fakta + dashboard |
+| **C. Sync otomatis** (set/takedown komisi ikut Syntra) | browser (navigate+klik) | ✅ bypass | ⏳ pola sama B, nyusul |
 
 ### Progres & langkah
 - ✅ **A (Anchor) SELESAI (DRY)** — `diagnosa_toko` + `SQL.baca_komisi_patokan` + `config.username_dari_nama`. Verified Yarra 47 variasi.
-- ❌ **B (READ Shopee) = 403 KONFIRMASI** (10 Jul 11:04 via `run.py komisi_cek`, err 90309999). requests mustahil → **B & C dua-duanya WAJIB lewat BROWSER** (DrissionPage: buka halaman komisi, baca tabel + set/remove via klik ber-SDK). Ini jadi 1 modul browser terpisah (kaya rencana lama "TOOL MANUAL").
-- ⏳ **NEXT (bahas):** desain modul browser komisi — (1) baca daftar komisi aktif Shopee dari halaman → simpan (buat #9 banding + sumber commission_id), (2) set/takedown via klik. Cadence & manual-vs-terjadwal tentuin nanti.
+- ✅ **B (READ Shopee) TERBUKTI via browser** — `run.py komisi_grab` (buka `/portal/web-seller-affiliate/open_campaign` → `page.listen` tangkap `GetOpenCampaignProducts` → parse 6 item aktif Yarra). Dump `__komisi_shopee_<toko>.json`.
+- ⏳ **NEXT-B:** dari `komisi_grab`, simpan hasil ke **tabel fakta `harga_fakta_komisi`** (item_id, commission_id, persen, status) → **dashboard #9 tab Komisi: 2 tabel banding** (Syntra `harga_komisi_toko` vs Shopee) → tandai harusnya-komisi/belum/harusnya-ngga-tapi-aktif.
+- ⏳ **C (set/takedown browser)** — pola sama B (navigate halaman komisi + klik tombol set/hapus biar SDK nandatangan). Nyusul.
 
 ---
 
