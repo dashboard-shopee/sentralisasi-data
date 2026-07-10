@@ -602,6 +602,68 @@ def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=30):
     return {"error": "timeout", "kicked": kicked, "after_kick": after, "fetch_hook": hook}
 
 
+def sniff_set_komisi_produk():
+    """SNIFF set komisi dari HALAMAN PRODUK (Produk Saya, filter komisi) — bukan halaman affiliate.
+    Listen SEMUA /api (broad). User SET komisi 1 produk manual (sampai notif berhasil). Rekam req
+    header+body+response. Analisa: endpoint-nya BEDA (mungkin signable) atau tetap affiliateplatform
+    /gql (anti-bot)? Dump __komisi_sniff_produk_<toko>.json + highlight op write."""
+    import json as J
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    URL = "https://seller.shopee.co.id/portal/product/list/all?productType=ams_commission"
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === SNIFF SET KOMISI (HALAMAN PRODUK) — {nama} ===" + colorama.Style.RESET_ALL)
+        rec = []
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.listen.start("seller.shopee.co.id/api")   # BROAD: semua /api
+            page.get(URL); page.wait(4)
+            print(colorama.Fore.LIGHTYELLOW_EX + """
+================================================================
+  DI HALAMAN PRODUK ini: SET komisi 1 produk (Atur Komisi -> isi rate -> Simpan)
+  sampai notif BERHASIL. Semua /api kerekam. Kelar -> ENTER.
+  (kalau halaman produk ga kebuka, navigate ke Produk Saya + filter komisi)
+================================================================""" + colorama.Style.RESET_ALL)
+            try:
+                input(colorama.Fore.LIGHTYELLOW_EX + "[sniff produk] >>> ENTER kalau SET komisi udah berhasil... " + colorama.Style.RESET_ALL)
+            except EOFError:
+                page.wait(120)
+            for p in page.listen.steps(timeout=8):
+                url = getattr(p, "url", "")
+                method = getattr(p, "method", "")
+                postdata = getattr(getattr(p, "request", None), "postData", None)
+                # cuma simpen yg POST/PUT (aksi write) + endpoint menarik
+                if method not in ("POST", "PUT"):
+                    continue
+                body = postdata
+                try:
+                    body = J.loads(postdata) if isinstance(postdata, str) else postdata
+                except Exception:
+                    pass
+                hdr = dict(getattr(getattr(p, "request", None), "headers", {}) or {})
+                sig = [k for k in hdr if any(s in k.lower() for s in ("sap", "af-ac", "sz-", "x-sz"))]
+                rec.append({"url": url, "method": method, "sig_headers": sig,
+                            "request_body": body,
+                            "response": getattr(getattr(p, "response", None), "body", None)})
+            out = f"__komisi_sniff_produk_{username}.json"
+            with open(out, "w", encoding="utf-8") as f:
+                J.dump(rec, f, ensure_ascii=False, indent=2, default=str)
+            print(colorama.Fore.LIGHTGREEN_EX + f"[sniff produk] {len(rec)} req POST/PUT direkam -> {out}" + colorama.Style.RESET_ALL)
+            for r in rec:
+                u = r["url"].split("?")[0].split("/api/")[-1]
+                if any(k in (r["url"] + J.dumps(r.get("request_body") or "")).lower() for k in ("commission", "komisi", "campaign", "ams")):
+                    print(colorama.Fore.MAGENTA + f"  WRITE? {r['method']} /{u} | sig={r['sig_headers']}" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[sniff produk] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SNIFF SET KOMISI PRODUK SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 def takedown_komisi_browser(dry=True, konfirmasi=True, limit=1):
     """TAKEDOWN komisi via DOM-click (satu-satunya jalan; API mati). Alur per produk: ketik di
     search 'Cari di sini' → sisa 1 baris → klik <div>'Hapus' → modal 'Yakin Hapus?' → klik confirm →
@@ -838,6 +900,8 @@ if __name__ == "__main__":
         inspect_komisi_dom()
     elif arg in ("komisi_sniff", "sniff_komisi", "komisisniff"):
         sniff_komisi_write()
+    elif arg in ("komisi_sniff_produk", "sniff_produk", "komisisniffproduk"):
+        sniff_set_komisi_produk()
     elif arg in ("komisi_apitest", "komisi_test", "komisiapitest"):
         test_komisi_api_via_browser()
     elif arg in ("komisi_apollo", "apollo_probe", "komisiapollo"):
