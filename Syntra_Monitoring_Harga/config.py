@@ -39,6 +39,7 @@ TOKO_AKTIF = []
 # 4) Setelan yang kadang diubah:
 STOK_MINIMAL = 1                 # grab hanya variasi stok >= ini (0 dilewati)
 NAMA_PROMO = "PROMO TOKO"        # nama campaign Diskon Toko yang dikelola bot
+NAMA_UPSELL = "UPSELL"           # prefix nama paket diskon / voucher yg dikelola bot (idempotent)
 JELANG_EXPIRE_HARI = 1           # perpanjang promo bila sisa <= ini (hari)
 DURASI_PROMO_HARI = 180          # durasi promo baru (maks 180 sesuai Shopee)
 BUAT_PROMO_DARI_NOL = True       # bikin promo baru kalau toko belum punya promo toko

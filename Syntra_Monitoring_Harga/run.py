@@ -17,6 +17,7 @@ Pemakaian:
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan+bulanan)
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
+  python run.py provisioning [paket voucher]  # FASE 2 poin 5: pasang upsell (harian, DRY-RUN paksa)
   python run.py komisi_cek     # VERIF READ komisi Shopee via requests (kena anti-bot 403) — read-only
   python run.py komisi_grab    # GRAB komisi Shopee via BROWSER (tangkap gql ber-SDK) -> harga_fakta_komisi
   python run.py komisi_inspect # EKSPLORASI DOM halaman komisi (buat desain set/takedown bagian C)
@@ -159,6 +160,31 @@ def jalankan_fase2():
         close_session()
     catat_fase("rubah_harga", keterangan="Fase 2 v1 (promo toko + harga dasar + takedown flash/campaign, DRY-RUN paksa)")
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  FASE 2 poin 5 — PROVISIONING (pasang/daftar upsell). Cadence HARIAN (paket+voucher).
+#  Butuh olah_data terisi (grab Fase 1). ⚠️ DRY-RUN DIPAKSA (belum diverifikasi live).
+# ══════════════════════════════════════════════════════════════════
+def jalankan_provisioning(modul=("paket",)):
+    config.DRY_RUN = True   # PAKSA simulasi — belum diverifikasi live
+    from modules import provisioning as P
+    jam_siklus.kunci()
+    toko = config.daftar_toko_aktif()
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROVISIONING {list(modul)} — {len(toko)} toko — DRY-RUN (paksa) ===" + colorama.Style.RESET_ALL)
+    for username, info in toko.items():
+        nama = info["name"]
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            if "paket" in modul:
+                _aman(nama, "prov paket", lambda: P.paket(username, nama, session))
+            if "voucher" in modul:
+                _aman(nama, "prov voucher", lambda: P.voucher(username, nama, session))
+        except Exception as e:
+            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL provisioning: {e}" + colorama.Style.RESET_ALL)
+        close_session()
+    catat_fase("provisioning", keterangan=f"poin 5 {list(modul)} (DRY-RUN paksa)")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === PROVISIONING SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -919,6 +945,10 @@ if __name__ == "__main__":
         jalankan_kategori()
     elif arg in ("fase2", "rubah2"):
         jalankan_fase2()
+    elif arg in ("provisioning", "prov", "upsell"):
+        # opsional: pilih modul (python run.py provisioning paket voucher). default: paket
+        pilih = tuple(a.lower() for a in sys.argv[2:]) or ("paket",)
+        jalankan_provisioning(pilih)
     elif arg in ("rubah", "rubah_harga", "2"):
         _legacy_jalankan([2])
     elif arg in ("verifikasi", "verif", "3"):
