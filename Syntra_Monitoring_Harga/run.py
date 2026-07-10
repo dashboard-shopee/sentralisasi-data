@@ -23,6 +23,8 @@ Pemakaian:
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
+try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # cegah UnicodeEncodeError (emoji) di konsol Windows
+except Exception: pass
 import time
 from datetime import datetime
 import colorama; colorama.init()
@@ -461,6 +463,156 @@ def inspect_komisi_dom():
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === INSPECT DOM SELESAI ===" + colorama.Style.RESET_ALL)
 
 
+def sniff_komisi_write():
+    """SNIFF set/takedown komisi via API: buka halaman komisi (profil bot, udah login) → listen
+    `affiliateplatform/gql` → REKAM request HEADERS (x-sap-sec / af-ac-enc / x-sz-sdk dll) + body +
+    response tiap aksi. USER lakuin SET + TAKEDOWN komisi MANUAL sampai notif berhasil (semua kerekam,
+    ke-BUFFER selama proses). Dump __komisi_sniff_<toko>.json buat analisa apakah signature bisa
+    direplikasi via requests. ⚠️ INI BENERAN NGUBAH KOMISI (user yg klik) — pilih produk yg reversible."""
+    import json as J
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    URL = "https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign"
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === SNIFF SET/TAKEDOWN KOMISI — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        rec = []
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.listen.start("affiliateplatform/gql")   # start SEBELUM navigate biar ketangkep semua
+            page.get(URL); page.wait(3)
+            print(colorama.Fore.LIGHTYELLOW_EX + """
+================================================================
+  DI CHROME INI, lakukan MANUAL (sampai notif BERHASIL):
+    [1] SET komisi 1 produk (yg belum komisi) -> isi rate -> Simpan/Ajukan
+    [2] TAKEDOWN/hapus komisi 1 produk yg aktif
+  Semua request API kerekam LENGKAP (header + body + response).
+  ⚠️ pilih produk yg AMAN (bisa lo balikin). Kelar -> ENTER di sini.
+================================================================""" + colorama.Style.RESET_ALL)
+            try:
+                input(colorama.Fore.LIGHTYELLOW_EX + "[sniff komisi] >>> ENTER kalau SET + TAKEDOWN udah selesai... " + colorama.Style.RESET_ALL)
+            except EOFError:
+                page.wait(120)
+            for p in page.listen.steps(timeout=8):
+                postdata = getattr(getattr(p, "request", None), "postData", None)
+                op, body = "", postdata
+                try:
+                    rj = J.loads(postdata) if isinstance(postdata, str) else postdata
+                    if isinstance(rj, dict):
+                        op = rj.get("operationName", ""); body = rj
+                except Exception:
+                    pass
+                rec.append({
+                    "url": p.url, "op": op, "method": getattr(p, "method", ""),
+                    "request_headers": dict(getattr(getattr(p, "request", None), "headers", {}) or {}),
+                    "request_body": body,
+                    "response": getattr(getattr(p, "response", None), "body", None),
+                })
+            out = f"__komisi_sniff_{username}.json"
+            with open(out, "w", encoding="utf-8") as f:
+                J.dump(rec, f, ensure_ascii=False, indent=2, default=str)
+            print(colorama.Fore.LIGHTGREEN_EX + f"[sniff komisi] [{nama}] {len(rec)} request gql direkam -> {out}" + colorama.Style.RESET_ALL)
+            for r in rec:
+                if any(w in (r["op"] or "") for w in ("Set", "Remove", "AutoAdd")):
+                    hdr = r["request_headers"]
+                    sig = [k for k in hdr if any(s in k.lower() for s in ("sap", "af-ac", "sz-", "x-sz", "risk"))]
+                    print(colorama.Fore.MAGENTA + f"  WRITE {r['op']}: sig-headers={sig} | resp={str(r['response'])[:70]}" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[sniff komisi] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SNIFF KOMISI SELESAI ===" + colorama.Style.RESET_ALL)
+
+
+def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=40):
+    """Panggil gql affiliateplatform DARI konteks JS halaman (window.fetch) → SDK Shopee yg
+    nge-hook fetch auto-nandatangan (x-sap-sec dll). URL & body di-EMBED langsung ke script (bukan
+    arguments) + try/catch + poll window global. Return dict {status, body} / {error, kick_started}.
+    TANPA klik tombol."""
+    import json as J
+    url = f"https://seller.shopee.co.id/api/v3/affiliateplatform/gql?q={qparam}"
+    url_js = J.dumps(url)
+    body_js = J.dumps(J.dumps({"operationName": operation, "query": query, "variables": variables}))
+    # tunggu halaman settle biar konteks JS stabil (open_campaign kadang redirect/re-render).
+    for _ in range(24):
+        try:
+            if page.run_js("return document.readyState;") == "complete":
+                break
+        except Exception:
+            pass
+        page.wait(0.5)
+    page.wait(2)
+    # XHR SINKRON dalam 1 run_js -> blocking, return langsung (ga kena context-loss antar-poll).
+    js = f"""
+    try {{
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", {url_js}, false);
+      xhr.setRequestHeader("content-type", "application/json");
+      xhr.send({body_js});
+      return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
+    }} catch(e) {{ return JSON.stringify({{error: String(e)}}); }}
+    """
+    try:
+        raw = page.run_js(js)
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    try:
+        out = J.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(out, dict) and isinstance(out.get("body"), str):
+            try:
+                out["body"] = J.loads(out["body"])
+            except Exception:
+                pass
+        return out
+    except Exception:
+        return {"raw": str(raw)[:500]}
+
+
+def test_komisi_api_via_browser():
+    """TES: bisa gak panggil gql komisi dari konteks halaman (SDK auto-sign) — TANPA klik tombol.
+    Pakai READ aman (GetOpenCampaignProducts). status 200 + ada data = SDK nandatangan fetch kita
+    → set/takedown via page-fetch BAKAL JALAN. status 403 = SDK gak sign fetch injeksi (mentok DOM)."""
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    from modules import komisi_api
+    URL = "https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign"
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === TES KOMISI API VIA BROWSER — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.get(URL); page.wait(7)   # biarin SDK load penuh + redirect SPA settle
+            res = _komisi_gql_via_page(page, "GetOpenCampaignProductsQuery",
+                                       komisi_api._Q_DAFTAR_AKTIF, {"cursor": "", "limit": 5},
+                                       "GetOpenCampaignProducts")
+            try:
+                import json as _J
+                with open(f"__komisi_apitest_{username}.json", "w", encoding="utf-8") as _f:
+                    _J.dump(res, _f, ensure_ascii=False, indent=2, default=str)
+            except Exception:
+                pass
+            status = res.get("status")
+            b = res.get("body") or {}
+            blok = ((b.get("data") or {}).get("GetOpenCampaignProducts") or {}) if isinstance(b, dict) else {}
+            n = len(blok.get("itemList") or []) if isinstance(blok, dict) else 0
+            err = (b.get("error") if isinstance(b, dict) else None) or res.get("error")
+            if status == 200 and isinstance(b, dict) and b.get("data"):
+                print(colorama.Fore.LIGHTGREEN_EX + f"[tes] ✅ BERHASIL via page-fetch! status={status}, {n} item. SDK NANDATANGAN fetch kita → set/takedown API BISA (tanpa klik)." + colorama.Style.RESET_ALL)
+            else:
+                print(colorama.Fore.RED + f"[tes] ❌ GAGAL status={status} err={err}. SDK gak sign fetch injeksi → mentok DOM-click." + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[tes] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === TES SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1].lower() if len(sys.argv) > 1 else ""
     if arg == "login":
@@ -471,6 +623,10 @@ if __name__ == "__main__":
         grab_komisi_browser()
     elif arg in ("komisi_inspect", "inspect_komisi", "komisidom"):
         inspect_komisi_dom()
+    elif arg in ("komisi_sniff", "sniff_komisi", "komisisniff"):
+        sniff_komisi_write()
+    elif arg in ("komisi_apitest", "komisi_test", "komisiapitest"):
+        test_komisi_api_via_browser()
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)

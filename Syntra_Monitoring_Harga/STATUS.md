@@ -147,7 +147,12 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
 - ✅ **BANDING (#9 data-layer)** — `SQL.banding_komisi(nama_toko)` (bot) + SQL identik di dashboard API. Verdict `sesuai`/`belum_dikomisikan`/`harusnya_dicabut`. Verified Yarra: **6 sesuai, 4 belum_dikomisikan, 0 dicabut**. ⚠️ LIMITASI: peta SKU→item_id via olah_data (stok-filtered) → 43/58 SKU ke-map (SKU stok-0 hilang). PR: peta SKU→item lengkap.
 - ✅ **DASHBOARD #9 (tab Komisi)** — `web/.../pusat-promosi`: master **per-ITEM** (verdict badge ✅/⚠️/❌ + komisi Syntra% vs Shopee% + jml SKU) → klik **expand → detail SKU variasi** (`komisi_produk`). Grain per-item, verified SQL live + `tsc` clean. Verifikasi visual: user (butuh login).
 - ✅ **JADWAL HARIAN** — `grab_komisi_browser(interaktif=False)` masuk scheduler tier HARIAN (abis loop fase1, browser bebas). CLI `komisi_grab` tetap interaktif (jeda manual).
-- 🔧 **C (set/takedown browser) — MULAI (eksplorasi DOM)** — write komisi (SetOpenCampaigns/RemoveOpenCampaigns) via requests = 403, jadi WAJIB **DOM click automation** (klik tombol asli → SDK nandatangan). Step 1: `run.py komisi_inspect` (buka halaman komisi + JEDA manual + dump `__komisi_dom_<toko>.html` + ringkasan tombol/input) → dari situ desain selektor klik set-rate & hapus. **USER jalanin** (arahin ke view produk aktif / dialog set rate). Belum ada klik nyata (read-only).
+- 🔧 **C (set/takedown) — INVESTIGASI TUNTAS (10 Jul)**. Op WRITE asli (dari sniff `komisi_sniff`):
+  - **SET** = `CreateOpenCampaigns` — vars `{items:[{itemId,itemName}], commissionRate:<%×1000>, startNow:true, pageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`.
+  - **TAKEDOWN** = `RemoveOpenCampaigns` — vars `{commissionIds:[...], campaignPageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`. (UI ada modal "Yakin hapus? pembayaran distop 00:00 tgl-X" tapi komisi LANGSUNG kecabut.)
+  - Signature header: `x-sap-sec`+`x-sap-ri`+`af-ac-enc-dat` (per-req, SDK-generated) + `af-ac-enc-sz-token` (session-stabil) + `x-sz-sdk-version`.
+  - ❌ **API-injeksi MATI (dites `komisi_apitest`)**: fetch/XHR yg diinjeksi via `page.run_js` TIDAK ditandatangan SDK (SDK cuma sign wrapper apollo-nya sendiri, bukan window.fetch) → 403 → `redirect_to_error_page` (window ke-wipe / status 0). Konsisten catatan lama.
+  - ➡️ **SISA JALAN: DOM-click automation** (klik tombol asli + auto-handle modal konfirmasi biar gak manual). Fragile tapi satu-satunya. ATAU semi-manual (dashboard #9 udah nunjukin apa yg perlu di-set/cabut, user klik sendiri). **BAHAS: pilih mana.**
 
 ---
 
