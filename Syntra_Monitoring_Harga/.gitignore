@@ -11,6 +11,7 @@ __komisi_shopee_*.json
 __komisi_dom_*.html
 __komisi_dom_*.json
 __komisi_apollo_*.json
+__komisi_takedown_state_*.json
 __komisi_sniff_*.json
 __komisi_apitest_*.json
 __jubelio_token.json

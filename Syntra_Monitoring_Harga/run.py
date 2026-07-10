@@ -602,6 +602,124 @@ def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=30):
     return {"error": "timeout", "kicked": kicked, "after_kick": after, "fetch_hook": hook}
 
 
+def takedown_komisi_browser(dry=True, konfirmasi=True, limit=1):
+    """TAKEDOWN komisi via DOM-click (satu-satunya jalan; API mati). Alur per produk: ketik di
+    search 'Cari di sini' → sisa 1 baris → klik <div>'Hapus' → modal 'Yakin Hapus?' → klik confirm →
+    verify network (RemoveOpenCampaigns isAllSuccess). dry=True: cuma search+temuin tombol, GA diklik
+    (aman, ga ngubah). Target = produk komisi aktif Shopee (harga_fakta_komisi); nanti wiring Fase 2
+    pakai verdict 'harusnya_dicabut'. limit=batasi jumlah (dry test)."""
+    from sqlalchemy import text as _text
+    from modules.db import get_engine
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    URL = "https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign"
+    SRCH = 'x://input[@placeholder="Cari di sini"]'
+    HAPUS = 'x://div[contains(@class,"actionBtn") and normalize-space()="Hapus"]'
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        with get_engine().connect() as c:
+            rows = c.execute(_text("select item_id, item_name from harga_fakta_komisi where toko=:t limit :l"),
+                             {"t": nama, "l": limit}).fetchall()
+        targets = [(int(r.item_id), r.item_name or "") for r in rows]
+        mode = "DRY" if dry else "LIVE"
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === TAKEDOWN KOMISI ({mode}) — {nama} — {len(targets)} target ===" + colorama.Style.RESET_ALL)
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.listen.start("affiliateplatform/gql")
+            page.get(URL); page.wait(6)
+            # tungguin search box muncul (app Vue load lambat). Kalau tetep gak ada -> dump state.
+            box = None
+            for _ in range(12):
+                box = page.ele(SRCH, timeout=2)
+                if box:
+                    break
+                page.wait(1.5)
+            if not box:
+                print(colorama.Fore.RED + "  search box 'Cari di sini' TAK KETEMU — dump state halaman aktual" + colorama.Style.RESET_ALL)
+                try:
+                    import json as _J
+                    st = page.run_js(r"""try{var b=[];document.querySelectorAll('button,a,[role=button],[class*=Tab],[class*=tab]').forEach(function(e){var t=(e.innerText||'').trim().replace(/\s+/g,' ').slice(0,35);if(t)b.push(e.tagName.toLowerCase()+':'+t);});var i=[];document.querySelectorAll('input').forEach(function(e){i.push((e.placeholder||e.type||''));});return JSON.stringify({btns:b.slice(0,50),inputs:i});}catch(e){return JSON.stringify({error:String(e)});}""")
+                    _J.dump(_J.loads(st) if isinstance(st, str) else st, open(f"__komisi_takedown_state_{username}.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+                    dd = _J.loads(st) if isinstance(st, str) else st
+                    print("  INPUTS:", dd.get("inputs"))
+                    print("  BTNS:", " | ".join(dd.get("btns", [])[:30]))
+                except Exception as _e:
+                    print("  dump state gagal:", type(_e).__name__)
+                break
+            # Ambil TEKS tiap baris (in-order sama kaya page.eles(HAPUS)) via JS — buat cocokin produk.
+            import json as _J
+            rowjs = r"""
+            try {
+              var out=[]; var hs=document.querySelectorAll('div[class*="actionBtn"]');
+              hs.forEach(function(h){
+                if ((h.innerText||'').trim()!=='Hapus') return;
+                var row = h.closest('[class*="row"],[class*="Row"],[class*="listItem"],[class*="ListItem"],tr') || (h.parentElement&&h.parentElement.parentElement&&h.parentElement.parentElement.parentElement);
+                out.push((row&&(row.innerText||'')||'').replace(/\s+/g,' ').slice(0,160));
+              });
+              return JSON.stringify(out);
+            } catch(e){ return JSON.stringify({error:String(e)}); }
+            """
+            for iid, iname in targets:
+                haps = page.eles(HAPUS)
+                raw = page.run_js(rowjs)
+                rowtexts = _J.loads(raw) if isinstance(raw, str) else raw
+                if isinstance(rowtexts, dict):
+                    rowtexts = []
+                idx = -1
+                key_name = (iname or "").strip()[:18].lower()
+                for i, txt in enumerate(rowtexts):
+                    tl = str(txt).lower()
+                    if str(iid) in tl or (key_name and key_name in tl):
+                        idx = i; break
+                print(f"  item {iid} ({iname[:26]}): {len(haps)} baris, match idx={idx}")
+                if dry:
+                    print(colorama.Fore.YELLOW + f"    [DRY] ga diklik (rowtext contoh: {str(rowtexts[idx])[:70] if idx>=0 else 'N/A'})" + colorama.Style.RESET_ALL); continue
+                if idx < 0 or idx >= len(haps):
+                    print(colorama.Fore.RED + "    SKIP (produk ga ketemu di baris — mungkin perlu scroll/paginate)" + colorama.Style.RESET_ALL); continue
+                haps[idx].click(); page.wait(2.5)
+                # dump SEMUA tombol visible + elemen ber-teks konfirmasi (diagnosa selektor confirm)
+                try:
+                    mb = page.run_js(r"""try{
+                      var b=[]; document.querySelectorAll('button').forEach(function(e){
+                        var r=e.getBoundingClientRect(); if(r.width===0&&r.height===0)return;
+                        var t=(e.innerText||'').trim().slice(0,22); if(t) b.push(t+'|'+(e.className||'').slice(0,40));
+                      });
+                      var konf=[]; document.querySelectorAll('*').forEach(function(e){
+                        var t=(e.innerText||'').trim();
+                        if(/Yakin|Menghapus|Ingin Menghapus/i.test(t) && t.length<120 && e.children.length<=3) konf.push(t.slice(0,80)+' :: '+(e.className||'').slice(0,40));
+                      });
+                      return JSON.stringify({buttons:b.slice(0,25), konfirmasi:konf.slice(0,4)});
+                    }catch(e){return JSON.stringify({error:String(e)});}""")
+                    print(f"    [MODAL] {mb}")
+                except Exception:
+                    pass
+                if not konfirmasi:
+                    cancel = page.ele('x://div[contains(@class,"modal") or contains(@class,"dialog")]//button[contains(@class,"eds-react-button--normal") or contains(@class,"default")]', timeout=4)
+                    if cancel:
+                        cancel.click()
+                    print(colorama.Fore.YELLOW + "    [PROBE MODAL] di-CANCEL (ga jadi hapus)" + colorama.Style.RESET_ALL); continue
+                # modal konfirmasi -> tombol primary
+                confirm = page.ele('x://div[contains(@class,"modal") or contains(@class,"dialog") or contains(@class,"eds-modal")]//button[contains(@class,"primary")]', timeout=6)
+                if not confirm:
+                    print(colorama.Fore.RED + "    modal confirm TAK KETEMU" + colorama.Style.RESET_ALL); continue
+                confirm.click(); page.wait(3)
+                # verify via network
+                ok = False
+                for p in page.listen.steps(timeout=6):
+                    body = getattr(getattr(p, "response", None), "body", None)
+                    if isinstance(body, dict) and (((body.get("data") or {}).get("RemoveOpenCampaigns") or {}).get("isAllSuccess")):
+                        ok = True; break
+                print((colorama.Fore.MAGENTA if ok else colorama.Fore.RED) + f"    -> takedown {'BERHASIL (isAllSuccess)' if ok else 'gagal/ tak terverifikasi'}" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[takedown] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === TAKEDOWN SELESAI ({mode}) ===" + colorama.Style.RESET_ALL)
+
+
 def probe_komisi_apollo():
     """PROBE (read-only): cari instance Apollo Client / objek gql di window halaman komisi. Kalau
     ke-expose + punya .mutate/.query, kita bisa manggil mutation lewat jalur yg UDAH ditandatangani
@@ -724,6 +842,12 @@ if __name__ == "__main__":
         test_komisi_api_via_browser()
     elif arg in ("komisi_apollo", "apollo_probe", "komisiapollo"):
         probe_komisi_apollo()
+    elif arg in ("komisi_takedown_dry", "takedown_dry"):
+        takedown_komisi_browser(dry=True, limit=2)
+    elif arg in ("komisi_takedown_modal", "takedown_modal"):
+        takedown_komisi_browser(dry=False, konfirmasi=False, limit=1)   # klik Hapus -> dump modal -> CANCEL
+    elif arg in ("komisi_takedown_live", "takedown_live"):
+        takedown_komisi_browser(dry=False, konfirmasi=True, limit=1)
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)

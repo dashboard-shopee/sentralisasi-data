@@ -155,7 +155,8 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
     - `requests` biasa → 403. `sync XHR` via run_js → status 0. `fetch` via run_js → 403 → redirect (window ke-wipe).
     - Apollo client (`komisi_apollo` probe): app ini **VUE** (bukan React/Apollo), `__APOLLO_CLIENT__` **gak ke-expose**. Ada `__sap_hook_fetch`/`__monitor_sap_fetch` → `window.fetch` di-wrap TAPI cuma **monitoring**, bukan signer.
     - Bukti final: kick localStorage OK dalam 1 call (`kicked=PENDING`), tapi `after_kick=null` → tiap fetch-inject bikin halaman **redirect** (unsigned→403). Signing `x-sap-sec` ada di **layer request internal app (axios instance)**, bukan `window.fetch` global → **mustahil direplikasi dari luar**.
-  - ➡️ **SISA JALAN (2): (a) DOM-click automation** (klik tombol asli + auto-handle modal konfirmasi) — fragile, perlu build. **(b) Semi-manual** — dashboard #9 udah nunjukin persis apa yg perlu di-set/cabut, user klik di Shopee. Bot GAK nulis komisi. **PILIH SALAH SATU.**
+  - **DOM-automation dicoba (user pilih ini):** `takedown_komisi_browser` (dry/modal/live). ✅ **Row-matching SOLID** — search-free: ambil teks tiap baris via JS, cocokin nama produk, temuin `<div>'Hapus'` yg bener (verified idx cocok 2 produk). ❌ **Tapi klik→modal→confirm FRAGILE**: klik Hapus inkonsisten micu popup promo ("Telusuri Sekarang") ATAU **halaman ERROR** ("Kembali ke Halaman Utama") — kemungkinan **anti-bot challenge** krn halaman komisi dikunjungi automation belasan kali beruntun. Modal konfirmasi "Yakin Menghapus?" belum ke-capture bersih.
+  - ⚖️ **ASSESSMENT JUJUR:** row-matching bisa, tapi finalisasi klik+modal butuh banyak iterasi + tetap fragile (popup promo random, anti-bot challenge, Shopee ubah UI). ROI rendah (Yarra doang, 6 produk, gap 4, jarang berubah). **REKOMENDASI: semi-manual** (dashboard #9 nuntun, user klik). DOM-auto di-PAUSE (tool udah ada kalau mau lanjut). **BAHAS lagi.**
 
 ---
 
