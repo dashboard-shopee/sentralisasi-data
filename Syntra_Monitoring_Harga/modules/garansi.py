@@ -85,7 +85,7 @@ def list_rekomendasi(session, page_size=100, maks_halaman=50):
     models:[{model_id, model_name, cspu_id}]}. floor=best/Harga Terbaik, ceiling=Harga Program (rupiah).
     floor & ceiling per-ITEM (item_floor_price/item_ceiling_price)."""
     H = config.grab_headers(session); P = session["params"]
-    hasil = []; page = 1
+    hasil = {}; page = 1   # dedup by item_id
     while page <= maks_halaman:
         try:
             r = api_post(URL_MATCH, H, P,
@@ -95,6 +95,7 @@ def list_rekomendasi(session, page_size=100, maks_halaman=50):
             print(colorama.Fore.RED + f"[garansi] get_item_match_list hal {page} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
             break
         lst = (r.get("data") or {}).get("list") or []
+        before = len(hasil)
         for it in lst:
             floor = int((it.get("item_floor_price") or {}).get("lower_value") or 0) // FAKTOR
             ceil = int((it.get("item_ceiling_price") or {}).get("lower_value") or 0) // FAKTOR
@@ -105,14 +106,15 @@ def list_rekomendasi(session, page_size=100, maks_halaman=50):
                     models.append({"model_id": str(pi.get("model_id", "")),
                                    "model_name": pi.get("model_name", ""),
                                    "cspu_id": str(ci.get("cspu_id", ""))})
-            hasil.append({"item_id": int(it.get("item_id") or 0), "item_name": it.get("item_name", ""),
-                          "floor": floor, "ceiling": ceil,
-                          "stok": int(it.get("item_current_stock") or 0), "models": models})
-        if len(lst) < page_size:
+            hasil[int(it.get("item_id") or 0)] = {
+                "item_id": int(it.get("item_id") or 0), "item_name": it.get("item_name", ""),
+                "floor": floor, "ceiling": ceil,
+                "stok": int(it.get("item_current_stock") or 0), "models": models}
+        if not lst or len(hasil) == before:   # halaman kosong ATAU ga ada yg baru -> stop
             break
         page += 1
     print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} produk rekomendasi (belum-didaftar)" + colorama.Style.RESET_ALL)
-    return hasil
+    return list(hasil.values())
 
 
 # ── DINOMINASI + bid_status — get_item_ongoing_list (semua page_tab, dedup bid_id) ──
@@ -132,6 +134,7 @@ def list_ongoing_status(session, page_size=100, maks_halaman=50):
             except Exception:
                 break
             lst = (r.get("data") or {}).get("list") or []
+            before = len(hasil)
             for it in lst:
                 iid = int(it.get("item_id") or 0); stok = int(it.get("item_current_stock") or 0)
                 floor = int((it.get("item_floor_price") or {}).get("lower_value") or 0) // FAKTOR
@@ -146,7 +149,7 @@ def list_ongoing_status(session, page_size=100, maks_halaman=50):
                                      "model_id": str(pi.get("model_id", "")), "model_name": pi.get("model_name", ""),
                                      "bid_id": bid_id, "bid_status": bi.get("bid_status"), "stok": stok,
                                      "floor": floor, "ceiling": ceil, "cspu_id": str(ci.get("cspu_id", ""))}
-            if len(lst) < page_size:
+            if not lst or len(hasil) == before:   # halaman kosong ATAU ga ada yg baru -> stop tab ini
                 break
             page += 1
     print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} model dinominasi (ongoing)" + colorama.Style.RESET_ALL)

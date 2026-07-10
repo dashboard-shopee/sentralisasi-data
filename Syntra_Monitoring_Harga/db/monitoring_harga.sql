@@ -263,6 +263,27 @@ create table if not exists harga_fakta_komisi (
 );
 create index if not exists idx_fakta_komisi_toko on harga_fakta_komisi(toko);
 
+-- 14c. FAKTA GARANSI NOMINASI (harian) — 3 kategori halaman Nominasi Produk. Grain: item/model.
+--     Sumber: garansi.list_rekomendasi (belum-didaftar) + list_ongoing_status (bid_status 30/40).
+--     kategori: 'rekomendasi' (belum didaftar) | 'terbaik' (winning, muncul customer) | 'perlu_ditinjau'.
+--     floor = Harga Terbaik (best), ceiling = Harga Program. Buat dashboard Pusat Promosi > Garansi (3 tab).
+create table if not exists harga_fakta_garansi_nom (
+    toko             text   not null,
+    item_id          bigint not null,
+    model_id         bigint not null default 0,
+    kategori         text   not null,
+    item_name        text,
+    model_name       text,
+    floor            numeric default 0,
+    ceiling          numeric default 0,
+    stok             numeric default 0,
+    bid_id           text,
+    bid_status       integer,
+    diperbarui_pada  timestamptz default now(),
+    primary key (toko, item_id, model_id, kategori)
+);
+create index if not exists idx_fakta_garansi_nom_toko on harga_fakta_garansi_nom(toko, kategori);
+
 -- 15. KATEGORI Shopee per produk (Fase 1, incremental). Grain: item (bukan variasi).
 --     Sumber: get_product_info (category_path + category_path_name_list). UPSERT (bukan
 --     snapshot) — diisi bertahap cuma utk produk yg belum punya kategori.

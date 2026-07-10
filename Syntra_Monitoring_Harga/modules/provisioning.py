@@ -143,21 +143,25 @@ def garansi(shop, nama_toko, session):
           TAKEDOWN (refresh balik ke belum-didaftar). DRY_RUN-aware (modul garansi handle)."""
     from modules import garansi as G
     from modules import sql_harga as SQL
-    from modules.fase2_harga import _margin, GARANSI_SELISIH, GARANSI_MARGIN_MIN
+    from modules.fase2_harga import _margin
+
+    # KPI garansi dari CONFIG (bisa diubah sewaktu2 di config.py blok "KPI PER-MODUL"):
+    SELISIH = config.KPI_GARANSI_SELISIH        # best minimal target − ini (default 500)
+    MARGIN_MIN = config.KPI_GARANSI_MARGIN_MIN  # margin@best minimal ini (default 0.07 = 7%)
 
     baris = SQL.baca_baris_rubah(nama_toko)
     tgt = {(b["item_id"], b["model_id"]): b for b in baris}          # target (harga_akhir) + sku per (item,model)
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
 
     def qualify(best, item_id, model_id):
-        """None=ga ada target (skip). True/False=lolos kondisi."""
+        """None=ga ada target (skip). True/False=lolos kondisi (best≥target−SELISIH & margin@best≥MARGIN_MIN)."""
         b = tgt.get((int(item_id), int(model_id)))
         if not b or not b.get("harga_akhir") or best <= 0:
             return None
-        if best < b["harga_akhir"] - GARANSI_SELISIH:
+        if best < b["harga_akhir"] - SELISIH:
             return False
         m = _margin(best, biaya.get((b["sku"] or "").strip().upper()))
-        if m is not None and m < GARANSI_MARGIN_MIN:
+        if m is not None and m < MARGIN_MIN:
             return False
         return True
 

@@ -64,6 +64,28 @@ def fakta_garansi(nama_toko, session):
     return n
 
 
+def fakta_garansi_nom(nama_toko, session):
+    """Grab 3 KATEGORI nominasi garansi -> harga_fakta_garansi_nom (buat dashboard Pusat Promosi >
+    Garansi 3 tab): rekomendasi (belum-didaftar) + terbaik + perlu_ditinjau. READ-ONLY."""
+    from modules import garansi as G
+    baris = []
+    for it in G.list_rekomendasi(session):                       # (a) belum-didaftar
+        for m in (it.get("models") or [{}]):
+            baris.append({"item_id": it["item_id"], "model_id": int(m.get("model_id") or 0),
+                          "kategori": "rekomendasi", "item_name": it["item_name"],
+                          "model_name": m.get("model_name", ""), "floor": it["floor"],
+                          "ceiling": it["ceiling"], "stok": it["stok"], "bid_id": None, "bid_status": None})
+    for o in G.list_ongoing_status(session):                     # (b) terbaik / (c) perlu_ditinjau
+        kat = "terbaik" if o.get("bid_status") == G.BID_STATUS_TERBAIK else "perlu_ditinjau"
+        baris.append({"item_id": o["item_id"], "model_id": int(o.get("model_id") or 0),
+                      "kategori": kat, "item_name": o["item_name"], "model_name": o["model_name"],
+                      "floor": o["floor"], "ceiling": o["ceiling"], "stok": o["stok"],
+                      "bid_id": o["bid_id"], "bid_status": o["bid_status"]})
+    n = SQL.simpan_fakta_garansi_nom(nama_toko, baris) if baris else 0
+    _log(nama_toko, f"Garansi nominasi: {n} baris (rekom+terbaik+perlu-ditinjau)", colorama.Fore.LIGHTGREEN_EX)
+    return n
+
+
 # ── TIER HARIAN: Campaign (sesi buka-nominasi + produk ternominasi) ──
 def fakta_campaign(nama_toko, session):
     """campaign.open_sessions + get_nominated -> fakta_campaign_sesi + _item.

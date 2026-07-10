@@ -466,6 +466,18 @@ def simpan_fakta_komisi(toko, baris):
         pk=("toko", "item_id"))
 
 
+def simpan_fakta_garansi_nom(toko, baris):
+    """baris = list {item_id, model_id, kategori, item_name, model_name, floor, ceiling, stok,
+    bid_id, bid_status} — 3 kategori nominasi garansi (rekomendasi/terbaik/perlu_ditinjau).
+    Snapshot per toko. Kosong -> tabel toko dikosongin (panggil hanya kalau grab sukses)."""
+    return _snapshot_toko(
+        "harga_fakta_garansi_nom", toko,
+        ["toko", "item_id", "model_id", "kategori", "item_name", "model_name",
+         "floor", "ceiling", "stok", "bid_id", "bid_status"],
+        [{"toko": toko, **b} for b in baris],
+        pk=("toko", "item_id", "model_id", "kategori"))
+
+
 def simpan_fakta_paket(toko, baris):
     """baris = list {bundle_deal_id, name, status, start_time, end_time, tiers(list/None)}."""
     for b in baris:
