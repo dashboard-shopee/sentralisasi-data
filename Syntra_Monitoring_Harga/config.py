@@ -157,6 +157,15 @@ def nama_toko_resmi():
     return {info["name"] for info in SHOP_DATABASE.values()}
 
 
+def username_dari_nama(nama):
+    """Nama tampilan toko -> username (kebalikan SHOP_DATABASE). None kalau tak ketemu.
+    Dipakai mis. resolve komisi (harga_komisi_toko pakai username_toko, diagnosa pakai nama)."""
+    for u, info in SHOP_DATABASE.items():
+        if info["name"] == nama:
+            return u
+    return None
+
+
 def is_toko_resmi(nama_tampilan):
     return nama_tampilan in nama_toko_resmi()
 

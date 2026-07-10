@@ -609,6 +609,22 @@ def baca_garansi_best(toko):
             for r in rows}
 
 
+def baca_komisi_patokan(username_toko):
+    """{SKU_UPPER: {harga_jual, persen}} produk yg KOMISI-nya AKTIF (`harga_jual > 0`) di toko ini,
+    dari `harga_komisi_toko` (SYNTRA = sumber kebenaran komisi; NO anti-bot). Komisi aktif ⇒
+    `harga_jual` jadi PATOKAN harga → target Fase 2 beralih ke sini (poin 3·0). `username_toko` =
+    username (mis. 'yarrastore'); kolom tabel `username_toko`. Toko tanpa komisi -> {} (mayoritas)."""
+    if not username_toko:
+        return {}
+    with get_engine().connect() as c:
+        rows = c.execute(text("""select upper(sku) sku_u, harga_jual, komisi_persen
+                                 from harga_komisi_toko
+                                 where lower(username_toko) = lower(:u) and harga_jual > 0"""),
+                         {"u": username_toko}).fetchall()
+    return {r.sku_u: {"harga_jual": int(r.harga_jual or 0), "persen": float(r.komisi_persen or 0)}
+            for r in rows}
+
+
 def baca_item_di_paket(toko):
     """set(item_id) yg lagi ikut PAKET DISKON (dari konteks jenis='Paket Diskon'). Konteks TIDAK
     simpan bundle_deal_id (ongoing_campaigns ct=3 promotion_id kosong) -> cukup tau item-nya

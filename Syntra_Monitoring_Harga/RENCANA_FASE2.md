@@ -5,7 +5,13 @@
 > Prinsip: **tiru Fase 2 lama (`update_harga.py`) tapi DIPERLENGKAP.** User mau DETAIL,
 > jangan halu. Garap per-modul, jelasin alur sambil ngoding.
 
-**Definisi tetap:** Target = `pancing` kalau ada, else **Harga Diskon** (stored per-SKU).
+**Definisi Target (URUT prioritas):**
+1. **Harga Komisi** — kalau produk PUNYA komisi aktif di halaman Komisi (Syntra). ⭐ Komisi aktif →
+   **Harga Komisi jadi PATOKAN untuk SEMUA promo** (promo toko/garansi/flash/campaign/harga dasar),
+   bukan target biasa lagi. + kalau harga komisi di Shopee ≠ harga komisi Syntra → **samakan** (set komisi).
+2. else **`pancing`** (kalau ada)
+3. else **Harga Diskon** (stored per-SKU)
+
 Real = `harga_tampil` (Fase 1). Margin (olah data) = basis Harga Real.
 
 > ⚠️ **WAJIB — diagnosa/aksi Fase 2 HANYA valid di atas data grab FRESH.** Urutan per-toko:
@@ -20,6 +26,7 @@ Real = `harga_tampil` (Fase 1). Margin (olah data) = basis Harga Real.
 
 | Modul | Fase 1 grab | Fase 2 reaktif (harga/takedown) | Fase 2 provisioning |
 |---|---|---|---|
+| **Komisi** | **harian** (grab Shopee semua toko + baca halaman Komisi Syntra) | **jam** (anchor: komisi aktif → target=harga komisi) | **harian** (banding → set/takedown komisi + rubah harga) |
 | Harga / Promo Toko | jam | **jam** (poin 1–4) | Promo Toko daftar: **jam** |
 | Garansi | harian | takedown: **jam** (deteksi dari konteks) | daftar: **harian** |
 | Campaign | harian | takedown: **jam** | daftar: **mingguan** |
@@ -37,6 +44,7 @@ punya harga+status tiap promo per variasi). EKSEKUSI takedown pakai **ID aksi** 
 
 | Kasus | Kondisi | Aksi |
 |---|---|---|
+| **3·0 Komisi (CEK PALING DULU)** | produk punya **komisi aktif** di halaman Komisi | ⭐ **TARGET := Harga Komisi** (semua sub-aksi di bawah pakai patokan ini) + kalau harga komisi Shopee ≠ Syntra → **samakan** (set komisi) |
 | 1 | Target kosong | skip "tanpa target" |
 | 2 | Real == Target | skip "sudah sesuai" |
 | 3 | **Target < Harga Awal** — cek TIAP promo yg variasi ini ikuti: | |
@@ -56,6 +64,7 @@ punya harga+status tiap promo per variasi). EKSEKUSI takedown pakai **ID aksi** 
 
 | Modul | Cadence | Aturan |
 |---|---|---|
+| **Komisi** | harian | banding **halaman Komisi (Syntra)** vs **Shopee (semua toko)**: (a) harusnya dikomisikan tapi belum → **set komisi + set harga**; (b) harusnya TIDAK tapi komisi aktif → **takedown komisi + rubah harga**; (c) udah sesuai → skip. Komisi aktif ⇒ harga komisi jadi patokan semua promo (lihat 3·0). |
 | Promo Toko | jam | buat/duplikat + masukin produk `Target<HargaAwal` yg belum ada |
 | Garansi | harian | pasang **hanya jika** best `≥ Target−500` **DAN** margin@best `≥ 7%`. 3 kondisi: belum-daftar / dinominasi-terbaik / **"perlu ditinjau" → BATALKAN**. (detail nanti) |
 | Paket Diskon | harian | belum ada→buat+enroll semua; udah ada→masukin produk yg belum masuk. Tier 2→1%/3→2%/7→3% (handoff §10.2) |

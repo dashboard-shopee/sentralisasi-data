@@ -17,6 +17,7 @@ Pemakaian:
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan+bulanan)
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
+  python run.py komisi_cek     # VERIF READ komisi Shopee (anti-bot?) — read-only, toko komisi-aktif
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
@@ -244,10 +245,49 @@ def _legacy_jalankan(fases):
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === LEGACY [{label}] SELESAI ===" + colorama.Style.RESET_ALL)
 
 
+def cek_komisi_shopee():
+    """VERIFIKASI READ komisi Shopee (Komisi bagian B). Grab sesi toko komisi-aktif → coba
+    `komisi_api.baca_komisi_aktif`. Laporin JALAN (berapa item) atau kena ANTI-BOT (403/90309999).
+    READ-ONLY, TIDAK ubah apa pun. Hasilnya nentuin #9 bisa auto-grab via requests atau perlu
+    browser-session ber-SDK. Cuma proses toko yg komisinya aktif di `harga_komisi_toko` (skrg Yarra)."""
+    from modules import komisi_api
+    from modules.sql_harga import baca_komisi_patokan
+    toko = config.daftar_toko_aktif()
+    ada = False
+    for username, info in toko.items():
+        nama = info["name"]
+        if not baca_komisi_patokan(username):
+            continue   # skip toko tanpa komisi aktif (Syntra)
+        ada = True
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === CEK READ KOMISI SHOPEE — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        try:
+            session = grab_session(shop=username, i=info["i"])
+            try:
+                akun = komisi_api.grab_akun(session)
+                print(f"[komisi cek] [{nama}] akun: operator={akun.get('operator')} shop_id={akun.get('shop_id')}")
+            except Exception as e:
+                print(colorama.Fore.YELLOW + f"[komisi cek] [{nama}] grab_akun gagal: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+            try:
+                aktif = komisi_api.baca_komisi_aktif(session)
+                print(colorama.Fore.LIGHTGREEN_EX + f"[komisi cek] [{nama}] ✅ baca_komisi_aktif JALAN: {len(aktif)} item komisi aktif di Shopee" + colorama.Style.RESET_ALL)
+                for it in aktif[:5]:
+                    print(f"    item {it['item_id']} rate {it['persen']}% status {it['status']}")
+            except Exception as e:
+                print(colorama.Fore.RED + f"[komisi cek] [{nama}] ❌ baca_komisi_aktif GAGAL (kemungkinan anti-bot): {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[komisi cek] [{nama}] GAGAL grab sesi: {e}" + colorama.Style.RESET_ALL)
+        close_session()
+    if not ada:
+        print(colorama.Fore.YELLOW + "[komisi cek] tak ada toko dgn komisi aktif di harga_komisi_toko." + colorama.Style.RESET_ALL)
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === CEK KOMISI SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1].lower() if len(sys.argv) > 1 else ""
     if arg == "login":
         buka_login()
+    elif arg in ("komisi_cek", "cek_komisi", "komisicek"):
+        cek_komisi_shopee()
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)

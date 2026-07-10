@@ -106,18 +106,30 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
 
 def diagnosa_toko(nama_toko):
     """Klasifikasi semua variasi 1 toko ke kasus 1-4 + daftar aksi. READ-ONLY.
-    Return list dict {item_id, model_id, sku, target, real, harga_awal, stok, pjh, kasus, aksi}."""
+    Return list dict {item_id, model_id, sku, target, real, harga_awal, stok, pjh, kasus, aksi,
+    komisi_patokan}.
+
+    ⭐ POIN 3·0 KOMISI (anchor, dicek PALING DULU): kalau SKU punya komisi aktif di
+    `harga_komisi_toko` (harga_jual>0), TARGET beralih dari pancing/harga-diskon → **harga_jual**
+    (harga komisi). Jadi SEMUA promo (kasus 1-4) pakai harga komisi sbg patokan. Sumber SQL Syntra,
+    no anti-bot. (Sinkronisasi set/takedown komisi ke Shopee = bagian C, kena anti-bot, terpisah.)"""
     baris = SQL.baca_baris_rubah(nama_toko)
     promo = SQL.baca_promo_detail(nama_toko)
     garansi = SQL.baca_garansi_best(nama_toko)
     penjualan = SQL.baca_penjualan_per_hari([b["item_id"] for b in baris])
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
+    komisi = SQL.baca_komisi_patokan(config.username_dari_nama(nama_toko))   # {SKU_UPPER: {harga_jual, persen}}
 
     out = []
     for b in baris:
         key = (b["item_id"], b["model_id"])
-        target, real, H, stok = b["harga_akhir"], b["harga_real"], b["harga_awal"], b["stok"]
+        real, H, stok = b["harga_real"], b["harga_awal"], b["stok"]
         pjh = penjualan.get(b["item_id"], 0.0)
+
+        # POIN 3·0 — komisi aktif -> harga komisi (harga_jual) jadi TARGET (patokan semua promo).
+        kom = komisi.get((b["sku"] or "").strip().upper())
+        komisi_patokan = kom["harga_jual"] if (kom and kom["harga_jual"] > 0) else None
+        target = komisi_patokan if komisi_patokan else b["harga_akhir"]
 
         if not target or target <= 0:
             kasus, aksi = "tanpa_target", []
@@ -134,15 +146,19 @@ def diagnosa_toko(nama_toko):
 
         out.append({"item_id": b["item_id"], "model_id": b["model_id"], "sku": b["sku"],
                     "target": target, "real": real, "harga_awal": H, "stok": stok,
-                    "pjh": round(pjh, 1), "kasus": kasus, "aksi": aksi})
+                    "pjh": round(pjh, 1), "kasus": kasus, "aksi": aksi,
+                    "komisi_patokan": komisi_patokan})
     return out
 
 
 def ringkas(diagnosa):
-    """Ringkasan jumlah per kasus + per jenis aksi (buat log/verifikasi)."""
+    """Ringkasan jumlah per kasus + per jenis aksi + berapa variasi ke-anchor komisi (log/verifikasi)."""
     from collections import Counter
     kasus = Counter(d["kasus"] for d in diagnosa)
     aksi = Counter(a.get("promo", a.get("aksi")) for d in diagnosa for a in d["aksi"])
+    n_komisi = sum(1 for d in diagnosa if d.get("komisi_patokan"))
+    if n_komisi:
+        kasus["_komisi_anchor"] = n_komisi
     return dict(kasus), dict(aksi)
 
 
