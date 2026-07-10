@@ -221,6 +221,17 @@ export async function GET(req: Request) {
       if (filterToko) eqToko(`s."toko"`);
       if (search) like([`s."itemName"`]);
       order = `s."verdict" asc, s."itemName" asc`;
+    } else if (tab === "garansi_nom") {
+      // Garansi Harga Terbaik — 3 kategori (Nominasi Produk). kat: rekomendasi | terbaik | perlu_ditinjau.
+      // floor = Harga Terbaik (best), ceiling = Harga Program. Sumber harga_fakta_garansi_nom (bot harian).
+      const kat = (p.get("kat") || "terbaik").trim();
+      cols = `s.toko, s.item_id "itemId", s.model_id "modelId", s.item_name "itemName",
+              s.model_name "modelName", s.floor, s.ceiling, s.stok, s.bid_status "bidStatus"`;
+      base = `from harga_fakta_garansi_nom s`;
+      params.push(kat); where.push(`s.kategori = $${params.length}`);
+      if (filterToko) eqToko("s.toko");
+      if (search) like(["s.item_name", "s.model_name"]);
+      order = `s.stok desc, s.item_name asc`;
     } else {
       return NextResponse.json({ error: "Tab tidak dikenal" }, { status: 400 });
     }

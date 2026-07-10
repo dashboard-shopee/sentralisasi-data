@@ -77,6 +77,7 @@ garansi withdraw → paket takedown (`PD.keluarkan_item` semua deal) + voucher t
 | **5** | **Promo Toko master-detail** (promo-level aktif+akan datang → klik→produk, grab `get_discount_list`) | ✅ (grab harian + dashboard, dikonfirmasi user 10 Jul) |
 | 6 | Paket Diskon master-detail + KPI (aktif+akan datang → klik→produk; item per bundle) | ⏳ |
 | 7 | Campaign rework (running+upcoming → klik→produk; cek kenapa nominasi 0) | ⏳ |
+| **G** | **Garansi 3 sub-tab** (Belum Didaftar/Terbaik/Perlu-Ditinjau) di Pusat Promosi → sumber `harga_fakta_garansi_nom` (bot harian). API `tab=garansi_nom&kat=` + sub-tab UI | ✅ (verifikasi visual user) |
 | **9** | **Komisi tab banding** — master per-ITEM (verdict Syntra vs Shopee) → klik detail SKU. Sumber Shopee = browser grab (bypass anti-bot). | ✅ (dashboard + jadwal harian; verifikasi visual user) |
 
 > Detail-mechanism dashboard digeneralisasi (`DETAIL_CFG` di page.tsx) — dukung voucher + promo_toko; tinggal daftarin utk paket/campaign nanti.

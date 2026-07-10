@@ -60,6 +60,11 @@ const COLS: Record<string, Col[]> = {
     { k: "shopeePersen", t: "Komisi Shopee %", f: "num" },
     { k: "jmlSku", t: "Jml SKU", f: "num" },
   ],
+  garansi_nom: [
+    { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" }, { k: "modelName", t: "Variasi" },
+    { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "ceiling", t: "Harga Program", f: "rp" },
+    { k: "stok", t: "Stok", f: "num" },
+  ],
 };
 
 const rp = (v: unknown) => {
@@ -81,8 +86,15 @@ const fmt = (v: unknown, f?: string) => {
   return String(v);
 };
 
+const GARANSI_SUB = [
+  { key: "rekomendasi", label: "Belum Didaftar" },
+  { key: "terbaik", label: "Terbaik" },
+  { key: "perlu_ditinjau", label: "Perlu Ditinjau" },
+];
+
 export default function PusatPromosiPage() {
   const [tab, setTab] = useState("promo_toko");
+  const [garSub, setGarSub] = useState("terbaik");   // sub-tab Garansi (a/b/c)
   const [rows, setRows] = useState<Row[]>([]);
   const [tokos, setTokos] = useState<Toko[]>([]);
   const [total, setTotal] = useState(0);
@@ -98,7 +110,8 @@ export default function PusatPromosiPage() {
     setErr("");
     try {
       const u = new URL("/api/produk/pusat-promosi", window.location.origin);
-      u.searchParams.set("tab", tab);
+      u.searchParams.set("tab", tab === "garansi" ? "garansi_nom" : tab);
+      if (tab === "garansi") u.searchParams.set("kat", garSub);
       u.searchParams.set("page", String(page));
       u.searchParams.set("size", String(size));
       if (toko) u.searchParams.set("toko", toko);
@@ -116,14 +129,14 @@ export default function PusatPromosiPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, page, toko, search]);
+  }, [tab, garSub, page, toko, search]);
 
   useEffect(() => {
     const t = setTimeout(load, search ? 300 : 0);
     return () => clearTimeout(t);
   }, [load, search]);
 
-  const cols = COLS[tab] || [];
+  const cols = COLS[tab === "garansi" ? "garansi_nom" : tab] || [];
   const totalPages = Math.max(1, Math.ceil(total / size));
 
   // Expand-row: klik promo -> produk di dalamnya. Config per tab yg support detail.
@@ -210,6 +223,26 @@ export default function PusatPromosiPage() {
           </button>
         ))}
       </div>
+
+      {/* Sub-tab Garansi (a/b/c) */}
+      {tab === "garansi" && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {GARANSI_SUB.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => { setGarSub(s.key); setPage(1); }}
+              className={
+                "px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all border " +
+                (garSub === s.key
+                  ? "bg-[#fff1ed] text-[#ee4d2d] border-[#ffccbc]"
+                  : "bg-white text-[#8a90a2] border-[#eef0f6] hover:bg-[#fafbfe]")
+              }
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
