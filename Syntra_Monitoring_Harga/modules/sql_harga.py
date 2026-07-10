@@ -568,6 +568,15 @@ def baca_penjualan_per_hari(item_ids):
     return {int(r.item_id): float(r.per_hari) for r in rows}
 
 
+def baca_stok_per_item(toko):
+    """{item_id: stok} per PRODUK (max stok antar variasi) dari harga_olah_data. Buat kriteria
+    provisioning campaign/flash (stok > ambang)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("select item_id, max(stok) stok from harga_olah_data where toko=:t group by item_id"),
+                         {"t": toko}).fetchall()
+    return {int(r.item_id): int(r.stok or 0) for r in rows}
+
+
 def baca_promo_detail(toko):
     """{(item_id, model_id): [{jenis, harga_promo, status, stok}]} — SEMUA promo yg variasi
     ikuti (dari konteks, di-grab per-jam). Dipakai Fase 2 buat cek takedown per-promo."""

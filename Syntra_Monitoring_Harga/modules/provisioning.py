@@ -88,3 +88,48 @@ def voucher(shop, nama_toko, session):
     warna = colorama.Fore.YELLOW if not vid else colorama.Fore.CYAN
     print(warna + f"[prov voucher] [{nama_toko}] {'(DRY) bakal buat' if not vid else 'buat'} voucher '{code}' diskon {config.KPI_VOUCHER_DISKON_PCT}% min Rp{mp:,}" + colorama.Style.RESET_ALL)
     return {"voucher": vid or "DRY-baru", "code": code, "min_price": mp}
+
+
+def campaign(shop, nama_toko, session):
+    """Campaign mingguan — nominasi produk (yg LOLOS kriteria stok) ke sesi campaign yg lagi buka
+    window nominasi. Kriteria: stok > KPI_CAMPAIGN_PASANG_STOK_MIN (50) DAN stok > KPI_CAMPAIGN_
+    PASANG_STOK_X_PJH (10) × penjualan/hari. Skip produk yg SEMUA modelnya udah ternominasi.
+    ⚠️ harga campaign maks target×0.985 = requirement Shopee saat nominasi/aktivasi (verif live)."""
+    from modules import campaign as C
+    from modules import sql_harga as SQL
+    sesi = C.open_sessions(session, keywords=config.CAMPAIGN_KEYWORDS)   # cuma sesi buka nominasi
+    if not sesi:
+        print(colorama.Fore.YELLOW + f"[prov campaign] [{nama_toko}] 0 sesi buka nominasi — skip" + colorama.Style.RESET_ALL)
+        return {"campaign": 0, "sesi": 0, "lolos": 0}
+
+    prod_all = C.produk_toko(nama_toko)                 # semua produk berstok [{item_id, models}]
+    stok = SQL.baca_stok_per_item(nama_toko)            # {item_id: stok}
+    pjh = SQL.baca_penjualan_per_hari([p["item_id"] for p in prod_all])
+    smin = config.KPI_CAMPAIGN_PASANG_STOK_MIN
+    xf = config.KPI_CAMPAIGN_PASANG_STOK_X_PJH
+    lolos = [p for p in prod_all
+             if stok.get(p["item_id"], 0) > smin and stok.get(p["item_id"], 0) > xf * pjh.get(p["item_id"], 0.0)]
+    print(colorama.Fore.WHITE + f"[prov campaign] [{nama_toko}] {len(prod_all)} produk → {len(lolos)} lolos (stok>{smin} & >{xf}×pjh) | {len(sesi)} sesi" + colorama.Style.RESET_ALL)
+
+    total = 0
+    for s in sesi:
+        sid = s["session_id"]
+        already = C.get_nominated(session, sid)         # {(iid_str,mid_str): {...}}
+        baru = [p for p in lolos
+                if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
+        r = C.nominate(session, sid, baru)
+        total += r.get("staged", 0)
+    print(colorama.Fore.CYAN + f"[prov campaign] [{nama_toko}] total staged {total} produk ke {len(sesi)} sesi" + colorama.Style.RESET_ALL)
+    return {"campaign": total, "sesi": len(sesi), "lolos": len(lolos)}
+
+
+def flash(shop, nama_toko, session):
+    """Flash Sale MINGGUAN — daftar produk ke sesi flash (grab slot 7hr, rotasi maks 50/sesi, urut
+    kategori+penjualan tertinggi, harga = real−POTONG_HARGA). Reuse `flash_sale_daftar.daftar_mingguan`
+    (udah lengkap). ⚠️ verif live endpoint flash (RENCANA §1 B&D — set_item_sequence pernah param-err,
+    udah non-fatal). Kriteria stok>KPI_FLASH_PASANG_STOK_MIN / >×pjh = refinement TODO (siapkan_produk
+    skrg cuma stok>0)."""
+    from modules import flash_sale_daftar as FSD
+    r = FSD.daftar_mingguan(session, nama_toko)
+    print(colorama.Fore.CYAN + f"[prov flash] [{nama_toko}] → {r}" + colorama.Style.RESET_ALL)
+    return {"flash_sesi": r.get("sesi", 0), **r}
