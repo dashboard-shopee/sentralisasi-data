@@ -102,7 +102,7 @@ garansi withdraw → paket takedown (`PD.keluarkan_item` semua deal) + voucher t
 ### Provisioning (poin 5)
 | Modul | Cadence | Status |
 |---|---|---|
-| **Komisi** (banding Syntra vs Shopee → set/takedown komisi + rubah harga) | harian | ⏳ (API `komisi_api` set/takedown/baca udah ada; logika banding+aksi belum) |
+| **Komisi** — set/takedown **MANUAL** (dashboard #9 nuntun; API mustahil) + **rubah harga OTOMATIS** (Anchor A) | harian | ✅ (grab+banding+anchor auto; enroll manual) |
 | Promo Toko (buat/duplikat + daftar produk baru) | jam | ✅ (bagian eksekusi 3a) |
 | Garansi (daftar, kondisi best/margin, batalkan "perlu ditinjau") | harian | ⏳ |
 | Paket Diskon (buat/enroll semua) | harian | ⏳ (buat+enroll-semua blm; helper item-level `PD.keluarkan_item`/`masukkan_item` udah ada, dipakai kasus 4) |
@@ -158,7 +158,7 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
   - **DOM-automation dicoba (user pilih ini):** `takedown_komisi_browser` (dry/modal/live). ✅ **Row-matching SOLID** — search-free: ambil teks tiap baris via JS, cocokin nama produk, temuin `<div>'Hapus'` yg bener (verified idx cocok 2 produk). ❌ **Tapi klik→modal→confirm FRAGILE**: klik Hapus inkonsisten micu popup promo ("Telusuri Sekarang") ATAU **halaman ERROR** ("Kembali ke Halaman Utama") — kemungkinan **anti-bot challenge** krn halaman komisi dikunjungi automation belasan kali beruntun. Modal konfirmasi "Yakin Menghapus?" belum ke-capture bersih.
   - ⚖️ **ASSESSMENT JUJUR:** row-matching bisa, tapi finalisasi klik+modal butuh banyak iterasi + tetap fragile (popup promo random, anti-bot challenge, Shopee ubah UI). ROI rendah (Yarra doang, 6 produk, gap 4, jarang berubah).
   - ✅ **TES TERAKHIR (halaman PRODUK, 10 Jul):** set komisi dari halaman Produk (`?productType=ams_commission`) pakai op **`SetOpenCampaigns`** TAPI **tetap `/v3/affiliateplatform/gql` + anti-bot sig lengkap**. Endpoint lain = cuma loading. **KESIMPULAN FINAL: SEMUA jalur set/takedown komisi (affiliate & produk, semua op) mentok di gql anti-bot yg sama. API MUSTAHIL, titik.**
-  - ➡️ **PILIHAN (nunggu user):** (a) SEMI-MANUAL — dashboard #9 nuntun (verdict belum_dikomisikan/harusnya_dicabut), user klik di Shopee; bot GAK nulis komisi. **REKOMENDASI gua** (ROI). (b) lanjut DOM-auto (fragile, tool `takedown_komisi_browser` udah ada). Anchor A + grab/banding B + jadwal harian = **tetap otomatis** apapun pilihannya.
+  - ✅ **KEPUTUSAN FINAL (user, 10 Jul):** **set/takedown komisi = MANUAL** (dituntun dashboard #9 verdict; bot GAK nulis komisi — API mustahil, DOM fragile). **RUBAH HARGA produk komisi = OTOMATIS** → udah kepasang via **Anchor A** (`diagnosa_toko`: komisi aktif → target=harga_jual) + eksekusi Fase 2 (`set_harga` promo toko dll). Verified DRY Yarra: 47 produk ke-anchor, **15 di antaranya bot otomatis rubah harga ke harga komisi** (mis. GL-FNF-6 real 28.999→32.999). Tool DOM-auto (`takedown_komisi_browser`) di-arsipin (kalau suatu saat mau). **KOMISI C = SELESAI.**
 
 ---
 
@@ -194,16 +194,15 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
 
 **FASE 1 — FAKTA** (pengumpul data, jadi bahan Fase 2)
 - ✅ Core grab + scheduler + tabel fakta (garansi/campaign/flash/voucher/paket) + kategori
-- ✅ #5 Promo Toko master-detail · ⏳ #6 Paket · #7 Campaign · **#9 Komisi (2-tabel banding)**
+- ✅ #5 Promo Toko master-detail · **#9 Komisi (banding + grab browser + jadwal harian)** · ⏳ #6 Paket · #7 Campaign
 - ⏳ Kategori isi awal (user jalanin) · realign cadence voucher/paket → harian (pas jahit Fase 2)
 
 **FASE 2 — MASALAH + SOLUSI** (deteksi PER-MODUL: per-jam / harian / mingguan)  ◀ **KITA DI SINI**
-0. 🔧 **Komisi = PATOKAN HARGA** (per-jam, poin 3·0) — ✅ **Anchor A DONE (DRY)**: komisi aktif → target semua promo = harga komisi. Grab Shopee (B, verif anti-bot) & sync (C) nyusul.
+0. ✅ **KOMISI SELESAI** — harga komisi = PATOKAN (Anchor A, per-jam) → bot **otomatis rubah harga** produk komisi ke harga komisi (verified). Set/takedown komisi = **MANUAL** (dashboard #9 nuntun; API mustahil). Grab Shopee + banding = auto.
 1. ✅ **Harga poin 1–4 (DRY)** — 3a promo toko, 4 harga dasar (+paket/voucher takedown+re-add), 3b garansi, 3c flash, 3d campaign. **Verifikasi LIVE ⏳** (+ benerin endpoint flash). ✅ target udah ikut komisi (poin 0 anchor).
-2. ⏳ **Komisi provisioning** (harian) — banding Syntra vs Shopee → set/takedown komisi + rubah harga.
-3. ⏳ **Garansi provisioning** (harian) — daftar kondisi best/margin, batalin "perlu ditinjau" + tuntasin margin@best display.
-4. ⏳ **Paket + Voucher provisioning** (harian) — buat + enroll SEMUA produk; helper item-level udah ada.
-5. ⏳ **Campaign + Flash provisioning** (mingguan) — daftar per-kategori×penjualan; pemilihan produk.
+2. ⏳ **Garansi provisioning** (harian) — daftar kondisi best/margin, batalin "perlu ditinjau" + tuntasin margin@best display.
+3. ⏳ **Paket + Voucher provisioning** (harian) — buat + enroll SEMUA produk; helper item-level udah ada.
+4. ⏳ **Campaign + Flash provisioning** (mingguan) — daftar per-kategori×penjualan; pemilihan produk.
 
 **FASE 3 — LAPORAN** (verdict + audit hasil aksi ke dashboard)
 - ⏳ Belum mulai (nunggu Fase 2 jalan live).
