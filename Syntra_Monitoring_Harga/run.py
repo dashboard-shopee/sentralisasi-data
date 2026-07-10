@@ -18,7 +18,8 @@ Pemakaian:
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
   python run.py komisi_cek     # VERIF READ komisi Shopee via requests (kena anti-bot 403) — read-only
-  python run.py komisi_grab    # GRAB komisi Shopee via BROWSER (tangkap gql ber-SDK) -> dump __komisi_shopee_<toko>.json
+  python run.py komisi_grab    # GRAB komisi Shopee via BROWSER (tangkap gql ber-SDK) -> harga_fakta_komisi
+  python run.py komisi_inspect # EKSPLORASI DOM halaman komisi (buat desain set/takedown bagian C)
   python run.py rubah|verifikasi|fase4   # LEGACY Fase 2-4 lama (akan di-port ke model baru)
 """
 import sys
@@ -408,6 +409,58 @@ def grab_komisi_browser(interaktif=True):
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === GRAB KOMISI BROWSER SELESAI ===" + colorama.Style.RESET_ALL)
 
 
+def inspect_komisi_dom():
+    """EKSPLORASI DOM halaman komisi buat DESAIN set/takedown (bagian C) — GA HALU, ga klik apa-apa.
+    Buka halaman komisi → JEDA (kamu navigate/atur tampilan yg mau di-inspect: produk aktif, tombol
+    'Atur'/'Hapus', atau dialog set rate) → dump `page.html` ke __komisi_dom_<toko>.html + ringkasan
+    TOMBOL & INPUT (label/placeholder) biar gua tau selektor asli. READ-ONLY."""
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === INSPECT DOM KOMISI — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.get("https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign")
+            page.wait(4)
+            print(colorama.Fore.LIGHTYELLOW_EX + "[inspect] >>> Di Chrome: arahin ke tampilan yg mau gua liat "
+                  "(mis. list produk komisi + tombol Atur/Hapus, ATAU buka dialog set rate). Jangan di-SAVE." + colorama.Style.RESET_ALL)
+            try:
+                input(colorama.Fore.LIGHTYELLOW_EX + "[inspect] >>> Tekan ENTER kalau tampilan udah pas buat di-dump... " + colorama.Style.RESET_ALL)
+            except EOFError:
+                page.wait(3)
+            html = page.html or ""
+            out = f"__komisi_dom_{username}.html"
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(html)
+            btns, inps = [], []
+            try:
+                for b in page.eles("tag:button"):
+                    t = (b.text or "").strip()
+                    if t and t[:45] not in btns:
+                        btns.append(t[:45])
+            except Exception as e:
+                print(f"[inspect] baca tombol gagal: {type(e).__name__}")
+            try:
+                for ip in page.eles("tag:input"):
+                    ph = (ip.attr("placeholder") or "").strip()
+                    ty = (ip.attr("type") or "").strip()
+                    inps.append(f"{ty}:{ph}"[:40])
+            except Exception:
+                pass
+            print(colorama.Fore.LIGHTGREEN_EX + f"[inspect] [{nama}] HTML -> {out} ({len(html):,} char)" + colorama.Style.RESET_ALL)
+            print(colorama.Fore.WHITE + f"[inspect] TOMBOL ({len(btns)}): " + " | ".join(btns[:40]) + colorama.Style.RESET_ALL)
+            print(colorama.Fore.WHITE + f"[inspect] INPUT ({len(inps)}): " + " | ".join(inps[:20]) + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[inspect] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === INSPECT DOM SELESAI ===" + colorama.Style.RESET_ALL)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1].lower() if len(sys.argv) > 1 else ""
     if arg == "login":
@@ -416,6 +469,8 @@ if __name__ == "__main__":
         cek_komisi_shopee()
     elif arg in ("komisi_grab", "grab_komisi", "komisigrab"):
         grab_komisi_browser()
+    elif arg in ("komisi_inspect", "inspect_komisi", "komisidom"):
+        inspect_komisi_dom()
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)
