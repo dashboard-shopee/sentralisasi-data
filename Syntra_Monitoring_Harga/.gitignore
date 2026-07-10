@@ -9,6 +9,8 @@ __sniff_jubelio_auth.json
 __sniff_*.json
 __komisi_shopee_*.json
 __komisi_dom_*.html
+__komisi_dom_*.json
+__komisi_apollo_*.json
 __komisi_sniff_*.json
 __komisi_apitest_*.json
 __jubelio_token.json

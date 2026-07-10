@@ -434,28 +434,44 @@ def inspect_komisi_dom():
                 input(colorama.Fore.LIGHTYELLOW_EX + "[inspect] >>> Tekan ENTER kalau tampilan udah pas buat di-dump... " + colorama.Style.RESET_ALL)
             except EOFError:
                 page.wait(3)
+            import json as J
             html = page.html or ""
             out = f"__komisi_dom_{username}.html"
             with open(out, "w", encoding="utf-8") as f:
                 f.write(html)
-            btns, inps = [], []
-            try:
-                for b in page.eles("tag:button"):
-                    t = (b.text or "").strip()
-                    if t and t[:45] not in btns:
-                        btns.append(t[:45])
-            except Exception as e:
-                print(f"[inspect] baca tombol gagal: {type(e).__name__}")
-            try:
-                for ip in page.eles("tag:input"):
-                    ph = (ip.attr("placeholder") or "").strip()
-                    ty = (ip.attr("type") or "").strip()
-                    inps.append(f"{ty}:{ph}"[:40])
-            except Exception:
-                pass
-            print(colorama.Fore.LIGHTGREEN_EX + f"[inspect] [{nama}] HTML -> {out} ({len(html):,} char)" + colorama.Style.RESET_ALL)
-            print(colorama.Fore.WHITE + f"[inspect] TOMBOL ({len(btns)}): " + " | ".join(btns[:40]) + colorama.Style.RESET_ALL)
-            print(colorama.Fore.WHITE + f"[inspect] INPUT ({len(inps)}): " + " | ".join(inps[:20]) + colorama.Style.RESET_ALL)
+            # DUMP elemen CLICKABLE via JS (jauh lebih kebaca dari HTML mentah): button/a/[role=button]/
+            # elemen ber-onclick / cursor pointer. Simpan text + tag + class + id.
+            probe = r"""
+            try {
+              var res = [];
+              var els = document.querySelectorAll('button, a, [role=button], [class*=btn], [class*=Button], svg[class*=icon], [class*=action], [class*=Action]');
+              for (var i=0;i<els.length && res.length<200;i++){
+                var e = els[i];
+                var t = (e.innerText||e.textContent||'').trim().replace(/\s+/g,' ').slice(0,40);
+                var cls = (e.getAttribute('class')||'').slice(0,60);
+                var r = e.getBoundingClientRect();
+                if (r.width===0 && r.height===0) continue;   // skip hidden
+                res.push({tag:e.tagName.toLowerCase(), text:t, cls:cls, id:(e.id||'').slice(0,30),
+                          x:Math.round(r.x), y:Math.round(r.y)});
+              }
+              var inps = [];
+              document.querySelectorAll('input,textarea').forEach(function(e){
+                var r=e.getBoundingClientRect(); if(r.width===0&&r.height===0)return;
+                inps.push({type:e.type||e.tagName.toLowerCase(), ph:(e.placeholder||'').slice(0,40), cls:(e.getAttribute('class')||'').slice(0,50)});
+              });
+              return JSON.stringify({clickable:res, inputs:inps});
+            } catch(e){ return JSON.stringify({error:String(e)}); }
+            """
+            raw = page.run_js(probe)
+            data = J.loads(raw) if isinstance(raw, str) else (raw or {})
+            outj = f"__komisi_dom_{username}.json"
+            with open(outj, "w", encoding="utf-8") as f:
+                J.dump(data, f, ensure_ascii=False, indent=2)
+            cl = data.get("clickable", [])
+            print(colorama.Fore.LIGHTGREEN_EX + f"[inspect] [{nama}] HTML -> {out} | clickable -> {outj} ({len(cl)} elemen)" + colorama.Style.RESET_ALL)
+            for e in cl[:35]:
+                if e.get("text") or "action" in (e.get("cls", "").lower()):
+                    print(f"    <{e['tag']}> '{e.get('text','')}' cls={e.get('cls','')[:35]}")
         except Exception as e:
             print(colorama.Fore.RED + f"[inspect] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
         finally:
