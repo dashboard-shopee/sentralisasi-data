@@ -527,16 +527,25 @@ def sniff_komisi_write():
     print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SNIFF KOMISI SELESAI ===" + colorama.Style.RESET_ALL)
 
 
-def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=40):
-    """Panggil gql affiliateplatform DARI konteks JS halaman (window.fetch) → SDK Shopee yg
-    nge-hook fetch auto-nandatangan (x-sap-sec dll). URL & body di-EMBED langsung ke script (bukan
-    arguments) + try/catch + poll window global. Return dict {status, body} / {error, kick_started}.
-    TANPA klik tombol."""
-    import json as J
+def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=30):
+    """Panggil gql affiliateplatform via window.fetch DARI konteks halaman → SDK (__sap_hook_fetch)
+    auto-nandatangan. Hasil disimpen ke localStorage (TAHAN navigasi same-origin, jadi ga ilang
+    walau halaman ke-redirect). Poll localStorage. Return {status, body} / {error}. TANPA klik."""
+    import json as J, time as T
     url = f"https://seller.shopee.co.id/api/v3/affiliateplatform/gql?q={qparam}"
     url_js = J.dumps(url)
     body_js = J.dumps(J.dumps({"operationName": operation, "query": query, "variables": variables}))
-    # tunggu halaman settle biar konteks JS stabil (open_campaign kadang redirect/re-render).
+
+    def _js(s):
+        for _ in range(15):
+            try:
+                return page.run_js(s)
+            except Exception as ex:
+                if "ContextLost" in type(ex).__name__ or "refresh" in str(ex).lower():
+                    page.wait(1); continue
+                raise
+        return None
+
     for _ in range(24):
         try:
             if page.run_js("return document.readyState;") == "complete":
@@ -545,30 +554,100 @@ def _komisi_gql_via_page(page, operation, query, variables, qparam, timeout=40):
             pass
         page.wait(0.5)
     page.wait(2)
-    # XHR SINKRON dalam 1 run_js -> blocking, return langsung (ga kena context-loss antar-poll).
-    js = f"""
+
+    kick = f"""
     try {{
-      var xhr = new XMLHttpRequest();
-      xhr.open("POST", {url_js}, false);
-      xhr.setRequestHeader("content-type", "application/json");
-      xhr.send({body_js});
-      return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
-    }} catch(e) {{ return JSON.stringify({{error: String(e)}}); }}
+      localStorage.setItem('__komres', 'PENDING');
+      fetch({url_js}, {{method:'POST', headers:{{'content-type':'application/json'}}, body:{body_js}, credentials:'include'}})
+        .then(function(r){{ return r.text().then(function(t){{ localStorage.setItem('__komres', JSON.stringify({{status:r.status, body:t}})); }}); }})
+        .catch(function(e){{ localStorage.setItem('__komres', JSON.stringify({{error:String(e)}})); }});
+      return 'kicked|ls=' + localStorage.getItem('__komres');
+    }} catch(e) {{ return 'kickerr:' + String(e); }}
     """
-    try:
-        raw = page.run_js(js)
-    except Exception as e:
-        return {"error": f"{type(e).__name__}: {e}"}
-    try:
-        out = J.loads(raw) if isinstance(raw, str) else raw
-        if isinstance(out, dict) and isinstance(out.get("body"), str):
+    kicked = _js(kick)   # diagnosa: harus 'kicked|ls=PENDING' kalau eksekusi + localStorage OK
+    page.wait(0.5)
+    after = _js("return localStorage.getItem('__komres');")
+    hook = _js("return (typeof window.__sap_hook_fetch) + '|native=' + /native/.test(window.fetch.toString());")
+    t0 = T.time()
+    while T.time() - t0 < timeout:
+        v = _js("return localStorage.getItem('__komres');")
+        if v and v != "PENDING":
             try:
-                out["body"] = J.loads(out["body"])
+                o = J.loads(v)
+                if isinstance(o, dict) and isinstance(o.get("body"), str):
+                    try:
+                        o["body"] = J.loads(o["body"])
+                    except Exception:
+                        pass
+                return o
             except Exception:
-                pass
-        return out
-    except Exception:
-        return {"raw": str(raw)[:500]}
+                return {"raw": str(v)[:500]}
+        page.wait(0.5)
+    return {"error": "timeout", "kicked": kicked, "after_kick": after, "fetch_hook": hook}
+
+
+def probe_komisi_apollo():
+    """PROBE (read-only): cari instance Apollo Client / objek gql di window halaman komisi. Kalau
+    ke-expose + punya .mutate/.query, kita bisa manggil mutation lewat jalur yg UDAH ditandatangani
+    SDK (bukan fetch injeksi). Cuma ngintip window (ga manggil gql) → ga trigger 403/redirect."""
+    import json as J
+    from modules import session as S
+    from modules.sql_harga import baca_komisi_patokan
+    URL = "https://seller.shopee.co.id/portal/web-seller-affiliate/open_campaign"
+    toko = config.daftar_toko_aktif()
+    for username, info in toko.items():
+        if not baca_komisi_patokan(username):
+            continue
+        nama = info["name"]
+        print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROBE APOLLO KOMISI — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.get(URL)
+            for _ in range(24):
+                try:
+                    if page.run_js("return document.readyState;") == "complete":
+                        break
+                except Exception:
+                    pass
+                page.wait(0.5)
+            page.wait(4)
+            probe = """
+            try {
+              var out = {relKeys:[], apollo:null, candidates:[], gqlFns:[]};
+              var kk = Object.keys(window);
+              out.relKeys = kk.filter(function(k){ return /apollo|client|graphql|gql|sap|sz|affiliate|__/i.test(k); }).slice(0,60);
+              if (window.__APOLLO_CLIENT__) {
+                var c = window.__APOLLO_CLIENT__;
+                out.apollo = {global:'__APOLLO_CLIENT__', mutate: typeof c.mutate, query: typeof c.query};
+              }
+              for (var i=0;i<kk.length;i++){
+                try {
+                  var v = window[kk[i]];
+                  if (v && typeof v==='object'){
+                    if (typeof v.mutate==='function' && typeof v.query==='function') out.candidates.push(kk[i]);
+                  }
+                  if (typeof v==='function' && /gql|graphql/i.test(kk[i])) out.gqlFns.push(kk[i]);
+                } catch(e){}
+              }
+              return JSON.stringify(out);
+            } catch(e){ return JSON.stringify({error:String(e)}); }
+            """
+            raw = page.run_js(probe)
+            res = J.loads(raw) if isinstance(raw, str) else raw
+            with open(f"__komisi_apollo_{username}.json", "w", encoding="utf-8") as f:
+                J.dump(res, f, ensure_ascii=False, indent=2, default=str)
+            print(colorama.Fore.WHITE + f"[probe] key relevan: {res.get('relKeys')}" + colorama.Style.RESET_ALL)
+            print(colorama.Fore.WHITE + f"[probe] __APOLLO_CLIENT__: {res.get('apollo')}" + colorama.Style.RESET_ALL)
+            print(colorama.Fore.WHITE + f"[probe] kandidat (punya mutate+query): {res.get('candidates')} | gqlFns: {res.get('gqlFns')}" + colorama.Style.RESET_ALL)
+            if res.get("apollo") or res.get("candidates"):
+                print(colorama.Fore.LIGHTGREEN_EX + "[probe] ✅ ada kandidat apollo -> bisa dicoba mutate lewat jalur signed." + colorama.Style.RESET_ALL)
+            else:
+                print(colorama.Fore.YELLOW + "[probe] ⚠️ apollo client GAK ke-expose di window global." + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[probe] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+        finally:
+            S.tutup_page()
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === PROBE SELESAI ===" + colorama.Style.RESET_ALL)
 
 
 def test_komisi_api_via_browser():
@@ -627,6 +706,8 @@ if __name__ == "__main__":
         sniff_komisi_write()
     elif arg in ("komisi_apitest", "komisi_test", "komisiapitest"):
         test_komisi_api_via_browser()
+    elif arg in ("komisi_apollo", "apollo_probe", "komisiapollo"):
+        probe_komisi_apollo()
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
         siklus_fase1(paksa_semua=paksa)

@@ -151,8 +151,11 @@ Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cu
   - **SET** = `CreateOpenCampaigns` — vars `{items:[{itemId,itemName}], commissionRate:<%×1000>, startNow:true, pageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`.
   - **TAKEDOWN** = `RemoveOpenCampaigns` — vars `{commissionIds:[...], campaignPageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`. (UI ada modal "Yakin hapus? pembayaran distop 00:00 tgl-X" tapi komisi LANGSUNG kecabut.)
   - Signature header: `x-sap-sec`+`x-sap-ri`+`af-ac-enc-dat` (per-req, SDK-generated) + `af-ac-enc-sz-token` (session-stabil) + `x-sz-sdk-version`.
-  - ❌ **API-injeksi MATI (dites `komisi_apitest`)**: fetch/XHR yg diinjeksi via `page.run_js` TIDAK ditandatangan SDK (SDK cuma sign wrapper apollo-nya sendiri, bukan window.fetch) → 403 → `redirect_to_error_page` (window ke-wipe / status 0). Konsisten catatan lama.
-  - ➡️ **SISA JALAN: DOM-click automation** (klik tombol asli + auto-handle modal konfirmasi biar gak manual). Fragile tapi satu-satunya. ATAU semi-manual (dashboard #9 udah nunjukin apa yg perlu di-set/cabut, user klik sendiri). **BAHAS: pilih mana.**
+  - ❌ **API-injeksi MATI — INVESTIGASI TUNTAS (semua dicoba 10 Jul):**
+    - `requests` biasa → 403. `sync XHR` via run_js → status 0. `fetch` via run_js → 403 → redirect (window ke-wipe).
+    - Apollo client (`komisi_apollo` probe): app ini **VUE** (bukan React/Apollo), `__APOLLO_CLIENT__` **gak ke-expose**. Ada `__sap_hook_fetch`/`__monitor_sap_fetch` → `window.fetch` di-wrap TAPI cuma **monitoring**, bukan signer.
+    - Bukti final: kick localStorage OK dalam 1 call (`kicked=PENDING`), tapi `after_kick=null` → tiap fetch-inject bikin halaman **redirect** (unsigned→403). Signing `x-sap-sec` ada di **layer request internal app (axios instance)**, bukan `window.fetch` global → **mustahil direplikasi dari luar**.
+  - ➡️ **SISA JALAN (2): (a) DOM-click automation** (klik tombol asli + auto-handle modal konfirmasi) — fragile, perlu build. **(b) Semi-manual** — dashboard #9 udah nunjukin persis apa yg perlu di-set/cabut, user klik di Shopee. Bot GAK nulis komisi. **PILIH SALAH SATU.**
 
 ---
 
