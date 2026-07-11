@@ -144,6 +144,7 @@ export default function PusatPromosiPage() {
   // Expand-row: klik promo -> produk di dalamnya. Config per tab yg support detail.
   const DETAIL_CFG: Record<string, { idField: string; detailTab: string; idParam: string; priceField: string; judul: string }> = {
     voucher: { idField: "voucherId", detailTab: "voucher_produk", idParam: "voucher_id", priceField: "hargaTampil", judul: "voucher" },
+    paket: { idField: "bundleDealId", detailTab: "paket_produk", idParam: "bundle_deal_id", priceField: "hargaTampil", judul: "paket diskon" },
     promo_toko: { idField: "promotionId", detailTab: "promo_toko_produk", idParam: "promotion_id", priceField: "hargaPromo", judul: "promo toko" },
     komisi: { idField: "itemId", detailTab: "komisi_produk", idParam: "item_id", priceField: "hargaJual", judul: "komisi (SKU variasi)" },
   };

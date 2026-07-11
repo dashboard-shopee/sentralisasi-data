@@ -64,6 +64,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ shopWide: false, produk });
     }
 
+    // PRODUK dalam 1 Paket Diskon (expand-row tab Paket). items jsonb = daftar item_id (keanggotaan).
+    if (tab === "paket_produk") {
+      const bid = p.get("bundle_deal_id");
+      const tk = p.get("toko");
+      if (!bid || !tk) return NextResponse.json({ error: "bundle_deal_id & toko wajib" }, { status: 400 });
+      const v = await q<{ items: number[] | null }>(
+        `select items from harga_fakta_paket where toko=$1 and bundle_deal_id=$2`, [tk, bid]
+      );
+      const scope = v[0]?.items;
+      if (!scope || !Array.isArray(scope) || scope.length === 0) {
+        return NextResponse.json({ produk: [] });
+      }
+      const produk = await q<Record<string, unknown>>(
+        `select distinct on (item_id) item_id "itemId", sku, nama_produk "namaProduk", harga_tampil "hargaTampil"
+         from harga_olah_data where toko=$1 and item_id = any($2::bigint[]) order by item_id`,
+        [tk, scope]
+      );
+      return NextResponse.json({ produk });
+    }
+
     // PRODUK dalam 1 Promo Toko (expand-row tab Promo Toko).
     if (tab === "promo_toko_produk") {
       const pid = p.get("promotion_id");
