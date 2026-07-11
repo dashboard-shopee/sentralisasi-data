@@ -119,12 +119,12 @@ export async function GET(req: Request) {
       let W = "1=1";
       const params: unknown[] = [];
       const filterToko = p.get("toko") || "";
-      if (filterToko) { params.push(filterToko); W += ` and toko = $${params.length}`; }
+      if (filterToko) { params.push(filterToko); W += ` and ho.toko = $${params.length}`; }
       const filterSumber = p.get("sumber") || "";
-      if (filterSumber) { params.push(filterSumber); W += ` and sumber_harga = $${params.length}`; }
+      if (filterSumber) { params.push(filterSumber); W += ` and ho.sumber_harga = $${params.length}`; }
       if (search) {
         params.push(`%${search}%`);
-        W += ` and (sku ilike $${params.length} or nama_produk ilike $${params.length} or nama_variasi ilike $${params.length} or item_id::text like $${params.length} or model_id::text like $${params.length})`;
+        W += ` and (ho.sku ilike $${params.length} or ho.nama_produk ilike $${params.length} or ho.nama_variasi ilike $${params.length} or ho.item_id::text like $${params.length} or ho.model_id::text like $${params.length})`;
       }
       let order = "coalesce(ss.parent_qty, 0) desc, ho.toko asc, ho.item_id asc, ho.model_id asc";
       if (sortCol) {
@@ -182,7 +182,7 @@ export async function GET(req: Request) {
         limit $${params.length - 1} offset $${params.length}
       `, params);
       const countParams = [...params]; countParams.splice(countParams.length - 2, 2);
-      const total = await q<{ count: string }>(`select count(*) from harga_olah_data where ${W}`, countParams);
+      const total = await q<{ count: string }>(`select count(*) from harga_olah_data ho where ${W}`, countParams);
       return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
 
     } else if (tab === "komisi") {
