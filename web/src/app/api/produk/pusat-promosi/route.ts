@@ -224,10 +224,34 @@ export async function GET(req: Request) {
     } else if (tab === "garansi_nom") {
       // Garansi Harga Terbaik — 3 kategori (Nominasi Produk). kat: rekomendasi | terbaik | perlu_ditinjau.
       // floor = Harga Terbaik (best), ceiling = Harga Program. Sumber harga_fakta_garansi_nom (bot harian).
+      // + Harga Real (harga live Shopee dari harga_olah_data) & Margin per harga (Real/Terbaik/Program).
+      // SKU & biaya per-SKU diambil via join harga_olah_data (toko/item/model) -> harga_all_produk/erp.
       const kat = (p.get("kat") || "terbaik").trim();
+      const marginExpr = (priceCol: string) =>
+        `(case when ${priceCol} > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(${priceCol}, 0)) else null end)::numeric`;
       cols = `s.toko, s.item_id "itemId", s.model_id "modelId", s.item_name "itemName",
-              s.model_name "modelName", s.floor, s.ceiling, s.stok, s.bid_status "bidStatus"`;
-      base = `from harga_fakta_garansi_nom s`;
+              s.model_name "modelName", o.sku,
+              o.harga_tampil "hargaReal", ${marginExpr("o.harga_tampil")} "marginReal",
+              s.floor, ${marginExpr("s.floor")} "marginBest",
+              s.ceiling, ${marginExpr("s.ceiling")} "marginProgram",
+              s.stok, s.bid_status "bidStatus"`;
+      base = `from harga_fakta_garansi_nom s
+              left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id
+              left join (
+                select upper(h.sku) as sku_u,
+                  coalesce(e.hpp,0)::numeric as hpp,
+                  (coalesce((select value::numeric from kalkulator_settings where key='batch_admin_fee_pct'),0.16)
+                   + coalesce((select value::numeric from kalkulator_settings where key='batch_discount_ads_pct'),0.06)
+                   + coalesce((select value::numeric from kalkulator_settings where key='batch_salary_pct'),0.08)
+                   + coalesce((select value::numeric from kalkulator_settings where key='batch_commission_pct'),0.0)) as total_pct_biaya,
+                  (coalesce((select value::numeric from kalkulator_settings where key='batch_packing_fee'),400)
+                   + (case when coalesce(sm.total_qty,0) > 0
+                          then coalesce((select value::numeric from kalkulator_settings where key='batch_service_fee'),1250) * coalesce(sm.total_orders,0) / sm.total_qty
+                          else coalesce((select value::numeric from kalkulator_settings where key='batch_service_fee'),1250) end))::numeric as biaya_tetap_adjusted
+                from harga_all_produk h
+                left join erp_sku_list e on h.sku = e.sku
+                left join erp_shopee_metrics sm on h.sku = sm.sku
+              ) sc on sc.sku_u = upper(o.sku)`;
       params.push(kat); where.push(`s.kategori = $${params.length}`);
       if (filterToko) eqToko("s.toko");
       if (search) like(["s.item_name", "s.model_name"]);

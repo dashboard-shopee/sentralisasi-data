@@ -62,7 +62,9 @@ const COLS: Record<string, Col[]> = {
   ],
   garansi_nom: [
     { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" }, { k: "modelName", t: "Variasi" },
-    { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "ceiling", t: "Harga Program", f: "rp" },
+    { k: "hargaReal", t: "Harga Real", f: "rp" }, { k: "marginReal", t: "Margin Real", f: "margin" },
+    { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
+    { k: "ceiling", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
     { k: "stok", t: "Stok", f: "num" },
   ],
 };
