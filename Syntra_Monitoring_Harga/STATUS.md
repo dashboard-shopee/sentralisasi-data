@@ -1,210 +1,103 @@
-# STATUS — Syntra Monitoring Harga (acuan tunggal progres)
+# 🧵 BENANG MERAH — Syntra Monitoring Harga
 
-> **Baca file ini dulu tiap mulai kerja.** Legenda: ✅ selesai · 🔧 lagi dikerjain · ⏳ belum · ⏸️ ditunda/PR.
-> Arsitektur **3 fase**: 1=Fakta · 2=Masalah+Solusi · 3=Laporan. **Cadence per-MODUL** (bukan per-fase).
-> 📌 **FILE INI = SATU-SATUNYA DOKUMENTASI** (mulai 10 Jul) — semua progres + spec + rencana di sini.
-> `RENCANA_FASE1/2.md` & `HANDOFF.md` = arsip lama (jangan diandelin lagi). Update terakhir: **11 Jul 2026**.
-
-## ▶️ MULAI DARI SINI (next session) — update **11 Jul 2026**
-**Posisi: FASE 2 hampir kelar di level DRY. Belum ada yang jalan LIVE (semua DRY-paksa).**
-
-### ✅ UDAH JADI (semua DRY-RUN, 0 perubahan nyata ke Shopee)
-- **Fase 2 poin 1–4 (kontrol harga per-jam) LENGKAP:** diagnosa 1–4 · 3a promo toko · 4 harga dasar
-  (+ takedown & re-add paket/voucher) · 3b takedown garansi · 3c takedown flash · 3d takedown campaign.
-  Tes: **`python run.py fase2`**.
-- **Poin 3·0 KOMISI = PATOKAN HARGA (Anchor A):** komisi aktif (`harga_komisi_toko`) → target semua
-  promo = harga komisi. Otomatis. Verified Yarra 47 variasi.
-- **Komisi grab Shopee (browser, bypass anti-bot)** → `harga_fakta_komisi` + **dashboard #9 banding**
-  (Syntra vs Shopee: sesuai/belum-dikomisikan/harusnya-dicabut). Jadwal harian. `run.py komisi_grab`.
-- **Fase 2 poin 5 PROVISIONING (harian/mingguan):** **`python run.py provisioning [paket voucher campaign flash garansi]`**
-  — Paket · Voucher · Campaign · Flash · **Garansi** (a-enroll/b-takedown/c-refresh). Semua DRY, verified.
-- **Garansi dashboard 3 sub-tab** (Belum Didaftar/Terbaik/Perlu-Ditinjau) di Pusat Promosi.
-- **KPI terpusat** di `config.py` blok "KPI PER-MODUL" (`KPI_*`) — semua ambang editable.
-
-### ⏳ BELUM (urutan saran)
-1. **Verifikasi LIVE** semua Fase 2 (skrg DRY-paksa di `jalankan_fase2`/`jalankan_provisioning`).
-   Mulai 1 toko kecil (Kimmioshop), `MODE_LIVE` tetap, hapus paksa-DRY bertahap per modul.
-2. **Benerin endpoint flash takedown** (`SKIP_FLASH_TAKEDOWN=True`, ditolak code 1001) — PR di bawah.
-3. **Scheduler wiring:** provisioning masuk jadwal otomatis (harian: paket/voucher/campaign/garansi;
-   mingguan: flash). Skrg cuma command manual. + Fase 2 harga masuk scheduler per-jam.
-4. **FASE 3 — LAPORAN** (belum mulai): verdict + audit hasil aksi ke dashboard.
-
-### ✋ KOMISI set/takedown = MANUAL (final, API mustahil)
-Write komisi ke Shopee **mustahil via API** (anti-bot `x-sap-sec`, udah dites habis: requests/fetch-inject/
-XHR/apollo semua 403). DOM-click fragile. **Keputusan: set/takedown komisi = MANUAL** (user klik di Shopee,
-dituntun dashboard #9). **Rubah HARGA produk komisi tetap OTOMATIS** (Anchor A). Komisi = SELESAI.
-
-**PENTING sebelum ngoding:** ⚠️ Fase 2 WAJIB di data grab FRESH. ⚠️ `config.MODE_LIVE=True` → tes SELALU
-paksa `config.DRY_RUN=True` dulu (kayak `jalankan_fase2`). Provisioning idempotent (nama/kode prefix `UPSELL`/`UP`).
-
-**Commands:** `run.py` (scheduler Fase 1) · `grab`/`grab full` · `kategori` · `fase2` (harga DRY) ·
-`provisioning [modul]` (poin 5 DRY) · `komisi_grab` (grab komisi browser) · `garansi_sniff`/`komisi_sniff` (tool sniff) · `rubah`/`verifikasi`/`fase4` (legacy).
+> **Acuan tunggal.** SPEC program (3 fase, per-modul) + PROGRES (penanda simbol).
+> ⚠️ **Isi spec DIKUNCI** — jangan nambah/ngubah tanpa perintah owner. Tiap kerja, yang di-update **cuma penanda progres** (jangan nambah tulisan).
+> 📝 Penjelasan santai, catatan, temuan teknis, backlog → **`PANDUAN_PROGRAM.md`** (bukan di sini).
+> **Penanda:** ✅ jalan · 🔴 live · 🟡 logika beres, belum live · 🔧 dikerjain · ⏳ belum
 
 ---
 
-## PRINSIP (jangan dilanggar)
-- ✅ **Fase 2 WAJIB jalan di data grab FRESH** (grab → diagnosa → eksekusi, sesi & data sama-sama baru). Jangan diagnosa di DB basi (kasus "Tipe 1" 9 Jul).
-- ✅ **DRY-RUN default** (`config.DRY_RUN` dari env `HARGA_LIVE`; catatan: `config.MODE_LIVE` skrg =True → live). Tes selalu paksa DRY dulu.
-- ✅ **Cadence per-modul** (lihat tabel di `RENCANA_FASE2.md`).
+## 🔁 ALUR — 3 FASE TERPISAH
+
+```
+FASE 1 (FAKTA)   → scheduler tiap jam :05 — grab data terbaru semua toko (READ-ONLY)
+FASE 2 (AKSI)    → command sendiri — deteksi + benerin harga / cabut-pasang promo
+                   (WAJIB grab FRESH dulu di sesi yg sama sebelum bertindak — ga pernah data basi)
+FASE 3 (LAPORAN) → rangkum hasil aksi                                          ⏳
+```
+**Aturan inti:** 3 fase JALAN TERPISAH (Fase 1 = grab · Fase 2 = aksi · Fase 3 = lapor). Fase 2 selalu pakai data FRESH.
 
 ---
 
-## FASE 1 — FAKTA (Pengumpul Fakta)
-| Item | Status |
-|---|---|
-| Core: grab produk+stok+konteks (tier jam) + scheduler 24 jam + jam_siklus | ✅ |
-| Tabel fakta: garansi / campaign(sesi+item) / flash(sesi+item) / voucher / paket | ✅ |
-| Komisi = baca `harga_komisi_toko` Syntra (proteksi harga: skip item komisi) | ✅ (baca doang) |
-| **Komisi GRAB dari Shopee** (semua toko, `komisi_api.baca_komisi_aktif`) + dashboard banding | ⏳ (bagian #9) |
-| Kategori Shopee (get_product_info) — modul+tabel+command+tier | ✅ |
-| **Kategori: isi awal semua toko** (`python run.py kategori`) | ⏳ (user jalanin) |
-| Cadence realign: Voucher & Paket mingguan → **harian** | ⏳ (pas jahit Fase 2) |
+## 📅 JADWAL (kapan modul digerakin)
 
-### Fase 1 — Backlog perbaikan (9 item, disepakati 8 Jul)
-| # | Item | Status |
+| Kapan | LIHAT (Fase 1) | TINDAK (Fase 2) |
 |---|---|---|
-| 1 | Log fix (pemicu grab + fakta_harian/mingguan/bulanan, hapus duplikat) | ✅ |
-| 2 | Voucher filter (berjalan+akan datang) + **klik→produk** | ✅ |
-| 3 | Garansi 3 harga (Kini/Terbaik/Program) | ✅ |
-| 4 | Flash fix (end_time>=now, buang over-fetch Yarra) | ✅ |
-| 8 | Urutan tab by cadence | ✅ |
-| **5** | **Promo Toko master-detail** (promo-level aktif+akan datang → klik→produk, grab `get_discount_list`) | ✅ (grab harian + dashboard, dikonfirmasi user 10 Jul) |
-| 6 | Paket Diskon master-detail + KPI (aktif+akan datang → klik→produk; item per bundle) | ⏳ |
-| 7 | Campaign rework (running+upcoming → klik→produk; cek kenapa nominasi 0) | ⏳ |
-| **G** | **Garansi 3 sub-tab** (Belum Didaftar/Terbaik/Perlu-Ditinjau) di Pusat Promosi → sumber `harga_fakta_garansi_nom` (bot harian). API `tab=garansi_nom&kat=` + sub-tab UI | ✅ (verifikasi visual user) |
-| **9** | **Komisi tab banding** — master per-ITEM (verdict Syntra vs Shopee) → klik detail SKU. Sumber Shopee = browser grab (bypass anti-bot). | ✅ (dashboard + jadwal harian; verifikasi visual user) |
+| **Tiap jam** :05 | grab produk, harga, stok + promo toko | **Poin 1–4 (kontrol harga + CABUT, per-produk):** benerin harga · cabut garansi/flash/campaign yg ga aman · keluarin-pasang balik produk dari paket/voucher pas ubah harga awal · set/daftar promo toko |
+| **Tiap hari** 02:00 | grab komisi, garansi, voucher, paket, campaign, flash | **Poin 5 (PASANG):** paket 🔴 · voucher · garansi + banding komisi |
+| **Tiap minggu** | — (pakai data harian) | **Poin 5 (PASANG):** campaign · flash |
 
-> Detail-mechanism dashboard digeneralisasi (`DETAIL_CFG` di page.tsx) — dukung voucher + promo_toko; tinggal daftarin utk paket/campaign nanti.
-> ⚠️ **Garansi margin display (WIP user):** page.tsx tab Garansi udah ada 3 kolom margin (marginCurrent/Best/Program, `f:"margin"`) TAPI API `pusat-promosi` belum return field margin + `fmt` belum handle "margin" → nyambung ke item "margin@best" (hitung margin@harga-promo). Perlu dituntasin bareng modul garansi.
+*(Grab ≠ aksi: campaign & flash digrab HARIAN — supaya cabut per-jam pakai data ga basi — tapi PASANG-nya tetap mingguan.)*
 
-> Pattern master-detail udah ADA & reusable (dibangun utk Voucher): `DETAIL_TABS`+`toggleRow`+expand-row di `web/.../pusat-promosi/page.tsx`, API `tab=<x>_produk`.
+**Poin 1–4 (cabut) = TIAP JAM semua promo. Poin 5 (pasang) = per cadence.** Cabut cepet, pasang santai.
+*(Scheduler skrg = FASE 1 grab doang. Fase 2 (poin 1–4 & poin 5) jalan lewat COMMAND terpisah — belum auto di scheduler.)*
 
 ---
 
-## FASE 2 — MASALAH + SOLUSI
-### Modul HARGA (poin 1–4, per-jam)
-| Bagian | Status |
-|---|---|
-| **3·0 KOMISI = PATOKAN HARGA** ⭐ — komisi aktif (`harga_jual>0`) → **target := harga_jual** utk SEMUA promo | ✅ **BAGIAN A DONE (DRY, 10 Jul)**. `diagnosa_toko` override target dari `SQL.baca_komisi_patokan` (Syntra SQL, no anti-bot). Verified live-DB: Yarra 47 variasi ke-anchor (harga komisi 32999/10%), Kimmioshop 0. Field baru `komisi_patokan` + `ringkas` hitung `_komisi_anchor`. (Samakan komisi Shopee = bagian C, terpisah.) |
-| DETEKSI/diagnosa (kasus tanpa_target/sesuai/koreksi_turun/harga_dasar + cek semua promo) | ✅ (read-only) |
-| Guard promo tak-dikenal "Tipe 1" (hold ≥target-500, flag <target-500) | ✅ |
-| **3a Eksekusi Promo Toko** (lifecycle buat/duplikat + set/daftar) | ✅ DRY-RUN |
-| **4 Harga Dasar** | ✅ core+paket+voucher (DRY). Urutan: garansi withdraw → **paket takedown** (`PD.keluarkan_item` ke semua deal aktif) + **voucher takedown** (`V.keluarkan_item` per voucher dari `item_scope`) → `edit_harga_dasar` (promo toko/flash/campaign→ubah base) → **re-add paket** (deal utama) + **re-add voucher** (voucher sama). ⚠️ voucher item-edit belum verif live (PR). Tes DRY penuh Beverra (7 kasus) belum. |
-| 3b Takedown Garansi (best<target-500 / margin@best<7%) | ✅ logika (margin@best wired, sumber FAKTA+bid_id). Modul garansi penuh ⏳ |
-| **3c Takedown Flash** (flash<target-10 / stok 0) | ✅ DRY (`eksekusi_takedown_flash`→`flash_sale.takedown_items`). ⚠️ ke-skip live (`SKIP_FLASH_TAKEDOWN=True`, endpoint set-item ditolak 1001, PR flash) |
-| **3d Takedown Campaign** (price<target*98.5% / stok<30 / stok<penjualan/hari) | ✅ DRY (`eksekusi_takedown_campaign`→`campaign.takedown` requests+nomination_id, GANTI browser lama). Resolve on-demand `open_sessions(window="sesi")`. Untested live (0 nominasi skrg) |
+## ⚙️ POIN 1–4 — KONTROL HARGA (tiap jam, per produk)
 
-### Provisioning (poin 5)
-| Modul | Cadence | Status |
-|---|---|---|
-| **Komisi** — set/takedown **MANUAL** (dashboard #9 nuntun; API mustahil) + **rubah harga OTOMATIS** (Anchor A) | harian | ✅ (grab+banding+anchor auto; enroll manual) |
-| Promo Toko (buat/duplikat + daftar produk baru) | jam | ✅ (bagian eksekusi 3a) |
-| Garansi (daftar, kondisi best/margin, batalkan "perlu ditinjau") | harian | ✅ **DRY** (`provisioning.garansi`). (a) enroll rekomendasi qualify=best≥target−500 & margin@best≥7% & stok>0; (b) Terbaik NOT-qualify→withdraw; (c) Perlu-Ditinjau qualify→re-daftar else withdraw. KPI dari config. Endpoint sniff: `get_item_match_list`/`get_item_ongoing_list`(bid_status 30/40)/`submit_bidding_online`/`seller_withdraw`. **Pagination FIXED** (ambil semua: Alialia 440 rekom + 170 ongoing). Angka dikonfirmasi USER bener. Untested LIVE. |
-| Paket Diskon (buat/enroll semua) | harian | ✅ **DRY** (`provisioning.paket` — idempotent `UPSELL <toko>`, buat/reuse + `enroll_semua`. Verified DRY Kimmioshop 221 produk, tier 2→1/3→2/7→3%). Untested LIVE. |
-| Voucher (buat/enroll semua) | harian | ✅ **DRY** (`provisioning.voucher` — idempotent kode `UP*`, ikuti_toko shop-wide, auto-perpanjang H-1 / buat baru. min_price=2×AOV. Verified DRY Kimmioshop). ⚠️ tipe ikuti_toko dulu (voucher PRODUK per-band nyusul); durasi reuse DURASI_PROMO_HARI (180d, verif live). |
-| Campaign (daftar, harga≤target*98.5%, stok>50 & >10×penjualan/hari) | mingguan | ✅ **DRY** (`provisioning.campaign` — filter stok>50 & >10×pjh via `baca_stok_per_item`+pjh, nominasi ke sesi buka window, skip yg udah ternominasi. Verified kriteria Kimmioshop 221→185 lolos). ⚠️ harga≤target×0.985 = requirement Shopee saat aktivasi (verif live). |
-| Flash Sale (maks 50/sesi, per kategori×penjualan, harga real-10) | mingguan | ✅ **DRY** (`provisioning.flash` → reuse `flash_sale_daftar.daftar_mingguan`). ⚠️ verif live endpoint (RENCANA §1 B&D). Kriteria stok>50/pjh = refinement TODO (siapkan_produk skrg stok>0). |
-
-### Wiring
-| Item | Status |
-|---|---|
-| Command `python run.py fase2` (grab→diagnosa→eksekusi promo toko+harga dasar+takedown flash/campaign, DRY-RUN paksa) | ✅ |
-| Masuk SCHEDULER otomatis (per-jam) | ⏳ (nunggu verifikasi live — poin 1–4 udah lengkap DRY) |
+1. Target kosong → skip ("tanpa target").
+2. Harga real = target → skip ("sudah sesuai").
+3. Harga real ≠ target **&** target < harga awal → cek berurutan:
+   - **① Komisi:** aktif? → target diganti jadi **Harga Komisi** (patokan semua promo di bawah).
+   - **② Promo Toko:** belum ada → daftarin · udah ada → set harga promo = target.
+   - **③ Garansi:** cabut kalau best < target−500 **atau** margin < 7%.
+   - **④ Flash:** cabut kalau < target−10 **atau** stok 0.
+   - **⑤ Campaign:** cabut kalau < target×98,5% **atau** stok < 30 **atau** stok < pjh.
+4. Harga real ≠ target **&** target ≥ harga awal → **UBAH HARGA DASAR:** keluarin produk dari SEMUA promo (promo toko, garansi, paket, voucher, flash, campaign) → ubah harga awal → pasang balik **paket & voucher** (wajib selalu nempel).
 
 ---
 
-## 🔧 MODUL AKTIF: KOMISI (lagi digarap — bahas per-bagian, ga halu)
+## 📦 PER-MODUL — spec + progres
+Format tiap modul: 👀 LIHAT (Fase 1) · 🔧 CABUT (poin 1–4, tiap jam) · ➕ PASANG (poin 5)
+📌 **Grab promo (Promo Toko–Flash) = CUMA yang BERJALAN + AKAN DATANG.** Yang udah BERAKHIR dibuang.
 
-### Sumber data (VERIFIED dari kode, 10 Jul)
-- **SYNTRA = patokan "harusnya"**: SQL `harga_komisi_toko` (sku, username_toko, harga_saat_ini, komisi_persen, **harga_jual**). **Komisi aktif = `harga_jual > 0`**. Diedit di dashboard SYNTRA. → nentuin produk mana HARUSNYA dikomisikan + harga komisi (=harga_jual) + persen. **NO anti-bot (SQL murni).**
-- **SHOPEE = kenyataan "aktual"**: `komisi_api.baca_komisi_aktif`/`baca_komisi_items` (gql) → item yg BENERAN aktif komisi (item_id, commission_id, persen, status).
+### 1. KOMISI  🔴 *(grab + harga otomatis · set/takedown komisi MANUAL)*
+- 👀 *harian:* produk mana aktif komisi (halaman affiliate, semua toko) + banding vs Syntra
+- 🔧 *jam:* komisi aktif → harga komisi jadi patokan semua promo
+- ➕ *harian:* banding → (a) sesuai · (b) harusnya-dikomisikan · (c) harusnya-dicabut
+- 📌 **Yang MANUAL cuma SET/TAKEDOWN komisinya** (bot nuntun via dashboard, API mustahil). **Harga tetap dirubah OTOMATIS** — lewat promo toko atau harga awal, tergantung keadaan.
 
-### ⚠️ KENDALA ANTI-BOT (verified) + ✅ SOLUSI BROWSER-LISTEN (TERBUKTI 10 Jul)
-Endpoint `affiliateplatform/gql` WAJIB header `x-sap-sec` dari SDK JS Shopee (cuma ke-generate pas halaman ASLI kebuka).
-- **`requests`/session-grab: 403 KONFIRMASI** (`komisi_cek` 10 Jul, err 90309999) — READ **&** WRITE dua-duanya mustahil via requests.
-- ✅ **SOLUSI: browser-listen** (`komisi_grab`, TERBUKTI 10 Jul) — buka halaman komisi **`/portal/web-seller-affiliate/open_campaign`**, JS-nya manggil gql ber-SDK sendiri, `page.listen` tangkap **response**-nya (bypass anti-bot, no perlu tanda tangan sendiri). **READ KOMISI SHOPEE ✅ JALAN.**
+### 2. PROMO TOKO  🟡
+- 👀 *jam:* promo jalan + akan datang + produknya
+- 🔧 *jam:* belum ada → daftarin ke promo utama · udah ada → set harga promo = target
+- ➕ *jam:* buat/duplikat, masukin produk yg target < harga awal
 
-### Struktur data komisi Shopee (dari `komisi_grab`, VERIFIED)
-- Op **`GetOpenCampaignProducts`** → `data.GetOpenCampaignProducts.{itemList, totalCount, cursor, modelsMap}`.
-- Item AKTIF: `{itemId, itemName, commissionId, commissionStatus:"CommissionStatusOngoing", commissionRate:10000 (=10%), period...}`. commId `0`/status Unknown = daftar rekomendasi (belum aktif) → di-skip.
-- 🔎 **Temuan Yarra: Shopee cuma 6 item komisi AKTIF, Syntra `harga_komisi_toko` 58 SKU** → gap gede (harusnya dikomisikan tapi belum). INI yg #9 mau tampilin.
+### 3. GARANSI  🟡
+- 👀 *harian:* 3 harga (Kini/Terbaik/Program) + status (belum-daftar / terbaik / perlu-ditinjau)
+- 🔧 *jam:* cabut kalau best < target−500 **atau** margin < 7%
+- ➕ *harian:* daftar kalau best ≥ target−500 **&** margin ≥ 7% **&** stok > 0 · "perlu ditinjau" → batalin
 
-### Pecahan modul + kelayakan
-| Bagian | Sumber | Anti-bot? | Kelayakan |
-|---|---|---|---|
-| **A. Anchor harga** (poin 3·0): komisi aktif → target = harga komisi (patokan semua promo) | `harga_komisi_toko` (SQL) | TIDAK | ✅ **DONE (DRY, 10 Jul)** — verified Yarra 47 variasi |
-| **B. Grab Shopee aktual + dashboard banding** (#9) | browser-listen `komisi_grab` | ✅ bypass | ✅ **READ TERBUKTI** (6 item Yarra) — tinggal simpan ke fakta + dashboard |
-| **C. Sync otomatis** (set/takedown komisi ikut Syntra) | browser (navigate+klik) | ✅ bypass | ⏳ pola sama B, nyusul |
+### 4. PAKET  🔴 *(logika verified LIVE · jalan lewat command `provisioning paket`)*
+- 👀 *harian:* paket (berjalan+akan datang) + produk di tiap paket (membership)
+- 🔧 *jam:* keluarin-pasang balik produk **per-produk** pas ubah harga awal (poin 4)
+- ➕ *harian:* produk belum masuk paket manapun → masukin UPSELL. Tier 2→1% / 3→2% / 7→3%. Usahain 1 paket; lewat 1000 → paket #2. Belum ada → buat. Jelang-expire → perpanjang H-1 / buat baru
 
-### Progres & langkah
-- ✅ **A (Anchor) SELESAI (DRY)** — `diagnosa_toko` + `SQL.baca_komisi_patokan` + `config.username_dari_nama`. Verified Yarra 47 variasi.
-- ✅ **B (READ Shopee) TERBUKTI via browser** — `run.py komisi_grab` (buka `/portal/web-seller-affiliate/open_campaign` → `page.listen` tangkap `GetOpenCampaignProducts` → parse item aktif). Dump `__komisi_shopee_<toko>.json` + **SIMPAN ke `harga_fakta_komisi`** (snapshot per toko). Verified Yarra 6 item.
-- ✅ **BANDING (#9 data-layer)** — `SQL.banding_komisi(nama_toko)` (bot) + SQL identik di dashboard API. Verdict `sesuai`/`belum_dikomisikan`/`harusnya_dicabut`. Verified Yarra: **6 sesuai, 4 belum_dikomisikan, 0 dicabut**. ⚠️ LIMITASI: peta SKU→item_id via olah_data (stok-filtered) → 43/58 SKU ke-map (SKU stok-0 hilang). PR: peta SKU→item lengkap.
-- ✅ **DASHBOARD #9 (tab Komisi)** — `web/.../pusat-promosi`: master **per-ITEM** (verdict badge ✅/⚠️/❌ + komisi Syntra% vs Shopee% + jml SKU) → klik **expand → detail SKU variasi** (`komisi_produk`). Grain per-item, verified SQL live + `tsc` clean. Verifikasi visual: user (butuh login).
-- ✅ **JADWAL HARIAN** — `grab_komisi_browser(interaktif=False)` masuk scheduler tier HARIAN (abis loop fase1, browser bebas). CLI `komisi_grab` tetap interaktif (jeda manual).
-- 🔧 **C (set/takedown) — INVESTIGASI TUNTAS (10 Jul)**. Op WRITE asli (dari sniff `komisi_sniff`):
-  - **SET** = `CreateOpenCampaigns` — vars `{items:[{itemId,itemName}], commissionRate:<%×1000>, startNow:true, pageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`.
-  - **TAKEDOWN** = `RemoveOpenCampaigns` — vars `{commissionIds:[...], campaignPageSource:19, campaignChannelSource:1}` → resp `isAllSuccess:true`. (UI ada modal "Yakin hapus? pembayaran distop 00:00 tgl-X" tapi komisi LANGSUNG kecabut.)
-  - Signature header: `x-sap-sec`+`x-sap-ri`+`af-ac-enc-dat` (per-req, SDK-generated) + `af-ac-enc-sz-token` (session-stabil) + `x-sz-sdk-version`.
-  - ❌ **API-injeksi MATI — INVESTIGASI TUNTAS (semua dicoba 10 Jul):**
-    - `requests` biasa → 403. `sync XHR` via run_js → status 0. `fetch` via run_js → 403 → redirect (window ke-wipe).
-    - Apollo client (`komisi_apollo` probe): app ini **VUE** (bukan React/Apollo), `__APOLLO_CLIENT__` **gak ke-expose**. Ada `__sap_hook_fetch`/`__monitor_sap_fetch` → `window.fetch` di-wrap TAPI cuma **monitoring**, bukan signer.
-    - Bukti final: kick localStorage OK dalam 1 call (`kicked=PENDING`), tapi `after_kick=null` → tiap fetch-inject bikin halaman **redirect** (unsigned→403). Signing `x-sap-sec` ada di **layer request internal app (axios instance)**, bukan `window.fetch` global → **mustahil direplikasi dari luar**.
-  - **DOM-automation dicoba (user pilih ini):** `takedown_komisi_browser` (dry/modal/live). ✅ **Row-matching SOLID** — search-free: ambil teks tiap baris via JS, cocokin nama produk, temuin `<div>'Hapus'` yg bener (verified idx cocok 2 produk). ❌ **Tapi klik→modal→confirm FRAGILE**: klik Hapus inkonsisten micu popup promo ("Telusuri Sekarang") ATAU **halaman ERROR** ("Kembali ke Halaman Utama") — kemungkinan **anti-bot challenge** krn halaman komisi dikunjungi automation belasan kali beruntun. Modal konfirmasi "Yakin Menghapus?" belum ke-capture bersih.
-  - ⚖️ **ASSESSMENT JUJUR:** row-matching bisa, tapi finalisasi klik+modal butuh banyak iterasi + tetap fragile (popup promo random, anti-bot challenge, Shopee ubah UI). ROI rendah (Yarra doang, 6 produk, gap 4, jarang berubah).
-  - ✅ **TES TERAKHIR (halaman PRODUK, 10 Jul):** set komisi dari halaman Produk (`?productType=ams_commission`) pakai op **`SetOpenCampaigns`** TAPI **tetap `/v3/affiliateplatform/gql` + anti-bot sig lengkap**. Endpoint lain = cuma loading. **KESIMPULAN FINAL: SEMUA jalur set/takedown komisi (affiliate & produk, semua op) mentok di gql anti-bot yg sama. API MUSTAHIL, titik.**
-  - ✅ **KEPUTUSAN FINAL (user, 10 Jul):** **set/takedown komisi = MANUAL** (dituntun dashboard #9 verdict; bot GAK nulis komisi — API mustahil, DOM fragile). **RUBAH HARGA produk komisi = OTOMATIS** → udah kepasang via **Anchor A** (`diagnosa_toko`: komisi aktif → target=harga_jual) + eksekusi Fase 2 (`set_harga` promo toko dll). Verified DRY Yarra: 47 produk ke-anchor, **15 di antaranya bot otomatis rubah harga ke harga komisi** (mis. GL-FNF-6 real 28.999→32.999). Tool DOM-auto (`takedown_komisi_browser`) di-arsipin (kalau suatu saat mau). **KOMISI C = SELESAI.**
+### 5. VOUCHER  🟡 *(← next)*
+- 👀 *harian:* voucher jalan + akan datang
+- 🔧 *jam:* keluarin-pasang balik **per-produk** pas ubah harga awal
+- ➕ *harian:* belum ada → buat voucher **SHOP-WIDE** (diskon flat **2% semua produk**, min belanja 2×AOV, auto-perpanjang H-1). Shop-wide = otomatis nutupin semua produk, ga perlu enroll per-produk.
 
----
+### 6. CAMPAIGN  🟡
+- 👀 *harian:* sesi campaign (berjalan+akan datang) + nominasi *(grab harian, pasang mingguan)*
+- 🔧 *jam:* cabut kalau < target×98,5% **atau** stok < 30 **atau** stok < pjh
+- ➕ *mingguan:* daftar kalau potongan ≤ target×98,5% **&** stok > 50 **&** stok > 10×pjh
 
-## FASE 3 — LAPORAN
-| Item | Status |
-|---|---|
-| Verdict + audit hasil aksi ke dashboard | ⏳ (belum mulai) |
+### 7. FLASH  🟡 *(cabut: endpoint rusak)*
+- 👀 *harian:* sesi flash (berjalan+akan datang) + item *(grab harian, pasang mingguan)*
+- 🔧 *jam:* cabut kalau < target−10 **atau** stok 0  ⚠️ endpoint rusak
+- ➕ *mingguan:* sesi s/d 7 hari; maks 50/sesi, per-kategori penjualan tertinggi; harga kini−10; stok > 50 **atau** > 10×pjh; stok promo maks 350
+
+*(pjh = penjualan/hari rata2 30 hari, dari Shopee BUKAN ERP. "target" jadi Harga Komisi kalau produk aktif komisi.)*
 
 ---
 
-## ⏸️ PR / PEKERJAAN RUMAH (jangan lupa — bahas &/atau koding)
-- ✅🗣️ **KOMISI — arah UDAH diputusin (10 Jul), tinggal koding** (spec masuk `RENCANA_FASE2.md`). Ringkas: (1) **Fase 1** grab komisi Shopee semua toko → dashboard tab Komisi **2 tabel banding** (Syntra vs Shopee) [#9]; (2) **Fase 2 per-jam** komisi aktif → **Harga Komisi = patokan** semua promo (poin 3·0); (3) **Fase 2 harian** banding → set/takedown komisi + rubah harga. **Sub-detail masih perlu dibahas pas ngoding:** aturan enroll komisi presisi (produk mana yg "harusnya dikomisikan"), sumber harga komisi Syntra (tabel/kolom mana), handling multi-toko. Cuma **YARRA** aktif skrg.
-- 🗣️ **Arah lanjut Fase 2** (abis poin 1–4 DRY lengkap): mulai **provisioning** (paket/voucher dulu) ATAU **verifikasi live 3c/3d** dulu ATAU **Komisi (anchor+dashboard)** dulu?
-- ⏸️ **[3c] Endpoint takedown FLASH per-item** — `set_shop_flash_sale_items` ditolak Shopee (code 1001 "spex common error") 100% → `config.SKIP_FLASH_TAKEDOWN=True` bikin `flash_sale.takedown_items` ke-skip total. Kode diagnosa+eksekusi (`eksekusi_takedown_flash`) UDAH siap. **PR: re-sniff endpoint remove-item flash yg benar** (kandidat: `set_shop_flash_sale` level-SESI `{flash_sale_id,time_slot_id,status}`), lalu balikin `SKIP_FLASH_TAKEDOWN=False`. Sampai itu, flash takedown TIDAK jalan walau LIVE.
-- ⏸️ **[3c/3d] Verifikasi LIVE takedown flash & campaign** — belum kebukti end-to-end (saat dikerjain 10 Jul: flash 0 sesi, campaign 0 nominasi). Tes ulang pas ada sesi/nominasi aktif.
-- ⏸️ **[3d] Campaign takedown saat window NOMINASI udah tutup** — `eksekusi_takedown_campaign` pakai `open_sessions(window="sesi")` (sesi berjalan) buat resolve `nomination_id`. **BELUM diuji** apakah `opt_out` valid kalau nominasi udah closed tapi produk masih jalan. Kalau ditolak → cari endpoint withdraw lain / cache nomination_id pas nominasi masih buka.
-- ⏸️ **[kasus 4] Verifikasi LIVE edit item VOUCHER aktif** — `voucher._set_item_voucher` (keluarkan/masukkan item) pakai `PUT voucher/` (jalur sama `perpanjang_voucher`). **BELUM diverifikasi** Shopee ngebolehin edit `rule.items` voucher yg lagi BERJALAN (banyak platform ngunci item voucher aktif). Kalau ditolak → cari endpoint edit-item voucher khusus / stop+buat-ulang voucher.
-- ⏸️ **[kasus 4] Paket: deal-id per item tak diketahui** — konteks `ongoing_campaigns` ct=3 `promotion_id` KOSONG (dikonfirmasi sniff), jadi takedown paket = PUT status=2 ke SEMUA deal aktif (no-op kalau item tak di deal itu) + re-add ke **deal utama** (`baca_paket_aktif()[0]`). Konsekuensi: item bisa pindah konsolidasi ke deal utama. **PR: kalau perlu presisi, sniff endpoint "list item dalam 1 bundle_deal"** biar tau deal asal per item.
-- ⏸️ **Identifikasi "Tipe 1"** (campaign_type=1) — sniff pas aktif lagi (udah berakhir 8 Jul). Sementara: guard hold/flash.
-- ✅ **Margin garansi** — display dashboard (3 kolom, rumus identik) + Fase 2 `_margin`/`baca_biaya_sku` (bot). Temuan: "Harga Terbaik" Shopee sering margin NEGATIF (jual rugi) → takedown bener.
-- ⏸️ **Garansi konteks vs fakta 0 overlap** — konteks `campaign_type=11` (86 var Alialia) TIDAK sama dgn fakta `get_ongoing_list` (46 var). Fase 2 pakai FAKTA. **PR: investigasi campaign_type=11 itu apa** + konsistensi.
-- ⏸️ **Margin<7% guard promo tak-dikenal (Tipe 1)** — masih pakai best only, margin belum (butuh harga promo Tipe 1).
-- ⏸️ **Perpanjang promo toko** — dianggap tak bisa extend (temuan lama) → duplikat. Verifikasi endpoint kalau perlu.
-- ⏸️ Garansi "perlu ditinjau" → batalkan (detail pas modul garansi).
-- ⏸️ Paket/Voucher aturan enroll detail; Campaign/Flash pemilihan produk per-kategori.
-- ⏸️ Kategori isi awal (`run.py kategori`) — user jalanin (get_product_info sensitif anti-bot).
+## 📊 FASE 3 — LAPORAN  ⏳
+Rangkum aksi robot tiap hari (harga dibenerin, promo dipasang/dicabut) → dashboard.
 
 ---
 
-## 🧵 PETA JALAN (benang merah pembuatan Syntra Monitoring Harga)
-> Urutan besar bikin program. Panah **◀ KITA DI SINI** = posisi sekarang. Tiap langkah nyambung:
-> Fase 1 ngumpulin fakta → Fase 2 pakai fakta buat deteksi+aksi → Fase 3 laporin hasil aksi.
-
-**FASE 1 — FAKTA** (pengumpul data, jadi bahan Fase 2)
-- ✅ Core grab + scheduler + tabel fakta (garansi/campaign/flash/voucher/paket) + kategori
-- ✅ #5 Promo Toko master-detail · **#9 Komisi (banding + grab browser + jadwal harian)** · ⏳ #6 Paket · #7 Campaign
-- ⏳ Kategori isi awal (user jalanin) · realign cadence voucher/paket → harian (pas jahit Fase 2)
-
-**FASE 2 — MASALAH + SOLUSI** (deteksi PER-MODUL: per-jam / harian / mingguan)  ◀ **KITA DI SINI**
-0. ✅ **KOMISI SELESAI** — harga komisi = PATOKAN (Anchor A, per-jam) → bot **otomatis rubah harga** produk komisi ke harga komisi (verified). Set/takedown komisi = **MANUAL** (dashboard #9 nuntun; API mustahil). Grab Shopee + banding = auto.
-1. ✅ **Harga poin 1–4 (DRY)** — 3a promo toko, 4 harga dasar (+paket/voucher takedown+re-add), 3b garansi, 3c flash, 3d campaign. **Verifikasi LIVE ⏳** (+ benerin endpoint flash). ✅ target udah ikut komisi (poin 0 anchor).
-2. 🔧 **Provisioning poin 5** (`modules/provisioning.py` + `run.py provisioning [paket voucher campaign flash garansi]`, DRY paksa): ✅ Paket · Voucher · Campaign · Flash (DRY) · 🔧 **Garansi** ((a) enroll ✅, (b)/(c) ongoing perlu review: page_tab fetch 76/171 + takedown rate). Untested LIVE.
-
-**FASE 3 — LAPORAN** (verdict + audit hasil aksi ke dashboard)
-- ⏳ Belum mulai (nunggu Fase 2 jalan live).
-
-**JAHIT AKHIR:** semua modul Fase 2 masuk SCHEDULER per-cadence + Fase 3 laporan otomatis.
-
-## KPI terpusat (config.py — blok "KPI PER-MODUL")
-Semua ambang bisnis Fase 2 (pasang & takedown) SATU sumber di `config.py` (prefix `KPI_*`).
-Modul BACA dari sana (jangan hardcode). Takedown harga: `KPI_GARANSI_SELISIH/MARGIN_MIN`,
-`KPI_FLASH_SELISIH`, `KPI_CAMPAIGN_FAKTOR/STOK_MIN`. Pasang: `KPI_PAKET_TIER/USAGE_LIMIT`,
-`KPI_VOUCHER_*` (diskon/min_price faktor+buffer/band), `KPI_FLASH_*` (maks produk/stok/potong/slot),
-`KPI_CAMPAIGN_PASANG_*`. Yg pasang campaign/flash blm diwiring (provisioning ⏳) tapi KPI-nya udah siap.
+## 📍 PROGRES SEKARANG
+Fase 1 (grab) jalan **semua toko**. Fase 2 (aksi) = command terpisah, verifikasi live bertahap per-modul.
+✅ **Paket** verified live (command manual) · 🟡 **Voucher** (next) · 🟡 Garansi / Promo Toko / Campaign / Flash · ⏳ Fase 3
+⚠️ Open: endpoint **takedown flash RUSAK** (`SKIP_FLASH_TAKEDOWN`). Cadence grab udah selaras (semua promo harian/per-jam, stok dari grab produk per-jam).

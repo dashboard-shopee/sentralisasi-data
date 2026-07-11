@@ -479,15 +479,19 @@ def simpan_fakta_garansi_nom(toko, baris):
 
 
 def simpan_fakta_paket(toko, baris):
-    """baris = list {bundle_deal_id, name, status, start_time, end_time, tiers(list/None)}."""
+    """baris = list {bundle_deal_id, name, status, start_time, end_time, tiers(list/None),
+    items(list/None), item_count(int)}."""
     for b in baris:
         tr = b.get("tiers")
         b["tiers"] = json.dumps(tr) if tr else None
+        it = b.get("items")
+        b["items"] = json.dumps(it) if it else None
+        b.setdefault("item_count", None)
     return _snapshot_toko(
         "harga_fakta_paket", toko,
-        ["toko", "bundle_deal_id", "name", "status", "start_time", "end_time", "tiers"],
+        ["toko", "bundle_deal_id", "name", "status", "start_time", "end_time", "tiers", "items", "item_count"],
         [{"toko": toko, **b} for b in baris],
-        pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers",))
+        pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers", "items"))
 
 
 def baca_item_tanpa_kategori(toko, limit):

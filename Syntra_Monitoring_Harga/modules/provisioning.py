@@ -16,39 +16,59 @@ from modules import voucher as V
 
 
 def paket(shop, nama_toko, session):
-    """Paket Diskon harian — pastikan ADA 1 paket `UPSELL <toko>` + enroll SEMUA produk toko.
-    Idempotent: kalau paket UPSELL yg masih berjalan udah ada → reuse + enroll (attach idempotent);
-    kalau belum ada → buat baru (DURASI_PROMO_HARI) + enroll. DRY_RUN: buat_deal balik None →
-    cukup lapor rencana (ga bisa enroll tanpa bid). Return ringkasan."""
+    """Paket Diskon harian (spec 11 Jul). FASE 2 (FASE 1 udah grab deal+item membership):
+      1) hitung produk yg BELUM masuk paket manapun = semua produk toko − yg udah terdaftar
+         (union item semua deal aktif/mendatang, via PD.item_ids_terdaftar);
+      2) reuse paket UPSELL bot yg masih hidup; jelang-expire (H-1) → coba perpanjang, gagal → buat baru;
+         belum ada UPSELL → buat baru;
+      3) enroll produk belum-masuk; kalau isi paket lewat cap (KPI_PAKET_MAKS_ITEM) → overflow ke paket #2.
+    Idempotent: dijalanin ulang cuma nambah yg beneran belum masuk. DRY: buat_deal None → lapor rencana."""
     now = int(time.time())
-    item_ids = PD.item_ids_toko(nama_toko)
-    if not item_ids:
+    semua = set(PD.item_ids_toko(nama_toko))
+    if not semua:
         print(colorama.Fore.YELLOW + f"[prov paket] [{nama_toko}] 0 produk di olah_data — skip (grab Fase 1 dulu)" + colorama.Style.RESET_ALL)
         return {"paket": None, "produk": 0}
 
     deals = PD.list_deals(session) or []
+    terdaftar = PD.item_ids_terdaftar(session, deals)      # produk yg udah di paket manapun
+    belum = sorted(semua - terdaftar)
+    kap = PD.baca_kapasitas(session)
+    print(colorama.Fore.WHITE + f"[prov paket] [{nama_toko}] {len(semua)} produk | {len(terdaftar)} udah di paket | "
+          f"{len(belum)} BELUM | kapasitas {kap}" + colorama.Style.RESET_ALL)
+
+    if not belum:
+        print(colorama.Fore.GREEN + f"[prov paket] [{nama_toko}] semua produk udah punya paket ✓ — ga ada yg didaftarin" + colorama.Style.RESET_ALL)
+        return {"paket": None, "produk": len(semua), "belum_masuk": 0, "masuk": 0}
+
     prefix = config.NAMA_UPSELL
-    aktif = [d for d in deals
-             if str(d.get("name", "")).startswith(prefix) and int(d.get("end_time") or 0) > now]
+    jelang = config.JELANG_EXPIRE_HARI * 86400
+    _end = lambda d: int(d.get("end_time") or 0)
+    upsell = sorted([d for d in deals if str(d.get("name", "")).startswith(prefix)], key=_end, reverse=True)
 
-    if aktif:
-        d0 = aktif[0]
-        bid = d0.get("bundle_deal_id") or d0.get("id")
-        start = int(d0.get("start_time") or now)
-        end = int(d0.get("end_time") or now + config.DURASI_PROMO_HARI * 86400)
-        r = PD.enroll_semua(session, item_ids, bid, start, end)
-        print(colorama.Fore.GREEN + f"[prov paket] [{nama_toko}] reuse '{d0.get('name')}' (id {bid}) → {r}" + colorama.Style.RESET_ALL)
-        return {"paket": bid, "baru": False, **r}
+    pakai = None
+    for d in upsell:
+        if _end(d) - now > jelang:                    # masih jauh dari expire → reuse
+            pakai = d; break
+        if PD.perpanjang_deal(session, d, now):       # jelang expire → coba perpanjang
+            pakai = d; break
 
-    # belum ada paket UPSELL berjalan → buat baru
-    start, end = now + 300, now + config.DURASI_PROMO_HARI * 86400
-    bid = PD.buat_deal(session, f"{prefix} {nama_toko}", start, end)   # None kalau DRY_RUN
-    if not bid:
-        print(colorama.Fore.YELLOW + f"[prov paket] [{nama_toko}] (DRY) bakal BUAT '{prefix} {nama_toko}' + enroll {len(item_ids)} produk" + colorama.Style.RESET_ALL)
-        return {"paket": "DRY-baru", "baru": True, "produk": len(item_ids)}
-    r = PD.enroll_semua(session, item_ids, bid, start, end)
-    print(colorama.Fore.CYAN + f"[prov paket] [{nama_toko}] paket BARU {bid} → {r}" + colorama.Style.RESET_ALL)
-    return {"paket": bid, "baru": True, **r}
+    if pakai:
+        bid = pakai.get("bundle_deal_id") or pakai.get("id")
+        start = int(pakai.get("start_time") or now)
+        end = int(pakai.get("end_time") or now + config.DURASI_PROMO_HARI * 86400)
+        baru = False
+    else:
+        start, end = now + 300, now + config.DURASI_PROMO_HARI * 86400
+        bid = PD.buat_deal(session, f"{prefix} {nama_toko}", start, end)   # None kalau DRY_RUN
+        if not bid:
+            print(colorama.Fore.YELLOW + f"[prov paket] [{nama_toko}] (DRY) bakal BUAT '{prefix} {nama_toko}' + enroll {len(belum)} produk belum-masuk" + colorama.Style.RESET_ALL)
+            return {"paket": "DRY-baru", "baru": True, "belum_masuk": len(belum)}
+        baru = True
+
+    r = PD.enroll_dengan_overflow(session, belum, bid, nama_toko, start, end, prefix)
+    print((colorama.Fore.CYAN if baru else colorama.Fore.GREEN)
+          + f"[prov paket] [{nama_toko}] paket {'BARU' if baru else 'reuse'} {bid} → {r}" + colorama.Style.RESET_ALL)
+    return {"paket": bid, "baru": baru, **r}
 
 
 def _kode_voucher(nama_toko):

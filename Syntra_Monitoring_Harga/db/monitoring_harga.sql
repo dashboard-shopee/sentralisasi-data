@@ -242,10 +242,15 @@ create table if not exists harga_fakta_paket (
     start_time       timestamptz,
     end_time         timestamptz,
     tiers            jsonb,
+    items            jsonb,      -- daftar item_id di dalam paket (keanggotaan produk)
+    item_count       integer,    -- jumlah item di paket
     diperbarui_pada  timestamptz default now(),
     primary key (toko, bundle_deal_id)
 );
 create index if not exists idx_fakta_paket_toko on harga_fakta_paket(toko);
+-- kolom membership ditambah 11 Jul (idempotent utk DB lama)
+alter table harga_fakta_paket add column if not exists items jsonb;
+alter table harga_fakta_paket add column if not exists item_count integer;
 
 -- 14b. FAKTA KOMISI AFFILIATE Shopee (harian). Grain: item. Sumber: BROWSER grab
 --      (run.py komisi_grab -> GetOpenCampaignProducts, bypass anti-bot gql). Komisi AKTIF =

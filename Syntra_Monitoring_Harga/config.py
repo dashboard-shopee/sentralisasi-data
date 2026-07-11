@@ -33,8 +33,10 @@ MODE_LIVE = True
 FASE_AKTIF = [1,2,3]
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko.
-TOKO_AKTIF = []
-# TOKO_AKTIF = ["kimmioshop"]
+#    ⚠️ Lagi VERIFIKASI LIVE bertahap → scope ke 1 toko kecil dulu (Kimmioshop).
+#    Balikin ke [] kalau udah yakin semua modul aman live.
+TOKO_AKTIF = []   # SEMUA 10 toko (tes Fase 1 all-stores)
+# TOKO_AKTIF = ["kimmioshop"]   # <- scope 1 toko (verifikasi live per-modul)
 
 # 4) Setelan yang kadang diubah:
 STOK_MINIMAL = 1                 # grab hanya variasi stok >= ini (0 dilewati)
@@ -75,6 +77,9 @@ KPI_CAMPAIGN_PASANG_STOK_X_PJH = 10     # DAN stok > ini × pjh
 # ── PASANG PAKET DISKON (provisioning harian) ──
 KPI_PAKET_TIER        = [(2, 1), (3, 2), (7, 3)]  # (min_qty, diskon%): beli 2→1%, 3→2%, 7→3%
 KPI_PAKET_USAGE_LIMIT = 100000                    # kuota pemakaian paket
+KPI_PAKET_MAKS_ITEM   = 1000                      # maks produk per-paket sebelum overflow ke paket ke-2.
+                                                  # ⚠️ PROVISIONAL — batas asli Shopee blm dikonfirmasi.
+                                                  # Kalau attach mulai gagal massal, turunkan angkanya.
 
 # ── PASANG VOUCHER (provisioning harian) ──
 KPI_VOUCHER_DISKON_PCT      = 2       # diskon voucher default (%)

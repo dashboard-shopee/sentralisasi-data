@@ -137,14 +137,17 @@ def list_ongoing_status(session, page_size=100, maks_halaman=50):
             before = len(hasil)
             for it in lst:
                 iid = int(it.get("item_id") or 0); stok = int(it.get("item_current_stock") or 0)
-                floor = int((it.get("item_floor_price") or {}).get("lower_value") or 0) // FAKTOR
-                ceil = int((it.get("item_ceiling_price") or {}).get("lower_value") or 0) // FAKTOR
                 iname = it.get("item_name", "")
                 for m in (it.get("model_list") or []):
                     bi = m.get("bidding_info") or {}; pi = m.get("product_info") or {}; ci = m.get("cspu_info") or {}
                     bid_id = str(bi.get("bid_id", ""))
                     if not bid_id:
                         continue
+                    # floor/ceiling PER-MODEL dari bidding_info (verified 12 Jul, produk CREAM Alialia):
+                    #   floor_price = "Harga Terbaik Saya" · ceiling_price = "Harga Program Saya".
+                    #   (item_floor/ceiling_price = rentang IZIN per-item, BUKAN nilai nominasi → dulu salah)
+                    floor = int(bi.get("floor_price") or 0) // FAKTOR
+                    ceil = int(bi.get("ceiling_price") or 0) // FAKTOR
                     hasil[bid_id] = {"item_id": iid, "item_name": iname,
                                      "model_id": str(pi.get("model_id", "")), "model_name": pi.get("model_name", ""),
                                      "bid_id": bid_id, "bid_status": bi.get("bid_status"), "stok": stok,

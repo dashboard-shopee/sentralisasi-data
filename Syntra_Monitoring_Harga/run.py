@@ -26,6 +26,7 @@ Pemakaian:
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # cegah UnicodeEncodeError (emoji) di konsol Windows
 except Exception: pass
+import os
 import time
 from datetime import datetime
 import colorama; colorama.init()
@@ -78,23 +79,23 @@ def siklus_fase1(paksa_semua=False):
         nama = info["name"]
         try:
             session = grab_session(shop=username, i=info["i"])     # HARVEST SESI 1x utk semua tier
-            # ── TIER JAM (selalu) ──
+            # ── TIER JAM (selalu) ── produk + Promo Toko (grab per-jam, ikut STATUS)
             n, nk = fakta.fakta_produk(username, nama, session)
             T["grab"] += n; T["konteks"] += nk
             print(colorama.Fore.LIGHTGREEN_EX
                   + f"[{_t()}] [{nama}] Produk: {n} variasi, {nk} promo->konteks"
                   + colorama.Style.RESET_ALL)
-            # ── TIER HARIAN ──
+            _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
+            # ── TIER HARIAN (Fakta) ──
             if due_harian:
                 _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
                 _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
-                _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
-                _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
-            # ── TIER MINGGUAN ──
-            if due_mingguan:
-                _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
+                _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))   # grab harian
+                _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))         # grab harian
                 _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
                 _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
+            # ── TIER MINGGUAN (Fakta) ──
+            if due_mingguan:
                 _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))  # incremental (capped)
             print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] --- SELESAI ---" + colorama.Style.RESET_ALL)
         except Exception as e:
@@ -125,9 +126,9 @@ def siklus_fase1(paksa_semua=False):
     catat_fase("grab", status="gagal" if (T["grab"] == 0 and T["gagal"]) else "ok",
                keterangan=f"{T['grab']} variasi, {T['konteks']} promo, {len(toko)} toko{g}")
     if due_harian:
-        catat_fase("fakta_harian", keterangan=f"{len(toko)} toko | Garansi + Campaign")
+        catat_fase("fakta_harian", keterangan=f"{len(toko)} toko | Garansi+Campaign+Flash+Voucher+Paket")
     if due_mingguan:
-        catat_fase("fakta_mingguan", keterangan=f"{len(toko)} toko | Flash + Voucher + Paket")
+        catat_fase("fakta_mingguan", keterangan=f"{len(toko)} toko | Kategori")
     if due_bulanan:
         catat_fase("fakta_bulanan", keterangan="housekeeping (prune fakta yatim)")
 
@@ -168,11 +169,21 @@ def jalankan_fase2():
 #  Butuh olah_data terisi (grab Fase 1). ⚠️ DRY-RUN DIPAKSA (belum diverifikasi live).
 # ══════════════════════════════════════════════════════════════════
 def jalankan_provisioning(modul=("paket",)):
-    config.DRY_RUN = True   # PAKSA simulasi — belum diverifikasi live
+    # ── REM go-live BERTAHAP ──
+    # Default: PAKSA DRY (aman). LIVE cuma kalau env PROV_LIVE=1 diset SENGAJA di command itu.
+    # Contoh live 1 toko: set TOKO_AKTIF=["kimmioshop"] di config, lalu:
+    #   (PowerShell)  $env:PROV_LIVE=1; python run.py provisioning paket
+    #   (bash)        PROV_LIVE=1 python run.py provisioning paket
+    prov_live = os.getenv("PROV_LIVE", "0") == "1"
+    if not prov_live:
+        config.DRY_RUN = True   # belum di-opt-in live -> paksa simulasi
     from modules import provisioning as P
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROVISIONING {list(modul)} — {len(toko)} toko — DRY-RUN (paksa) ===" + colorama.Style.RESET_ALL)
+    mode_txt = "DRY-RUN (paksa)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROVISIONING {list(modul)} — {len(toko)} toko [{', '.join(toko)}] — {mode_txt} ===" + colorama.Style.RESET_ALL)
+    if not config.DRY_RUN:
+        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE AKTIF (PROV_LIVE=1). Aksi provisioning bakal beneran ke Shopee." + colorama.Style.RESET_ALL)
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -190,8 +201,8 @@ def jalankan_provisioning(modul=("paket",)):
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL provisioning: {e}" + colorama.Style.RESET_ALL)
         close_session()
-    catat_fase("provisioning", keterangan=f"poin 5 {list(modul)} (DRY-RUN paksa)")
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === PROVISIONING SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
+    catat_fase("provisioning", keterangan=f"poin 5 {list(modul)} ({mode_txt})")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === PROVISIONING SELESAI ({mode_txt}) ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -223,7 +234,7 @@ def jalankan_kategori():
 def scheduler():
     menit = int(config.MENIT_RUNNING)
     print(colorama.Fore.LIGHTMAGENTA_EX
-          + f"[{_t()}] Scheduler HARGA aktif — Fase 1 (Fakta). Nembak tiap jam di menit {menit:02d}. "
+          + f"[{_t()}] Scheduler aktif — FASE 1 (Fakta, read-only). Nembak tiap jam di menit {menit:02d}. "
           + f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00 · "
           + f"Bulanan tgl-{config.TANGGAL_FAKTA_BULANAN}@{config.JAM_FAKTA_BULANAN}:00"
           + colorama.Style.RESET_ALL)

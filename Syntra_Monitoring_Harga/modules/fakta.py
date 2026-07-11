@@ -86,7 +86,7 @@ def fakta_garansi_nom(nama_toko, session):
     return n
 
 
-# ── TIER HARIAN: Campaign (sesi buka-nominasi + produk ternominasi) ──
+# ── TIER HARIAN: Campaign (grab harian; pasang mingguan) — sesi buka-nominasi + produk ternominasi ──
 def fakta_campaign(nama_toko, session):
     """campaign.open_sessions + get_nominated -> fakta_campaign_sesi + _item.
     Return (n_sesi, n_item)."""
@@ -126,7 +126,7 @@ def fakta_campaign(nama_toko, session):
     return ns, ni
 
 
-# ── TIER MINGGUAN: Flash Sale (sesi + item) ──
+# ── TIER HARIAN: Flash Sale (grab harian; pasang mingguan) — sesi + item ──
 def fakta_flash(nama_toko, session):
     """flash_sale.list_flash_sale + items_flash_sale -> fakta_flash_sesi + _item.
     Return (n_sesi, n_item)."""
@@ -167,7 +167,7 @@ def fakta_flash(nama_toko, session):
     return ns, ni
 
 
-# ── TIER MINGGUAN: Voucher ──
+# ── TIER HARIAN: Voucher ──
 def _num(x):
     """Rupiah/persen string ('50000.00') -> float; None/'' -> None."""
     if x in (None, "", "None"):
@@ -217,7 +217,7 @@ def fakta_voucher(nama_toko, session):
     return n
 
 
-# ── TIER MINGGUAN: Paket Diskon ──
+# ── TIER HARIAN: Paket Diskon ──
 def fakta_paket(nama_toko, session):
     """paket_diskon.list_deals -> harga_fakta_paket. Return jumlah bundle."""
     from modules import paket_diskon
@@ -229,6 +229,7 @@ def fakta_paket(nama_toko, session):
         bid = d.get("bundle_deal_id") or d.get("id")
         if not bid:
             continue
+        items = paket_diskon.baca_item_deal(session, int(bid))   # keanggotaan produk per paket
         baris.append({
             "bundle_deal_id": int(bid),
             "name": d.get("name") or None,
@@ -236,13 +237,15 @@ def fakta_paket(nama_toko, session):
             "start_time": _iso(d.get("start_time")),
             "end_time": _iso(d.get("end_time")),
             "tiers": d.get("additional_tiers") or d.get("tiers") or None,
+            "items": items,
+            "item_count": len(items),
         })
     n = SQL.simpan_fakta_paket(nama_toko, baris)
     _log(nama_toko, f"Paket Diskon: {n}", colorama.Fore.LIGHTGREEN_EX)
     return n
 
 
-# ── PROMO TOKO entity (tier harian) — buat Pusat Promosi master-detail ──
+# ── PROMO TOKO entity (tier JAM) — buat Pusat Promosi master-detail ──
 def fakta_promo_toko(username, nama_toko, session):
     """grab_semua_promo (berjalan+akan datang) + detail + item -> harga_fakta_promo_toko(+_item).
     Return (n_promo, n_item)."""
