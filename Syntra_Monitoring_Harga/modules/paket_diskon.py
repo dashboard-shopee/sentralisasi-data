@@ -279,16 +279,6 @@ def enroll_semua(session, item_ids, bundle_deal_id, start_time, end_time):
     return hasil
 
 
-def perpanjang_deal(session, deal, now):
-    """Coba perpanjang masa paket (dipanggil H-1 jelang expire). BELUM didukung:
-    endpoint edit end_time belum di-sniff. Return False → caller buat paket baru (spec fallback).
-    TODO: sniff endpoint edit bundle_deal (kandidat PUT base + {bundle_deal_id, end_time})."""
-    bid = deal.get("bundle_deal_id") or deal.get("id")
-    print(colorama.Fore.YELLOW + f"[paket diskon] perpanjang {bid} BELUM didukung (endpoint edit blm ada) "
-          f"→ akan buat paket baru" + colorama.Style.RESET_ALL)
-    return False
-
-
 def enroll_dengan_overflow(session, item_ids, bid, nama_toko, start, end, prefix, maks=None):
     """Enroll item ke paket `bid`; kalau isi paket lewat `maks` (cap per-paket), sisanya
     TUMPAH ke paket tambahan '<prefix> <toko> #N'. Return ringkasan gabungan.

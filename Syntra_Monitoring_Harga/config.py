@@ -18,36 +18,34 @@ load_dotenv()
 # ║                    PENGATURAN UTAMA — EDIT DI SINI                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-# 1) MODE — simulasi atau beneran?
-#    False = DRY-RUN (SIMULASI, AMAN): hitung + catat rencana, TIDAK ubah Shopee.
+# 1) MODE — simulasi atau live?
+#    False = DRY-RUN (SIMULASI, aman): hitung + catat rencana, TIDAK ubah Shopee.
 #    True  = LIVE: beneran ubah harga / bikin promo di Shopee.
 MODE_LIVE = True
 
-# 2) FASE yang dijalankan saat dobel-klik RUN.bat (python run.py tanpa argumen).
-#    Boleh gabung, dijalankan berurutan.
-#      1 = GRAB produk + konteks promo + HPP Jubelio
-#      2 = RUBAH HARGA ke Harga Diskon (butuh MODE_LIVE=True biar beneran)
-#      3 = VERIFIKASI (re-grab + banding harga real vs target)
-#      4 = PERPANJANG / buat Promo Toko
-#    Contoh: [1] · [2,3] · [1,2,3] full · [4]
-FASE_AKTIF = [1,2,3]
+# 2) FASE yang dijalankan scheduler (arsitektur 3 FASE):
+#      1 = FAKTA          (grab data, READ-ONLY)
+#      2 = MASALAH+SOLUSI (benerin harga + pasang/cabut promo)  → skrg command TERPISAH, belum di-scheduler
+#      3 = LAPORAN        (rangkum aksi)                         → belum dibikin
+#    ⚠️ Sekarang scheduler cuma jalanin FASE 1. Fase 2 manual: `run.py provisioning [modul]` / `run.py fase2`.
+FASE_AKTIF = [1]
 
-# 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko.
-#    ⚠️ Lagi VERIFIKASI LIVE bertahap → scope ke 1 toko kecil dulu (Kimmioshop).
-#    Balikin ke [] kalau udah yakin semua modul aman live.
-TOKO_AKTIF = []   # SEMUA 10 toko (tes Fase 1 all-stores)
-# TOKO_AKTIF = ["kimmioshop"]   # <- scope 1 toko (verifikasi live per-modul)
+# 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
+TOKO_AKTIF = []
 
-# 4) Setelan yang kadang diubah:
-STOK_MINIMAL = 1                 # grab hanya variasi stok >= ini (0 dilewati)
-NAMA_PROMO = "PROMO TOKO"        # nama campaign Diskon Toko yang dikelola bot
-NAMA_UPSELL = "UPSELL"           # prefix nama paket diskon / voucher yg dikelola bot (idempotent)
-JELANG_EXPIRE_HARI = 1           # perpanjang promo bila sisa <= ini (hari)
-DURASI_PROMO_HARI = 180          # durasi promo baru (maks 180 sesuai Shopee)
-BUAT_PROMO_DARI_NOL = True       # bikin promo baru kalau toko belum punya promo toko
-JEDA_VERIFIKASI_DETIK = 30        # jeda sebelum Fase 3 re-grab (beri waktu Shopee propagasi harga)
+# 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
+#    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
+MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
 
-# ── (turunan otomatis dari MODE_LIVE; env HARGA_LIVE=1 juga memaksa LIVE) ──
+# 5) Setelan lain:
+STOK_MINIMAL        = 1            # grab hanya variasi stok >= ini (0 dilewati)
+NAMA_PROMO          = "PROMO TOKO" # nama campaign Diskon Toko yang dikelola bot
+NAMA_UPSELL         = "UPSELL"     # prefix nama paket/voucher yg dikelola bot (idempotent)
+JELANG_EXPIRE_HARI  = 1            # promo dianggap "mau abis" bila sisa <= ini (hari)
+DURASI_PROMO_HARI   = 180          # durasi promo baru (maks 180 sesuai Shopee)
+BUAT_PROMO_DARI_NOL = True         # bikin promo toko baru kalau toko belum punya
+
+# ── (turunan MODE_LIVE; env HARGA_LIVE=1 juga memaksa LIVE) ──
 DRY_RUN = not (MODE_LIVE or os.getenv("HARGA_LIVE", "0") == "1")
 
 
@@ -77,9 +75,10 @@ KPI_CAMPAIGN_PASANG_STOK_X_PJH = 10     # DAN stok > ini × pjh
 # ── PASANG PAKET DISKON (provisioning harian) ──
 KPI_PAKET_TIER        = [(2, 1), (3, 2), (7, 3)]  # (min_qty, diskon%): beli 2→1%, 3→2%, 7→3%
 KPI_PAKET_USAGE_LIMIT = 100000                    # kuota pemakaian paket
-KPI_PAKET_MAKS_ITEM   = 1000                      # maks produk per-paket sebelum overflow ke paket ke-2.
-                                                  # ⚠️ PROVISIONAL — batas asli Shopee blm dikonfirmasi.
-                                                  # Kalau attach mulai gagal massal, turunkan angkanya.
+KPI_PAKET_MAKS_ITEM   = 100000                    # maks produk per-paket → EFEKTIF 1 paket (ga overflow).
+                                                  # Batas item asli Shopee GA di-ekspos API (cek 12 Jul); paket
+                                                  # #5 lama muat 227 produk lancar. Kalau nanti attach gagal
+                                                  # massal (deal penuh), turunkan ke angka asli yg ketauan.
 
 # ── PASANG VOUCHER (provisioning harian) ──
 KPI_VOUCHER_DISKON_PCT      = 2       # diskon voucher default (%)
@@ -100,20 +99,13 @@ KPI_FLASH_PASANG_STOK_X_PJH    = 10   # ATAU stok > ini × pjh
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║        SCHEDULER 24 JAM — FASE 1 (pola sama Syntra_Iklan)          ║
-# ║  Bot nyala terus, detak tiap 3 detik (tanpa log), nembak 1×/jam    ║
-# ║  di menit MENIT_RUNNING. Tiap tier fakta dipicu by JAM/HARI/TGL.   ║
-# ║  Semua bisa di-custom di sini.                                     ║
+# ║   JADWAL TRIGGER SCHEDULER (Fase 1). Bot nyala terus, detak 3 dtk, ║
+# ║   nembak 1×/jam di menit MENIT_RUNNING. (Tier BULANAN dihapus.)    ║
 # ╚══════════════════════════════════════════════════════════════════╝
-MENIT_RUNNING         = "5"       # nembak tiap jam di menit ini (:05)
-# TIER HARIAN (Garansi + Campaign) — jalan sekali sehari di jam ini.
-JAM_FAKTA_HARIAN      = "2"       # 02:00
-# TIER MINGGUAN (Flash Sale + Voucher + Paket Diskon) — sekali seminggu.
-HARI_FAKTA_MINGGUAN   = "SENIN"   # hari grab mingguan
-JAM_FAKTA_MINGGUAN    = "3"       # 03:00 (di hari mingguan)
-# TIER BULANAN (housekeeping: prune fakta yatim) — sekali sebulan.
-TANGGAL_FAKTA_BULANAN = "1"       # tanggal grab bulanan
-JAM_FAKTA_BULANAN     = "4"       # 04:00 (di tanggal bulanan)
+MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
+JAM_FAKTA_HARIAN    = "2"        # tier HARIAN jalan sekali sehari jam ini (02:00)
+HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari
+JAM_FAKTA_MINGGUAN  = "3"        # tier MINGGUAN: jam (03:00 di hari itu)
 
 # Map weekday Inggris -> Indonesia (buat banding dgn HARI_FAKTA_MINGGUAN).
 HARI_ID = {
@@ -293,42 +285,9 @@ def fmt_angka(n):
         return str(n)
 
 
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║   LEGACY — Google Sheet (warisan bot 02, dipakai modul lama saja)  ║
-# ║   Sudah migrasi ke SQL; JANGAN dipakai lagi. Disimpan agar modul    ║
-# ║   warisan (sku_sync/update_campaign/verifikasi_harga) tidak error.  ║
-# ╚══════════════════════════════════════════════════════════════════╝
-SHEET_ID = "1DQpoWjbeGMuM5MNOucN9g35CYEJQo5QX8B_iaLeyS3s"
-SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit"
-TAB_HARGA = "Olah Data"
-BARIS_AWAL = 3
-TAB_ALL_PRODUK = "ALL PRODUK"
-BARIS_AWAL_ALL_PRODUK = 3
-SINKRON_SKU_AKTIF = True
-FMT_TANGGAL_SKU = "%d/%m/%y"
-FMT_TIMESTAMP = "Terakhir diupdate: %d/%m/%Y %H:%M:%S"
-# Pemetaan kolom sheet lama (kol 'alasan'/'harga_diskon'/'keterangan' masih dirujuk modul warisan).
+# ── Peta nama→huruf kolom (sisa era Google Sheet; masih dirujuk `update_harga.py` via config.KOL). ──
 KOL = {
     "toko": "A", "item": "B", "model": "C", "sku": "E", "nama_variasi": "F",
     "nama_produk": "G", "harga_awal": "H", "harga_akhir": "K", "harga_diskon": "L",
     "keterangan": "N", "alasan": "O",
 }
-
-
-def google_service_account():
-    """Rekonstruksi dict service-account gspread (warisan; SQL tak memakainya)."""
-    client_email = os.getenv("GOOGLE_CLIENT_EMAIL", "")
-    return {
-        "type": "service_account",
-        "project_id": os.getenv("GOOGLE_PROJECT_ID", ""),
-        "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID", ""),
-        "private_key": os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\n", "\n"),
-        "client_email": client_email,
-        "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/"
-        + client_email.replace("@", "%40"),
-        "universe_domain": "googleapis.com",
-    }

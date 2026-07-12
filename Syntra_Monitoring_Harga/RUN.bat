@@ -2,9 +2,9 @@
 title Syntra Monitoring Harga
 cd /d "%~dp0"
 echo ================================================
-echo   SYNTRA MONITORING HARGA
-echo   Jalanin fase sesuai FASE_AKTIF di config.py
-echo   (1=grab  2=rubah  3=verifikasi  4=perpanjang)
+echo   SYNTRA MONITORING HARGA - SCHEDULER
+echo   Atur di config.py: FASE_AKTIF . TOKO_AKTIF . MODUL_AKTIF . jam trigger
+echo   Fase: 1=Fakta(grab)  2=Masalah+Solusi  3=Laporan
 echo ================================================
 python run.py
 echo.

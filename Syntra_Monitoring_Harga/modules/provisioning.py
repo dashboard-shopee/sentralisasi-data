@@ -19,9 +19,10 @@ def paket(shop, nama_toko, session):
     """Paket Diskon harian (spec 11 Jul). FASE 2 (FASE 1 udah grab deal+item membership):
       1) hitung produk yg BELUM masuk paket manapun = semua produk toko − yg udah terdaftar
          (union item semua deal aktif/mendatang, via PD.item_ids_terdaftar);
-      2) reuse paket UPSELL bot yg masih hidup; jelang-expire (H-1) → coba perpanjang, gagal → buat baru;
+      2) reuse paket UPSELL bot yg masih hidup; jelang-expire (H-1) → BUAT BARU (bukan perpanjang);
          belum ada UPSELL → buat baru;
-      3) enroll produk belum-masuk; kalau isi paket lewat cap (KPI_PAKET_MAKS_ITEM) → overflow ke paket #2.
+      3) enroll produk belum-masuk ke 1 paket (cap KPI_PAKET_MAKS_ITEM tinggi = efektif 1 paket;
+         batas item asli Shopee belum ketemu → overflow cuma jaga2 kalau attach mulai gagal massal).
     Idempotent: dijalanin ulang cuma nambah yg beneran belum masuk. DRY: buat_deal None → lapor rencana."""
     now = int(time.time())
     semua = set(PD.item_ids_toko(nama_toko))
@@ -49,8 +50,8 @@ def paket(shop, nama_toko, session):
     for d in upsell:
         if _end(d) - now > jelang:                    # masih jauh dari expire → reuse
             pakai = d; break
-        if PD.perpanjang_deal(session, d, now):       # jelang expire → coba perpanjang
-            pakai = d; break
+        # jelang-expire (≤ H-1) → JANGAN reuse; biar jatuh ke buat-baru
+        # (keputusan owner 12 Jul: expire = BUAT BARU, bukan perpanjang)
 
     if pakai:
         bid = pakai.get("bundle_deal_id") or pakai.get("id")

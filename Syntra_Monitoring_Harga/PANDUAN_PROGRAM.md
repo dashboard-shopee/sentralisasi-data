@@ -174,7 +174,43 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 
 ---
 
-## 📎 11. CATATAN TEKNIS (buat dev / sesi baru — owner boleh skip)
+## 📎 11. CATATAN TEKNIS (buat dev / sesi baru)
+
+### ▶️ HANDOFF — BACA INI DULU (update 12 Jul)
+
+**POSISI SEKARANG:** Fase 1 (grab) udah jalan di **SEMUA 10 toko** (kebukti, 0 anti-bot). Fase 2 = command TERPISAH (bukan di scheduler), lagi **verifikasi live PER-MODUL**. **Paket ✅ done + verified live.** Sekarang lagi di modul **VOUCHER**.
+
+**⏳ DECISION PENDING — tanya owner dulu sebelum lanjut voucher:**
+- Voucher kalau mau abis: mau **PERPANJANG** (kondisi sekarang; endpoint jalan & lebih rapi — rekomendasi gua) ATAU **BUAT-BARU** (biar konsisten sama paket)? **Owner belum putusin.** Setelah diputusin → tes live voucher.
+
+**✅ PERUBAHAN 12–13 Jul (UDAH di-commit + push):**
+- **Paket:** jelang-expire → buat-baru (`perpanjang_deal` dihapus); `KPI_PAKET_MAKS_ITEM=100000` (cap dilepas — batas item/paket ga ada di API Shopee). Dashboard: paket bisa diklik. Grab: buang deal berakhir.
+- **Garansi:** grab fix — floor/ceiling dari `bidding_info` per-model (Harga Terbaik/Program asli). Udah re-grab semua toko.
+- **Config refactor (13 Jul):** `config.py` jadi CONTROL PANEL — `FASE_AKTIF` (arsitektur 3-fase, skrg [1]) · `TOKO_AKTIF` · `MODUL_AKTIF` (nyala/matiin modul) · trigger jam. Trigger **bulanan DIHAPUS** (housekeeping → mingguan). Legacy Sheet block dibersihin (cuma `KOL` disisain, dipake `update_harga`). `RUN.bat` echo dibetulin. Scheduler honor `FASE_AKTIF`+`MODUL_AKTIF`. KPI dicek — udah sesuai.
+- **⏳ Belum dikerjain (nunggu owner):** konsolidasi paket → owner **hapus manual** paket non-UPSELL tiap toko, baru jalanin `provisioning paket` (bot isi sisanya ke 1 UPSELL).
+
+**LANGKAH LANJUT (urutan):**
+1. Owner putusin voucher perpanjang/buat-baru → **tes live voucher** (`PROV_LIVE=1 python run.py provisioning voucher`, scope 1 toko dulu via `config.TOKO_AKTIF`).
+2. Konsolidasi paket: owner hapus paket non-UPSELL manual → jalanin `provisioning paket` → cek semua produk masuk 1 UPSELL.
+3. Lanjut modul lain live: **Garansi → Campaign → Flash**.
+4. **Poin 1–4 (kontrol harga)** — belum pernah live, paling berisiko (ngubah harga jual tiap jam), bahas hati-hati. `jalankan_fase2` masih paksa-DRY.
+5. **Fase 3 (laporan)** — belum mulai.
+
+**CARA JALANIN:**
+- Fase 1 grab: `python run.py` (scheduler) / `python run.py grab full` (manual, semua tier).
+- Fase 2 provisioning: `python run.py provisioning [modul]` — default DRY; LIVE: set env `PROV_LIVE=1` dulu.
+- Scope toko: `config.TOKO_AKTIF` (`[]`=semua 10, `["kimmioshop"]`=1 toko).
+
+**ATURAN KERJA (dari owner — WAJIB):**
+- **STATUS.md = BENANG MERAH**, spec DIKUNCI. Tiap ada perubahan: update **penanda progres di STATUS** + **detail di PANDUAN ini** (dua-duanya).
+- **Jangan HALU** — verifikasi dari kode/probe dulu sebelum ngomong. **Jangan bikin file .md baru.** Komunikasi ke owner **ringkas** (dia gampang overwhelmed).
+- Web/dashboard → auto commit+push ke `main` (Vercel). Bot Python → commit **pas owner minta**.
+
+### Cara kerja modul (Fase 2)
+- **PAKET (per hari):** semua produk toko − yg udah di paket manapun = "belum masuk" → enroll ke 1 paket "UPSELL" (tier 2→1%/3→2%/7→3%). Belum ada → buat; jelang-expire → buat-baru. Idempotent (nama prefix "UPSELL"). Konsolidasi 1 paket = owner hapus paket lain manual.
+- **VOUCHER (per hari):** `list_vouchers` → cek voucher kode **"UP*"** valid. Ada → perpanjang yg mau abis (H-1). Belum → buat voucher **SHOP-WIDE** (`ikuti_toko`): diskon **2%** (`KPI_VOUCHER_DISKON_PCT`), min belanja = **2×AOV** (`min_price_toko`, buffer 0.97). Shop-wide = nutupin semua produk otomatis, **ga enroll per-produk**. Idempotent via prefix "UP". (Voucher PRODUK per-band = fase lanjutan, blm dipakai.)
+
+---
 
 **Keputusan penting:**
 - **Komisi set/takedown = MANUAL (final).** Write komisi via API mustahil (anti-bot `x-sap-sec` SDK-generated; requests/XHR/fetch/apollo semua 403; DOM-click fragile). Bot cuma nuntun via dashboard #9. Rubah harga produk komisi tetap OTOMATIS (Anchor A: komisi aktif `harga_komisi_toko.harga_jual>0` → target=harga_jual). Komisi READ bisa via browser-listen (`komisi_grab`).
@@ -184,6 +220,10 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
   - **PAKET grab** buang deal BERAKHIR via `end_time` (`_buang_berakhir`) — Shopee kadang tetap balikin deal ended walau filter time_status.
   - **PAKET tab dashboard** bisa diklik → detail produk di dalam paket (`paket_produk` API + entri `DETAIL_CFG` di page.tsx, pola sama voucher).
   - ⚠️ garansi & paket perlu **RE-GRAB** biar data lama (salah) di DB kebenerin.
+- **Keputusan Paket (12 Jul):**
+  - **Konsolidasi ke 1 paket** — bot cuma kelola 1 paket "UPSELL", enroll produk yg belum masuk paket manapun. Paket diskon LAIN (non-UPSELL) → **owner hapus manual** (Shopee: 1 produk cuma 1 bundle deal; abis dihapus, produknya otomatis ke-enroll ke UPSELL next run). Bot GA auto-hapus paket owner (aman).
+  - **Jelang-expire = BUAT BARU** (bukan perpanjang; fungsi `perpanjang_deal` dihapus).
+  - **Batas item/paket = GA ADA di API Shopee** (cek 12 Jul: detail cuma `usage_limit`+tier, ga ada max-item; `max_active_count=1000` itu batas jumlah DEAL bukan item). Paket #5 lama muat 227 produk lancar. → `KPI_PAKET_MAKS_ITEM=100000` (efektif 1 paket, ga overflow). Kalau nanti attach gagal massal (deal penuh) → baru ketauan angka asli, turunin.
 
 **Kode error / anti-bot:**
 - `1400101531` = item udah di bundle deal lain (Shopee: 1 produk cuma 1 bundle deal).
@@ -195,15 +235,17 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 - [Campaign] withdraw pas nominasi udah tutup belum diuji.
 - [Voucher] edit item voucher aktif (`PUT voucher/`) belum diverif Shopee bolehin.
 - [Paket] endpoint perpanjang deal belum di-sniff (skrg fallback buat-baru); konfirmasi cap item/paket (guess 1000).
+- ⏸️ **[Paket] ZIOSCARF & BEVERRA** — `bundle_deal/list/` sering balik `1400101507 database unavailable` (flaky/mostly-down di sisi SHOPEE, khusus 2 akun ini). **Request kita udah BENAR** (probe sempet tembus code=0; param/session identik toko lain, bukan port/browser/bug). Retry 7x beruntun gagal. **Keputusan (12 Jul): HOLD** — serahin ke grab harian (auto-retry), jangan dipaksa. 8 toko lain paket-nya OK.
 - [Komisi] peta SKU→item_id lengkap (SKU stok-0 hilang).
 - [Dashboard] DETAIL_CFG campaign (paket ✅ udah). [Kategori] isi awal (user jalanin).
 - ✅ "Fase 1 harus sejalan" BERES (12 Jul) — semua promo grab harian/per-jam; stok dari grab produk per-jam.
 
-**Saklar go-live (`config.py`):**
-- `MODE_LIVE=True` · `TOKO_AKTIF=[]` (semua 10 toko; Fase 1 all-stores). Scope 1 toko: `["kimmioshop"]`.
-- **Scheduler = FASE 1 doang** (grab, read-only). Fase 2 (provisioning + harga) = command TERPISAH.
-- Provisioning (Fase 2 poin 5): `python run.py provisioning [modul]` — default DRY, live pakai env `PROV_LIVE=1`.
-- `jalankan_fase2` (harga poin 1–4) masih paksa-DRY, command terpisah. `SKIP_FLASH_TAKEDOWN=True`.
+**Config = CONTROL PANEL (`config.py`) — jalanin: double-klik `RUN.bat`:**
+- `MODE_LIVE` (True=live / False=DRY simulasi) · `DRY_RUN` turunan (env `HARGA_LIVE=1` paksa live).
+- `FASE_AKTIF=[1]` — fase yg dijalanin scheduler (1=Fakta WIRED · 2=aksi command terpisah · 3=belum dibikin).
+- `TOKO_AKTIF` (`[]`=semua 10 · `["kimmioshop"]`=1 toko) · `MODUL_AKTIF` (list modul yg di-grab; buang = skip).
+- Trigger: `MENIT_RUNNING` · `JAM_FAKTA_HARIAN` · `HARI_FAKTA_MINGGUAN`+`JAM_FAKTA_MINGGUAN`. (bulanan DIHAPUS.)
+- **Scheduler = FASE 1 grab doang.** Fase 2 command TERPISAH: `run.py provisioning [modul]` (default DRY, live env `PROV_LIVE=1`) · `run.py fase2` (harga, masih paksa-DRY). `SKIP_FLASH_TAKEDOWN=True`.
 
 **Commands:** `run.py` (scheduler F1+provisioning) · `grab`/`grab full` · `kategori` · `fase2` · `provisioning [modul]` · `komisi_grab` · `*_sniff`.
 **KPI:** semua ambang di `config.py` blok "KPI PER-MODUL" (`KPI_*`), modul BACA dari sana (jangan hardcode).

@@ -71,12 +71,13 @@ Format tiap modul: 👀 LIHAT (Fase 1) · 🔧 CABUT (poin 1–4, tiap jam) · �
 ### 4. PAKET  🔴 *(logika verified LIVE · jalan lewat command `provisioning paket`)*
 - 👀 *harian:* paket (berjalan+akan datang) + produk di tiap paket (membership)
 - 🔧 *jam:* keluarin-pasang balik produk **per-produk** pas ubah harga awal (poin 4)
-- ➕ *harian:* produk belum masuk paket manapun → masukin UPSELL. Tier 2→1% / 3→2% / 7→3%. Usahain 1 paket; lewat 1000 → paket #2. Belum ada → buat. Jelang-expire → perpanjang H-1 / buat baru
+- ➕ *harian:* produk belum masuk paket manapun → masukin UPSELL, **target 1 PAKET** (batas item Shopee ga ketauan → ga overflow). Tier 2→1% / 3→2% / 7→3%. Belum ada → buat. Jelang-expire → **buat baru** (bukan perpanjang). Konsolidasi ke 1 paket: **owner hapus paket lain manual**, bot isi sisanya ke UPSELL.
 
-### 5. VOUCHER  🟡 *(← next)*
+### 5. VOUCHER  🟡 *(← NEXT — lagi dibahas)*
 - 👀 *harian:* voucher jalan + akan datang
 - 🔧 *jam:* keluarin-pasang balik **per-produk** pas ubah harga awal
 - ➕ *harian:* belum ada → buat voucher **SHOP-WIDE** (diskon flat **2% semua produk**, min belanja 2×AOV, auto-perpanjang H-1). Shop-wide = otomatis nutupin semua produk, ga perlu enroll per-produk.
+- ⏳ **DECISION PENDING (owner):** voucher mau tetap **perpanjang** (skrg, endpoint jalan) atau **buat-baru** (kaya paket)? Detail di PANDUAN. Belum dites live.
 
 ### 6. CAMPAIGN  🟡
 - 👀 *harian:* sesi campaign (berjalan+akan datang) + nominasi *(grab harian, pasang mingguan)*
@@ -97,7 +98,13 @@ Rangkum aksi robot tiap hari (harga dibenerin, promo dipasang/dicabut) → dashb
 
 ---
 
-## 📍 PROGRES SEKARANG
-Fase 1 (grab) jalan **semua toko**. Fase 2 (aksi) = command terpisah, verifikasi live bertahap per-modul.
-✅ **Paket** verified live (command manual) · 🟡 **Voucher** (next) · 🟡 Garansi / Promo Toko / Campaign / Flash · ⏳ Fase 3
-⚠️ Open: endpoint **takedown flash RUSAK** (`SKIP_FLASH_TAKEDOWN`). Cadence grab udah selaras (semua promo harian/per-jam, stok dari grab produk per-jam).
+## 📍 PROGRES SEKARANG (update 13 Jul)
+Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Fase 2 (aksi) = command terpisah, verifikasi live bertahap per-modul.
+- 🔧 **Config = control panel** — double-klik `RUN.bat` → scheduler. Atur di `config.py`: `FASE_AKTIF` · `TOKO_AKTIF` · `MODUL_AKTIF` · jam trigger. Trigger bulanan dibuang (housekeeping → mingguan), legacy Sheet dibersihin, KPI dicek sesuai.
+- ✅ **Paket** verified live (command manual) — logika beres + refinement 12 Jul (buat-baru, 1 paket, cap dilepas)
+- 🟡 **Voucher** = NEXT — logika beres (shop-wide 2%), **nunggu owner putusin perpanjang/buat-baru**, terus tes live
+- 🟡 Garansi / Promo Toko / Campaign / Flash — logika beres, belum tes live
+- ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (belum pernah live, masih paksa-DRY)
+
+**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — ada decision pending, perubahan belum di-commit, & langkah lanjut.
+⚠️ Open lain: takedown flash endpoint RUSAK · paket ZIOSCARF/BEVERRA flaky Shopee (hold).
