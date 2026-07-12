@@ -26,7 +26,6 @@ Pemakaian:
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # cegah UnicodeEncodeError (emoji) di konsol Windows
 except Exception: pass
-import os
 import time
 from datetime import datetime
 import colorama; colorama.init()
@@ -138,14 +137,14 @@ def siklus_fase1(paksa_semua=False):
 
 # ══════════════════════════════════════════════════════════════════
 #  FASE 2 (MASALAH+SOLUSI) modul HARGA — per-toko: grab FRESH -> diagnosa -> eksekusi.
-#  ⚠️ v1 DRY-RUN DIPAKSA (belum diverifikasi live). Hapus paksa kalau udah yakin.
+#  Mode ikut config.MODE_LIVE (False=DRY simulasi · True=LIVE beneran).
 # ══════════════════════════════════════════════════════════════════
 def jalankan_fase2():
-    config.DRY_RUN = True   # PAKSA simulasi — v1 belum diverifikasi live (config MODE_LIVE bisa True)
     from modules import fase2_harga as F2
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (HARGA) — {len(toko)} toko — DRY-RUN (paksa) ===" + colorama.Style.RESET_ALL)
+    mode_txt = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (HARGA) — {len(toko)} toko — {mode_txt} ===" + colorama.Style.RESET_ALL)
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -161,30 +160,21 @@ def jalankan_fase2():
         except Exception as e:
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
         close_session()
-    catat_fase("rubah_harga", keterangan="Fase 2 v1 (promo toko + harga dasar + takedown flash/campaign, DRY-RUN paksa)")
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI (DRY-RUN) ===" + colorama.Style.RESET_ALL)
+    catat_fase("rubah_harga", keterangan=f"Fase 2 harga (promo toko + harga dasar + takedown flash/campaign, {mode_txt})")
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode_txt}) ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
-#  FASE 2 poin 5 — PROVISIONING (pasang/daftar upsell). Cadence HARIAN (paket+voucher).
-#  Butuh olah_data terisi (grab Fase 1). ⚠️ DRY-RUN DIPAKSA (belum diverifikasi live).
+#  FASE 2 poin 5 — PROVISIONING (pasang/daftar upsell). Mode ikut config.MODE_LIVE.
 # ══════════════════════════════════════════════════════════════════
 def jalankan_provisioning(modul=("paket",)):
-    # ── REM go-live BERTAHAP ──
-    # Default: PAKSA DRY (aman). LIVE cuma kalau env PROV_LIVE=1 diset SENGAJA di command itu.
-    # Contoh live 1 toko: set TOKO_AKTIF=["kimmioshop"] di config, lalu:
-    #   (PowerShell)  $env:PROV_LIVE=1; python run.py provisioning paket
-    #   (bash)        PROV_LIVE=1 python run.py provisioning paket
-    prov_live = os.getenv("PROV_LIVE", "0") == "1"
-    if not prov_live:
-        config.DRY_RUN = True   # belum di-opt-in live -> paksa simulasi
     from modules import provisioning as P
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
-    mode_txt = "DRY-RUN (paksa)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
+    mode_txt = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
     print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROVISIONING {list(modul)} — {len(toko)} toko [{', '.join(toko)}] — {mode_txt} ===" + colorama.Style.RESET_ALL)
     if not config.DRY_RUN:
-        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE AKTIF (PROV_LIVE=1). Aksi provisioning bakal beneran ke Shopee." + colorama.Style.RESET_ALL)
+        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE (MODE_LIVE=True). Aksi provisioning bakal beneran ke Shopee." + colorama.Style.RESET_ALL)
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -209,7 +199,7 @@ def jalankan_provisioning(modul=("paket",)):
 # ══════════════════════════════════════════════════════════════════
 #  FASE 2 (AKSI) — orkestrasi buat SCHEDULER (dipanggil kalau 2 ada di FASE_AKTIF).
 #  Poin 1–4 (harga) = tiap JAM · Poin 5 (provisioning) = per CADENCE (ikut MODUL_AKTIF).
-#  AMAN: harga PAKSA-DRY; provisioning DRY kecuali env PROV_LIVE=1. Data fresh (tiap sub-langkah grab sendiri).
+#  Mode ikut config.MODE_LIVE (semua modul live/DRY bareng). Data fresh (tiap sub-langkah grab sendiri).
 # ══════════════════════════════════════════════════════════════════
 def siklus_fase2(paksa_semua=False):
     skr = jam_siklus.now()
@@ -261,8 +251,8 @@ def scheduler():
           + f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00"
           + colorama.Style.RESET_ALL)
     if 2 in fase:
-        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 2 aktif — harga PAKSA-DRY (belum verified live); "
-              + "provisioning DRY kecuali env PROV_LIVE=1. Aman." + colorama.Style.RESET_ALL)
+        m = "🔴 LIVE (ubah Shopee)" if not config.DRY_RUN else "DRY (simulasi)"
+        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 2 aktif — mode {m} (ikut MODE_LIVE)." + colorama.Style.RESET_ALL)
     if 3 in fase:
         print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 3 (laporan) belum dibikin — di-skip." + colorama.Style.RESET_ALL)
     jam_terakhir = None

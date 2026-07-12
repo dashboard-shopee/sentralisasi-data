@@ -12,7 +12,7 @@
 ```
 FASE 1 (FAKTA)   → grab data terbaru semua toko (READ-ONLY)
 FASE 2 (AKSI)    → benerin harga (poin 1-4, per-jam) + pasang/cabut promo (poin 5, per-cadence)
-                   AMAN: harga PAKSA-DRY; provisioning DRY kecuali env PROV_LIVE=1
+                   Mode ikut MODE_LIVE (1 saklar): live/DRY SEMUA modul bareng
 FASE 3 (LAPORAN) → rangkum hasil aksi                                          ⏳ belum dibikin
 ```
 **1 KESATUAN:** double-klik `RUN.bat` → scheduler jalanin fase yg ada di `FASE_AKTIF` (skrg `[1]`).
@@ -31,7 +31,7 @@ Fase tetap fungsi DISTINCT (siklus_fase1/siklus_fase2) tapi diorkestrasi 1 sched
 *(Grab ≠ aksi: campaign & flash digrab HARIAN — supaya cabut per-jam pakai data ga basi — tapi PASANG-nya tetap mingguan.)*
 
 **Poin 1–4 (cabut) = TIAP JAM semua promo. Poin 5 (pasang) = per cadence.** Cabut cepet, pasang santai.
-*(Fase 2 UDAH kejahit ke scheduler via `FASE_AKTIF` (`siklus_fase2`) — set `FASE_AKTIF=[1,2]` buat nyalain. Default `[1]`. Fase 2 aman: harga DRY, provisioning DRY kecuali `PROV_LIVE=1`. Command manual `run.py fase2`/`provisioning` tetap ada.)*
+*(Fase 2 UDAH kejahit ke scheduler via `FASE_AKTIF` (`siklus_fase2`) — set `FASE_AKTIF=[1,2]` buat nyalain. Default `[1]`. Live/DRY ikut **`MODE_LIVE`** (1 saklar, semua modul bareng). Command manual `run.py fase2`/`provisioning` tetap ada.)*
 
 ---
 
@@ -105,7 +105,7 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Fase 2 (aksi) = comman
 - ✅ **Paket** verified live (command manual) — logika beres + refinement 12 Jul (buat-baru, 1 paket, cap dilepas)
 - 🟡 **Voucher** = NEXT — logika beres (shop-wide 2%), **nunggu owner putusin perpanjang/buat-baru**, terus tes live
 - 🟡 Garansi / Promo Toko / Campaign / Flash — logika beres, belum tes live
-- ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (belum pernah live, masih paksa-DRY)
+- ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (logika beres, belum PERNAH diverifikasi live — hati2 pas nyalain MODE_LIVE)
 
 **⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — ada decision pending, perubahan belum di-commit, & langkah lanjut.
 ⚠️ Open lain: takedown flash endpoint RUSAK · paket ZIOSCARF/BEVERRA flaky Shopee (hold).

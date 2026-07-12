@@ -18,9 +18,9 @@ load_dotenv()
 # ║                    PENGATURAN UTAMA — EDIT DI SINI                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-# 1) MODE — simulasi atau live?
-#    False = DRY-RUN (SIMULASI, aman): hitung + catat rencana, TIDAK ubah Shopee.
-#    True  = LIVE: beneran ubah harga / bikin promo di Shopee.
+# 1) 🔴 SAKLAR LIVE — SATU-SATUNYA switch simulasi vs beneran. SEMUA modul & fase ikut ini.
+#    False = DRY-RUN (SIMULASI, AMAN): ngitung + catat rencana, TIDAK ngubah Shopee.
+#    True  = LIVE: SEMUA modul (harga poin 1-4 + provisioning poin 5) BENERAN ubah Shopee.
 MODE_LIVE = True
 
 # 2) FASE yang dijalankan scheduler (arsitektur 3 FASE):
@@ -45,8 +45,8 @@ JELANG_EXPIRE_HARI  = 1            # promo dianggap "mau abis" bila sisa <= ini 
 DURASI_PROMO_HARI   = 180          # durasi promo baru (maks 180 sesuai Shopee)
 BUAT_PROMO_DARI_NOL = True         # bikin promo toko baru kalau toko belum punya
 
-# ── (turunan MODE_LIVE; env HARGA_LIVE=1 juga memaksa LIVE) ──
-DRY_RUN = not (MODE_LIVE or os.getenv("HARGA_LIVE", "0") == "1")
+# ── DRY_RUN turunan dari MODE_LIVE (semua modul BACA config.DRY_RUN). ──
+DRY_RUN = not MODE_LIVE
 
 
 # ╔══════════════════════════════════════════════════════════════════╗

@@ -190,15 +190,15 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 - **⏳ Belum dikerjain (nunggu owner):** konsolidasi paket → owner **hapus manual** paket non-UPSELL tiap toko, baru jalanin `provisioning paket` (bot isi sisanya ke 1 UPSELL).
 
 **LANGKAH LANJUT (urutan):**
-1. Owner putusin voucher perpanjang/buat-baru → **tes live voucher** (`PROV_LIVE=1 python run.py provisioning voucher`, scope 1 toko dulu via `config.TOKO_AKTIF`).
+1. Owner putusin voucher perpanjang/buat-baru → **tes live voucher** (`python run.py provisioning voucher`; live/DRY ikut `MODE_LIVE`; scope 1 toko dulu via `config.TOKO_AKTIF`).
 2. Konsolidasi paket: owner hapus paket non-UPSELL manual → jalanin `provisioning paket` → cek semua produk masuk 1 UPSELL.
 3. Lanjut modul lain live: **Garansi → Campaign → Flash**.
-4. **Poin 1–4 (kontrol harga)** — belum pernah live, paling berisiko (ngubah harga jual tiap jam), bahas hati-hati. `jalankan_fase2` masih paksa-DRY.
+4. **Poin 1–4 (kontrol harga)** — belum pernah diverifikasi live, paling berisiko (ngubah harga jual tiap jam). Sekarang ikut `MODE_LIVE` (ga ada rem paksa-DRY lagi) → hati2, tes scope 1 toko dulu.
 5. **Fase 3 (laporan)** — belum mulai.
 
 **CARA JALANIN:**
 - Fase 1 grab: `python run.py` (scheduler) / `python run.py grab full` (manual, semua tier).
-- Fase 2 provisioning: `python run.py provisioning [modul]` — default DRY; LIVE: set env `PROV_LIVE=1` dulu.
+- Fase 2 provisioning: `python run.py provisioning [modul]` — live/DRY ikut `MODE_LIVE` (1 saklar).
 - Scope toko: `config.TOKO_AKTIF` (`[]`=semua 10, `["kimmioshop"]`=1 toko).
 
 **ATURAN KERJA (dari owner — WAJIB):**
@@ -241,11 +241,11 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 - ✅ "Fase 1 harus sejalan" BERES (12 Jul) — semua promo grab harian/per-jam; stok dari grab produk per-jam.
 
 **Config = CONTROL PANEL (`config.py`) — jalanin: double-klik `RUN.bat`:**
-- `MODE_LIVE` (True=live / False=DRY simulasi) · `DRY_RUN` turunan (env `HARGA_LIVE=1` paksa live).
+- `MODE_LIVE` = **SATU saklar** (True=SEMUA modul live · False=SEMUA DRY simulasi). `DRY_RUN` turunan otomatis.
 - `FASE_AKTIF=[1]` — fase yg dijalanin scheduler (1=Fakta · 2=aksi harga+provisioning · 3=laporan belum). **Fase 1 & 2 UDAH wired ke scheduler** (`siklus_fase1`/`siklus_fase2`); set `[1,2]` buat nyalain Fase 2.
 - `TOKO_AKTIF` (`[]`=semua 10 · `["kimmioshop"]`=1 toko) · `MODUL_AKTIF` (list modul yg di-grab & diproses; buang = skip).
 - Trigger: `MENIT_RUNNING` · `JAM_FAKTA_HARIAN` · `HARI_FAKTA_MINGGUAN`+`JAM_FAKTA_MINGGUAN`. (bulanan DIHAPUS.)
-- **Fase 2 di scheduler AMAN by default:** harga (poin 1-4) PAKSA-DRY (belum verified); provisioning DRY kecuali env `PROV_LIVE=1`. Command manual tetap ada: `run.py fase2` · `run.py provisioning [modul]`. `SKIP_FLASH_TAKEDOWN=True`.
+- **🔴 `MODE_LIVE` = SATU saklar live/DRY** — True: SEMUA modul (harga + provisioning) beneran ke Shopee; False: semua simulasi. Rem paksa-DRY & env `PROV_LIVE` **udah dihapus** (13 Jul). ⚠️ Modul selain paket belum diverifikasi live — pas nyalain, scope `TOKO_AKTIF`/`MODUL_AKTIF` dulu. Command manual tetap ada. `SKIP_FLASH_TAKEDOWN=True`.
 
 **Commands:** `run.py` (scheduler F1+provisioning) · `grab`/`grab full` · `kategori` · `fase2` · `provisioning [modul]` · `komisi_grab` · `*_sniff`.
 **KPI:** semua ambang di `config.py` blok "KPI PER-MODUL" (`KPI_*`), modul BACA dari sana (jangan hardcode).

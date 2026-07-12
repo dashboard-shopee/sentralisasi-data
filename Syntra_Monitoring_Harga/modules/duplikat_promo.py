@@ -191,7 +191,7 @@ def proses_duplikat_promo(shop, session, baris_sheet):
     if config.DRY_RUN or config.DUPLIKAT_PROMO_SIMULASI:
         print(colorama.Fore.MAGENTA
               + f"[duplikat promo] [{shop}] - [SIMULASI] tidak membuat promo (DRY_RUN/simulasi). "
-              + "Set HARGA_LIVE=1 untuk eksekusi nyata."
+              + "Set MODE_LIVE=True di config untuk eksekusi nyata."
               + colorama.Style.RESET_ALL)
         return
 
