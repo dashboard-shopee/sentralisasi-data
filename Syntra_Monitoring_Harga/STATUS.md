@@ -7,15 +7,16 @@
 
 ---
 
-## 🔁 ALUR — 3 FASE TERPISAH
+## 🔁 ALUR — 3 FASE (1 program, scheduler jalanin sesuai `config.FASE_AKTIF`)
 
 ```
-FASE 1 (FAKTA)   → scheduler tiap jam :05 — grab data terbaru semua toko (READ-ONLY)
-FASE 2 (AKSI)    → command sendiri — deteksi + benerin harga / cabut-pasang promo
-                   (WAJIB grab FRESH dulu di sesi yg sama sebelum bertindak — ga pernah data basi)
-FASE 3 (LAPORAN) → rangkum hasil aksi                                          ⏳
+FASE 1 (FAKTA)   → grab data terbaru semua toko (READ-ONLY)
+FASE 2 (AKSI)    → benerin harga (poin 1-4, per-jam) + pasang/cabut promo (poin 5, per-cadence)
+                   AMAN: harga PAKSA-DRY; provisioning DRY kecuali env PROV_LIVE=1
+FASE 3 (LAPORAN) → rangkum hasil aksi                                          ⏳ belum dibikin
 ```
-**Aturan inti:** 3 fase JALAN TERPISAH (Fase 1 = grab · Fase 2 = aksi · Fase 3 = lapor). Fase 2 selalu pakai data FRESH.
+**1 KESATUAN:** double-klik `RUN.bat` → scheduler jalanin fase yg ada di `FASE_AKTIF` (skrg `[1]`).
+Fase tetap fungsi DISTINCT (siklus_fase1/siklus_fase2) tapi diorkestrasi 1 scheduler. Fase 2 selalu pakai data FRESH.
 
 ---
 
@@ -30,7 +31,7 @@ FASE 3 (LAPORAN) → rangkum hasil aksi                                         
 *(Grab ≠ aksi: campaign & flash digrab HARIAN — supaya cabut per-jam pakai data ga basi — tapi PASANG-nya tetap mingguan.)*
 
 **Poin 1–4 (cabut) = TIAP JAM semua promo. Poin 5 (pasang) = per cadence.** Cabut cepet, pasang santai.
-*(Scheduler skrg = FASE 1 grab doang. Fase 2 (poin 1–4 & poin 5) jalan lewat COMMAND terpisah — belum auto di scheduler.)*
+*(Fase 2 UDAH kejahit ke scheduler via `FASE_AKTIF` (`siklus_fase2`) — set `FASE_AKTIF=[1,2]` buat nyalain. Default `[1]`. Fase 2 aman: harga DRY, provisioning DRY kecuali `PROV_LIVE=1`. Command manual `run.py fase2`/`provisioning` tetap ada.)*
 
 ---
 

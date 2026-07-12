@@ -178,7 +178,7 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 
 ### ▶️ HANDOFF — BACA INI DULU (update 12 Jul)
 
-**POSISI SEKARANG:** Fase 1 (grab) udah jalan di **SEMUA 10 toko** (kebukti, 0 anti-bot). Fase 2 = command TERPISAH (bukan di scheduler), lagi **verifikasi live PER-MODUL**. **Paket ✅ done + verified live.** Sekarang lagi di modul **VOUCHER**.
+**POSISI SEKARANG:** Fase 1 (grab) udah jalan di **SEMUA 10 toko** (kebukti, 0 anti-bot). **Fase 2 udah KEJAHIT ke scheduler** (via `FASE_AKTIF`, `siklus_fase2` — DRY-safe; set `[1,2]` buat nyalain) + command manual tetap ada. Lagi **verifikasi live PER-MODUL**: **Paket ✅ done + verified live.** Sekarang di modul **VOUCHER**.
 
 **⏳ DECISION PENDING — tanya owner dulu sebelum lanjut voucher:**
 - Voucher kalau mau abis: mau **PERPANJANG** (kondisi sekarang; endpoint jalan & lebih rapi — rekomendasi gua) ATAU **BUAT-BARU** (biar konsisten sama paket)? **Owner belum putusin.** Setelah diputusin → tes live voucher.
@@ -242,10 +242,10 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 
 **Config = CONTROL PANEL (`config.py`) — jalanin: double-klik `RUN.bat`:**
 - `MODE_LIVE` (True=live / False=DRY simulasi) · `DRY_RUN` turunan (env `HARGA_LIVE=1` paksa live).
-- `FASE_AKTIF=[1]` — fase yg dijalanin scheduler (1=Fakta WIRED · 2=aksi command terpisah · 3=belum dibikin).
-- `TOKO_AKTIF` (`[]`=semua 10 · `["kimmioshop"]`=1 toko) · `MODUL_AKTIF` (list modul yg di-grab; buang = skip).
+- `FASE_AKTIF=[1]` — fase yg dijalanin scheduler (1=Fakta · 2=aksi harga+provisioning · 3=laporan belum). **Fase 1 & 2 UDAH wired ke scheduler** (`siklus_fase1`/`siklus_fase2`); set `[1,2]` buat nyalain Fase 2.
+- `TOKO_AKTIF` (`[]`=semua 10 · `["kimmioshop"]`=1 toko) · `MODUL_AKTIF` (list modul yg di-grab & diproses; buang = skip).
 - Trigger: `MENIT_RUNNING` · `JAM_FAKTA_HARIAN` · `HARI_FAKTA_MINGGUAN`+`JAM_FAKTA_MINGGUAN`. (bulanan DIHAPUS.)
-- **Scheduler = FASE 1 grab doang.** Fase 2 command TERPISAH: `run.py provisioning [modul]` (default DRY, live env `PROV_LIVE=1`) · `run.py fase2` (harga, masih paksa-DRY). `SKIP_FLASH_TAKEDOWN=True`.
+- **Fase 2 di scheduler AMAN by default:** harga (poin 1-4) PAKSA-DRY (belum verified); provisioning DRY kecuali env `PROV_LIVE=1`. Command manual tetap ada: `run.py fase2` · `run.py provisioning [modul]`. `SKIP_FLASH_TAKEDOWN=True`.
 
 **Commands:** `run.py` (scheduler F1+provisioning) · `grab`/`grab full` · `kategori` · `fase2` · `provisioning [modul]` · `komisi_grab` · `*_sniff`.
 **KPI:** semua ambang di `config.py` blok "KPI PER-MODUL" (`KPI_*`), modul BACA dari sana (jangan hardcode).

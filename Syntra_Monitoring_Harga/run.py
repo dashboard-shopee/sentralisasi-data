@@ -1,7 +1,8 @@
 """run.py — Syntra_Monitoring_Harga | Orkestrator + Scheduler.
 
 Arsitektur 3 FASE: 1.Fakta -> 2.Masalah+Solusi -> 3.Laporan.
-Scheduler wire FASE 1 (Fakta, READ-ONLY). Fase 2 = command terpisah, Fase 3 belum dibikin.
+Scheduler jalanin fase sesuai config.FASE_AKTIF (1=grab · 2=aksi harga+provisioning · 3=laporan belum).
+Fase 2 di scheduler AMAN: harga paksa-DRY; provisioning DRY kecuali env PROV_LIVE=1. Command manual tetap ada.
 
 Scheduler: nyala terus, detak 3 detik, nembak 1x/jam di menit config.MENIT_RUNNING.
 Tier grab (config): JAM = produk+promo toko; HARIAN = komisi/garansi/campaign/flash/voucher/paket;
@@ -206,6 +207,27 @@ def jalankan_provisioning(modul=("paket",)):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  FASE 2 (AKSI) — orkestrasi buat SCHEDULER (dipanggil kalau 2 ada di FASE_AKTIF).
+#  Poin 1–4 (harga) = tiap JAM · Poin 5 (provisioning) = per CADENCE (ikut MODUL_AKTIF).
+#  AMAN: harga PAKSA-DRY; provisioning DRY kecuali env PROV_LIVE=1. Data fresh (tiap sub-langkah grab sendiri).
+# ══════════════════════════════════════════════════════════════════
+def siklus_fase2(paksa_semua=False):
+    skr = jam_siklus.now()
+    jam = skr.hour
+    hari = config.HARI_ID.get(skr.strftime("%A"), "")
+    due_harian = paksa_semua or (jam == int(config.JAM_FAKTA_HARIAN))
+    due_mingguan = paksa_semua or (hari == config.HARI_FAKTA_MINGGUAN and jam == int(config.JAM_FAKTA_MINGGUAN))
+    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (AKSI) — dari scheduler ===" + colorama.Style.RESET_ALL)
+    _aman("-", "fase2 harga (poin 1-4)", jalankan_fase2)                       # per JAM
+    mh = tuple(m for m in ("paket", "voucher", "garansi") if m in config.MODUL_AKTIF)
+    if due_harian and mh:
+        _aman("-", "provisioning harian", lambda: jalankan_provisioning(mh))   # poin 5 harian
+    mm = tuple(m for m in ("campaign", "flash") if m in config.MODUL_AKTIF)
+    if due_mingguan and mm:
+        _aman("-", "provisioning mingguan", lambda: jalankan_provisioning(mm)) # poin 5 mingguan
+
+
+# ══════════════════════════════════════════════════════════════════
 #  KATEGORI — isi awal SEMUA produk yg belum punya kategori (bulk, incremental).
 #  Aman diulang (cuma yg belum). Per toko harvest 1x lalu grab kategori sampai habis.
 # ══════════════════════════════════════════════════════════════════
@@ -238,9 +260,11 @@ def scheduler():
           + f"[{_t()}] Scheduler aktif — FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}. Nembak tiap jam di menit {menit:02d}. "
           + f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00"
           + colorama.Style.RESET_ALL)
-    if 2 in fase or 3 in fase:
-        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: scheduler baru wire FASE 1. Fase 2 (aksi) = command terpisah "
-              + "(`run.py provisioning`/`fase2`), Fase 3 belum dibikin." + colorama.Style.RESET_ALL)
+    if 2 in fase:
+        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 2 aktif — harga PAKSA-DRY (belum verified live); "
+              + "provisioning DRY kecuali env PROV_LIVE=1. Aman." + colorama.Style.RESET_ALL)
+    if 3 in fase:
+        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 3 (laporan) belum dibikin — di-skip." + colorama.Style.RESET_ALL)
     jam_terakhir = None
     while True:
         time.sleep(3)                                  # DETAK (tanpa log biar terminal bersih)
@@ -248,8 +272,11 @@ def scheduler():
         if now.minute == menit and now.hour != jam_terakhir:
             jam_terakhir = now.hour
             try:
-                if 1 in fase:                          # FASE 1 (grab) — satu2nya yg wired ke scheduler
+                if 1 in fase:                          # FASE 1 — grab (read-only)
                     siklus_fase1()
+                if 2 in fase:                          # FASE 2 — aksi (harga DRY + provisioning)
+                    siklus_fase2()
+                # if 3 in fase: FASE 3 laporan — belum dibikin
             except Exception as e:
                 print(colorama.Fore.RED + f"[{_t()}] SIKLUS GAGAL (di-skip, lanjut jam berikutnya): {e}"
                       + colorama.Style.RESET_ALL)
