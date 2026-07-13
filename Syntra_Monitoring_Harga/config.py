@@ -28,14 +28,16 @@ MODE_LIVE = True
 #      2 = MASALAH+SOLUSI (benerin harga + pasang/cabut promo)  → skrg command TERPISAH, belum di-scheduler
 #      3 = LAPORAN        (rangkum aksi)                         → belum dibikin
 #    ⚠️ Sekarang scheduler cuma jalanin FASE 1. Fase 2 manual: `run.py provisioning [modul]` / `run.py fase2`.
-FASE_AKTIF = [1]
+FASE_AKTIF = [1,2]
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
+# TOKO_AKTIF = ["kimmioshop"]
 TOKO_AKTIF = []
 
 # 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
 #    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
-MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+# MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+MODUL_AKTIF = ["promo_toko", "paket", "voucher", "kategori"]
 
 # 5) Setelan lain:
 STOK_MINIMAL        = 1            # grab hanya variasi stok >= ini (0 dilewati)
@@ -48,6 +50,16 @@ BUAT_PROMO_DARI_NOL = True         # bikin promo toko baru kalau toko belum puny
 # ── DRY_RUN turunan dari MODE_LIVE (semua modul BACA config.DRY_RUN). ──
 DRY_RUN = not MODE_LIVE
 
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║   JADWAL TRIGGER SCHEDULER (Fase 1). Bot nyala terus, detak 3 dtk, ║
+# ║   nembak 1×/jam di menit MENIT_RUNNING. (Tier BULANAN dihapus.)    ║
+# ╚══════════════════════════════════════════════════════════════════╝
+MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
+JAM_FAKTA_HARIAN    = "8"        # tier HARIAN jalan sekali sehari jam ini (08:00)
+HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari
+JAM_FAKTA_MINGGUAN  = "9"        # tier MINGGUAN: jam (09:00 di hari itu)
+# (Buat TES tier harian/mingguan pakai tes_harga.bat — JAM_TES harus SAMA dgn
+#  JAM_FAKTA_HARIAN (harian) atau JAM_FAKTA_MINGGUAN + HARI_TES (mingguan).)
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║           KPI PER-MODUL — PASANG & TAKEDOWN (EDIT DI SINI)         ║
@@ -80,14 +92,18 @@ KPI_PAKET_MAKS_ITEM   = 100000                    # maks produk per-paket → EF
                                                   # #5 lama muat 227 produk lancar. Kalau nanti attach gagal
                                                   # massal (deal penuh), turunkan ke angka asli yg ketauan.
 
-# ── PASANG VOUCHER (provisioning harian) ──
+# ── PASANG VOUCHER (provisioning harian) — voucher PRODUK per BAND harga (spec owner 13 Jul):
+#    band 1..BAND1_MAKS lalu per BAND_LEBAR (grid fix); MIN BELANJA = batas atas band + 1
+#    (maksa pembeli ambil >1 pcs). CAP: band yg min-nya > 2×AOV dibuang (aturan Shopee,
+#    keputusan owner) → produk mahal TANPA voucher. ──
 KPI_VOUCHER_DISKON_PCT      = 2       # diskon voucher default (%)
-KPI_VOUCHER_MINPRICE_FAKTOR = 2.0     # min_price = faktor × AOV (Shopee batasi ≤ 2× AOV)
-KPI_VOUCHER_MINPRICE_BUFFER = 0.97    # buffer < 1 biar aman DI BAWAH batas Shopee
-KPI_VOUCHER_AOV_WINDOW_HARI = 30      # jendela hari hitung AOV
 KPI_VOUCHER_BAND_LEBAR      = 20000   # lebar band harga voucher produk (per 20rb)
-KPI_VOUCHER_BAND1_MAKS      = 14999   # band pertama: 1 .. ini
+KPI_VOUCHER_BAND1_MAKS      = 14999   # band pertama: 1 .. ini (min belanja 15000)
 KPI_VOUCHER_USAGE_QTY       = 100000  # kuota pemakaian voucher
+KPI_VOUCHER_DURASI_HARI     = 90      # durasi voucher baru (90 verified live 13 Jul; >90 belum dites)
+KPI_VOUCHER_MINPRICE_FAKTOR = 2.0     # CAP band = faktor × AOV (aturan Shopee: min order ≤ 2×AOV)
+KPI_VOUCHER_MINPRICE_BUFFER = 0.97    # buffer < 1 biar cap aman DI BAWAH batas Shopee
+KPI_VOUCHER_AOV_WINDOW_HARI = 30      # jendela hari hitung AOV (fact_pesanan)
 
 # ── PASANG FLASH SALE (provisioning mingguan) ──
 KPI_FLASH_MAKS_PRODUK_PER_SESI = 50   # maks produk per sesi flash
@@ -96,16 +112,6 @@ KPI_FLASH_POTONG_HARGA         = 10   # harga flash = harga_diskon − ini
 KPI_FLASH_SLOT_HARI            = 7    # ambil slot s/d berapa hari ke depan
 KPI_FLASH_PASANG_STOK_MIN      = 50   # syarat pasang: stok > ini
 KPI_FLASH_PASANG_STOK_X_PJH    = 10   # ATAU stok > ini × pjh
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║   JADWAL TRIGGER SCHEDULER (Fase 1). Bot nyala terus, detak 3 dtk, ║
-# ║   nembak 1×/jam di menit MENIT_RUNNING. (Tier BULANAN dihapus.)    ║
-# ╚══════════════════════════════════════════════════════════════════╝
-MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
-JAM_FAKTA_HARIAN    = "2"        # tier HARIAN jalan sekali sehari jam ini (02:00)
-HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari
-JAM_FAKTA_MINGGUAN  = "3"        # tier MINGGUAN: jam (03:00 di hari itu)
 
 # Map weekday Inggris -> Indonesia (buat banding dgn HARI_FAKTA_MINGGUAN).
 HARI_ID = {

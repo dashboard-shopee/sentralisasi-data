@@ -1,8 +1,9 @@
-"""modules/voucher.py — AUTO daftar/perpanjang VOUCHER toko (upsell, TIDAK ubah harga).
+"""modules/voucher.py — AUTO daftar VOUCHER toko (upsell, TIDAK ubah harga).
+Jelang-expire = BUAT BARU (keputusan owner 13 Jul, konsisten paket; fungsi perpanjang dihapus).
 
 Endpoint terverifikasi via DevTools (3 Jul 2026):
   POST marketing/v3/voucher/               -> BUAT voucher -> data.voucher_id
-  PUT  marketing/v3/voucher/               -> EDIT/PERPANJANG (body + voucher_id, ganti end_time)
+  PUT  marketing/v3/voucher/               -> EDIT (body + voucher_id; dipakai edit rule.items)
   GET  marketing/v3/voucher/?voucher_id=X  -> detail 1 voucher
   GET  marketing/v3/voucher/list/          -> list voucher
   POST marketing/v3/voucher/validate_items/-> validasi item (voucher produk)
@@ -11,9 +12,17 @@ Semua via requests biasa (voucher TIDAK kena anti-bot). discount = persen (2 = 2
 max_value = batas maksimal diskon Rp (null = "Tidak Terbatas"). min_price = min belanja,
 Shopee batasi <= 2x AOV toko. rule.items = [{itemid}] utk voucher PRODUK (kosong = semua produk).
 
-3 TIPE (dibedakan param — sebagian masih perlu konfirmasi/capture bersih):
-  - ikuti toko  : shop-wide, voucher_landing_page 1
-  - pembeli baru: shop-wide, choose_users targeting (param persis: TODO konfirmasi)
+⚠️ ATURAN KODE (verified live 13 Jul): voucher_code WAJIB diawali PREFIX KODE TOKO
+(4 char, mis. "KIMM") + maks 5 char custom (total 9). Tanpa prefix -> 201600001 ERROR_PARAM
+(dan invalid_data cuma nampilin streamer_ids null — red herring, bukan field-nya).
+
+TIPE (dibedakan param):
+  - toko        : ✅ VERIFIED LIVE create 13 Jul (KIMMUP194 kimmioshop). Voucher toko
+                  reguler (usecase 1), SHOP-WIDE (rule.items kosong = semua produk),
+                  tanpa targeting user. Dipakai provisioning UPSELL.
+  - ikuti toko / pembeli baru: keluarga WELCOME voucher (usecase 3) — Shopee batasi
+                  1 AKTIF per toko (1400101033 "create a new shop welcome voucher
+                  after the existing one is expired"). JANGAN dipakai buat upsell.
   - produk      : rule.items terisi; dibagi 3+ BAND harga (per 20rb) via bands_harga()
 """
 import time
@@ -26,22 +35,36 @@ URL_VOUCHER = _BASE
 URL_LIST = _BASE + "list/"
 URL_VALIDATE = _BASE + "validate_items/"
 
-SATU_HARI = 86400
-
-# Preset param per TIPE voucher (dari capture DevTools; `usecase` = param URL saat bikin di UI,
-# TIDAK dikirim di body). ⚠️ ikuti_toko vs pembeli_baru payload-nya NYARIS SAMA (dua-duanya
-# shop_order_count:1) — pembeda pasti belum 100% jelas; verifikasi saat create live.
+# Preset param per TIPE voucher (`usecase` di respon GET: 1=toko reguler, 2=produk, 3=welcome;
+# usecase TIDAK dikirim di body create — server nentuin sendiri dari kombinasi param).
 TIPE = {
-    # Voucher Ikuti Toko (follow) — shop-wide, tampil di semua halaman.
+    # ✅ Voucher TOKO reguler — SHOP-WIDE (items kosong = semua produk), tanpa targeting.
+    #    VERIFIED LIVE create 13 Jul (tiru skema voucher KIMMBLJ35 existing).
+    "toko":         {"landing_page": 1, "display_voucher_early": False,
+                     "choose_users": {"shop_order_count": 0, "shop_order_count_period": 0}},
+    # ⚠️ WELCOME family (shop_order_count:1) — maks 1 AKTIF per toko (1400101033).
     "ikuti_toko":   {"landing_page": 1, "display_voucher_early": False,
                      "choose_users": {"shop_order_count": 1, "shop_order_count_period": 0}},
-    # Voucher Pembeli Baru (usecase=3) — shop-wide, display early.
     "pembeli_baru": {"landing_page": 0, "display_voucher_early": True,
                      "choose_users": {"shop_order_count": 1, "shop_order_count_period": 0}},
-    # Voucher Produk — pakai item_ids (per band harga). Tanpa targeting user.
-    "produk":       {"landing_page": 0, "display_voucher_early": True,
+    # Voucher Produk — pakai item_ids (per band harga), tanpa targeting user.
+    # Param disamain sama skema voucher produk ASLI di toko (KIMMV1, usecase 2).
+    "produk":       {"landing_page": 1, "display_voucher_early": True,
                      "choose_users": {"shop_order_count": 0, "shop_order_count_period": 0}},
 }
+
+
+def prefix_kode_toko(vouchers, username):
+    """PREFIX kode voucher toko (4 char, aturan Shopee: kode wajib diawali prefix ini).
+    Diambil dari voucher existing (paling sering, skip kode sistem 'SFP-');
+    fallback: 4 alnum pertama username (kimmioshop -> KIMM)."""
+    import re as _re
+    from collections import Counter
+    c = Counter(str(v.get("voucher_code") or "")[:4].upper() for v in (vouchers or [])
+                if v.get("voucher_code") and not str(v.get("voucher_code")).upper().startswith("SFP"))
+    if c:
+        return c.most_common(1)[0][0]
+    return (_re.sub(r"[^A-Za-z0-9]", "", str(username)).upper() + "XXXX")[:4]
 
 
 def _call(method, url, session, payload=None, extra_params=None, attempts=3):
@@ -73,17 +96,20 @@ def _chunks(lst, n):
         yield lst[i:i + n]
 
 
-# ── BAND HARGA: band pertama 1..BAND1_MAKS, sisanya per BAND_LEBAR, terakhir mentok di harga termahal ──
+# ── BAND HARGA: GRID FIX — band pertama 1..BAND1_MAKS, sisanya per BAND_LEBAR. Batas band
+#    SENGAJA ga mentok harga termahal: min belanja voucher BERJALAN ga bisa diedit (Shopee
+#    ERROR_VOUCHER_NO_EDIT_PERMISSION, verif 13 Jul) — grid fix bikin min ga pernah geser
+#    walau harga termahal berubah. Intent tetap: min belanja > harga tiap produk di band. ──
 def bands_harga(max_price):
-    """Return list (low, high) inklusif. Lebar band = KPI config. Contoh (band1=14999, lebar=20000)
-    max 50rb -> [(1,14999),(15000,34999),(35000,50000)]."""
+    """Return list (low, high) inklusif s/d band yg memuat max_price. Contoh (band1=14999,
+    lebar=20000) max 50rb -> [(1,14999),(15000,34999),(35000,54999)]. Min belanja = high+1."""
     max_price = int(max_price)
     b1 = int(config.KPI_VOUCHER_BAND1_MAKS)
     lebar = int(config.KPI_VOUCHER_BAND_LEBAR)
     bands = [(1, b1)]
     start = b1 + 1
     while start <= max_price:
-        bands.append((start, min(start + lebar - 1, max_price)))
+        bands.append((start, start + lebar - 1))
         start += lebar
     return bands
 
@@ -129,8 +155,10 @@ def get_voucher(session, voucher_id):
 
 
 # ── BUAT ──
+# ⚠️ value & max_value WAJIB angka 0 (kaya voucher buatan UI, "0.00") — verified live 13 Jul
+#    (ZTES A/B fe_status 2 = Berlangsung). Jangan kirim None.
 def _payload_voucher(name, code, start_time, end_time, discount=config.KPI_VOUCHER_DISKON_PCT,
-                     min_price=0, max_value=None, usage_quantity=config.KPI_VOUCHER_USAGE_QTY,
+                     min_price=0, max_value=0, usage_quantity=config.KPI_VOUCHER_USAGE_QTY,
                      limit_per_user=1, item_ids=None, choose_users=None, landing_page=1,
                      display_voucher_early=False, display_from=None):
     rule = {
@@ -146,7 +174,7 @@ def _payload_voucher(name, code, start_time, end_time, discount=config.KPI_VOUCH
         rule["items"] = [{"itemid": int(i)} for i in item_ids]
     return {
         "name": name, "start_time": int(start_time), "end_time": int(end_time),
-        "voucher_code": code, "value": None, "max_value": max_value,
+        "voucher_code": code, "value": 0, "max_value": int(max_value or 0),
         "discount": discount, "min_price": int(min_price),
         "usage_quantity": usage_quantity, "rule": rule,
     }
@@ -164,45 +192,80 @@ def buat_voucher(session, name, code, start_time, end_time, **kw):
     return vid
 
 
-# ── PERPANJANG (EDIT end_time) ──
-def perpanjang_voucher(session, voucher_id, end_time_baru, voucher_detail=None):
-    """Perpanjang voucher: PUT voucher/ dgn body voucher existing + end_time baru.
-    voucher_detail = hasil get_voucher (biar field lain ikut apa adanya). Kalau None -> di-fetch."""
-    detail = voucher_detail or get_voucher(session, voucher_id)
-    body = dict(detail)
-    body["voucher_id"] = voucher_id
-    body["end_time"] = int(end_time_baru)
+# ── BODY buat PUT voucher/ — WAJIB bentuk payload CREATE yang bersih + voucher_id.
+#    (kirim respon GET apa adanya = ERROR_PARAM: field server kaya signature/fe_status ditolak.
+#    Verif live 13 Jul: edit rule.items voucher BERJALAN -> BOLEH (propagasi ~10 dtk);
+#    edit min_price / mempersingkat end_time voucher berjalan -> DITOLAK
+#    ERROR_VOUCHER_NO_EDIT_PERMISSION / ERROR_PARAM.) ──
+def _body_edit(detail, items_override=None, **override):
+    """Susun body PUT dari detail GET: bentuk create-bersih, nilai apa adanya, bisa dioverride."""
+    r = detail.get("rule") or {}
+    items = items_override
+    if items is None:
+        items = [int(x.get("itemid")) for x in (r.get("items") or [])
+                 if isinstance(x, dict) and x.get("itemid")]
+    rule = {
+        "usage_limit_per_user": r.get("usage_limit_per_user", 1),
+        "coin_cashback_voucher": {"coin_percentage_real": None, "max_coin": None},
+        "voucher_landing_page": r.get("voucher_landing_page", 1),
+        "display_from": r.get("display_from"),
+        "exclusive_channel_type": None, "hide": 0, "reward_type": 0, "backend_created": 0,
+        "display_voucher_early": r.get("display_voucher_early", False),
+        "choose_users": r.get("choose_users") or {"shop_order_count": 0, "shop_order_count_period": 0},
+    }
+    if items:
+        rule["items"] = [{"itemid": int(i)} for i in sorted(items)]
+    body = {
+        "voucher_id": detail.get("voucher_id"), "name": detail.get("name"),
+        "start_time": int(detail.get("start_time") or 0), "end_time": int(detail.get("end_time") or 0),
+        "voucher_code": detail.get("voucher_code"),
+        "value": int(float(detail.get("value") or 0)), "max_value": int(float(detail.get("max_value") or 0)),
+        "discount": detail.get("discount"), "min_price": int(float(detail.get("min_price") or 0)),
+        "usage_quantity": detail.get("usage_quantity"), "rule": rule,
+    }
+    body.update(override)
+    return body
+
+
+# ── AKHIRI voucher (end_time = sekarang) ──
+def akhiri_voucher(session, voucher_id, detail=None):
+    """Coba akhiri voucher: PUT end_time = sebentar lagi. ⚠️ Verif 13 Jul: voucher BERJALAN
+    GA BISA diakhiri via API (ERROR_PARAM) — cuma yg BELUM mulai yg mungkin bisa.
+    Gagal-anggun -> return False + warning (akhiri MANUAL di Seller Center)."""
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[voucher] (DRY) perpanjang {voucher_id} -> end {end_time_baru}" + colorama.Style.RESET_ALL)
+        print(colorama.Fore.YELLOW + f"[voucher] (DRY) akhiri {voucher_id}" + colorama.Style.RESET_ALL)
         return True
-    _call("PUT", URL_VOUCHER, session, body)
-    print(colorama.Fore.MAGENTA + f"[voucher] {voucher_id} diperpanjang -> end {end_time_baru}" + colorama.Style.RESET_ALL)
+    try:
+        detail = detail or get_voucher(session, voucher_id)
+        _call("PUT", URL_VOUCHER, session, _body_edit(detail, end_time=int(time.time()) + 60), attempts=1)
+    except Exception:
+        print(colorama.Fore.YELLOW + f"[voucher] ⚠️ '{detail.get('name')}' (kode {detail.get('voucher_code')}) ga bisa diakhiri via API -> AKHIRI MANUAL di Seller Center" + colorama.Style.RESET_ALL)
+        return False
+    print(colorama.Fore.MAGENTA + f"[voucher] {voucher_id} diakhiri (end_time=sekarang)" + colorama.Style.RESET_ALL)
     return True
 
 
-# ── FASE 2 kasus 4: edit daftar item voucher PRODUK (takedown + re-add) ──
-#    Harga dasar tak bisa diubah kalau produk masih nyangkut voucher produk -> keluarin dulu,
-#    ubah harga dasar, lalu masukin lagi (voucher WAJIB selalu aktif). Pakai PUT voucher/ (jalur
-#    sama perpanjang_voucher). ⚠️ BELUM diverifikasi live apakah voucher AKTIF boleh diedit
-#    item-nya (Shopee kadang kunci item voucher berjalan) -> PR verifikasi.
+# ── FASE 2 kasus 4 + reconcile band: edit daftar item voucher PRODUK ──
+#    ✅ VERIFIED LIVE 13 Jul: rule.items voucher BERJALAN boleh diedit (tambah & keluar);
+#    perubahan kebaca di GET setelah ~10 detik (jangan verif kecepetan).
 def _set_item_voucher(session, voucher_id, item_ids, tambah, detail=None):
     """Ubah rule.items voucher: tambah=True -> tambahin item, False -> keluarin. Return bool."""
     ids = {int(i) for i in item_ids if i}
     if not ids:
         return False
     detail = detail or get_voucher(session, voucher_id)
-    body = dict(detail)
-    body["voucher_id"] = voucher_id
-    rule = dict(body.get("rule") or {})
-    sekarang = {int(x.get("itemid")) for x in (rule.get("items") or []) if isinstance(x, dict) and x.get("itemid")}
+    sekarang = {int(x.get("itemid")) for x in ((detail.get("rule") or {}).get("items") or [])
+                if isinstance(x, dict) and x.get("itemid")}
     baru = (sekarang | ids) if tambah else (sekarang - ids)
-    rule["items"] = [{"itemid": i} for i in sorted(baru)]
-    body["rule"] = rule
     aksi = "tambah" if tambah else "keluarkan"
+    if not baru:
+        # items kosong bisa ngerubah makna voucher (kosong = semua produk) -> jangan!
+        print(colorama.Fore.YELLOW + f"[voucher] ⚠️ {aksi} batal: voucher {voucher_id} bakal 0 item (kosong = semua produk). Akhiri manual kalau emang mau dimatiin." + colorama.Style.RESET_ALL)
+        return False
     if getattr(config, "DRY_RUN", False):
         print(colorama.Fore.YELLOW + f"[voucher] (DRY) {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
         return True
-    _call("PUT", URL_VOUCHER, session, body)
+    _call("PUT", URL_VOUCHER, session, _body_edit(detail, items_override=sorted(baru)))
     print(colorama.Fore.MAGENTA + f"[voucher] {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
     return True
 
@@ -259,8 +322,3 @@ def min_price_toko(toko, faktor=config.KPI_VOUCHER_MINPRICE_FAKTOR,
     return int(aov_toko(toko, window_hari) * faktor * buffer)
 
 
-# ── LOGIKA AUTO: perpanjang kalau <=1 hari sebelum mati, else bikin baru ──
-def perlu_perpanjang(voucher, sekarang, ambang=SATU_HARI):
-    """voucher dict punya end_time. True kalau sisa <= ambang (mau mati)."""
-    end = int(voucher.get("end_time") or 0)
-    return 0 < (end - sekarang) <= ambang

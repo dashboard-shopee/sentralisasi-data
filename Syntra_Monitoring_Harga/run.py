@@ -1,8 +1,9 @@
 """run.py — Syntra_Monitoring_Harga | Orkestrator + Scheduler.
 
 Arsitektur 3 FASE: 1.Fakta -> 2.Masalah+Solusi -> 3.Laporan.
-Scheduler jalanin fase sesuai config.FASE_AKTIF (1=grab · 2=aksi harga+provisioning · 3=laporan belum).
-Fase 2 di scheduler AMAN: harga paksa-DRY; provisioning DRY kecuali env PROV_LIVE=1. Command manual tetap ada.
+SIKLUS TERPADU (13 Jul): scheduler/tes jalanin `siklus_terpadu` — SATU loop toko, SATU harvest
+sesi per toko buat semua fase (fase ikut config.FASE_AKTIF, live/DRY ikut MODE_LIVE).
+Command manual (grab/fase2/provisioning) tetap ada.
 
 Scheduler: nyala terus, detak 3 detik, nembak 1x/jam di menit config.MENIT_RUNNING.
 Tier grab (config): JAM = produk+promo toko; HARIAN = komisi/garansi/campaign/flash/voucher/paket;
@@ -14,6 +15,8 @@ Pemakaian:
   python run.py login          # login Shopee sekali
   python run.py                # SCHEDULER 24 jam (Fase 1) — produksi
   python run.py grab           # tes 1 siklus Fase 1 SEKARANG (tier ikut jam saat ini)
+  python run.py tes [jam] [hari]  # TES 1 siklus SEKARANG (tes_harga.bat) — fase+modul ikut config.
+                               #   `tes full` = SEMUA tier dipaksa · `tes 2 SENIN` = simulasi jam/hari
   python run.py grab full      # tes 1 siklus Fase 1 + PAKSA semua tier (harian+mingguan)
   python run.py kategori       # isi KATEGORI Shopee semua produk (incremental, aman diulang)
   python run.py fase2          # FASE 2 modul Harga: grab fresh -> diagnosa -> eksekusi (DRY-RUN paksa)
@@ -52,87 +55,124 @@ def _aman(nama, label, fn):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  FASE 1 — PENGUMPUL FAKTA (READ-ONLY). Loop per-toko, harvest sesi 1x.
+#  SIKLUS TERPADU — SATU loop toko, SATU harvest sesi per toko buat SEMUA fase
+#  (permintaan owner 13 Jul — dulu fase 1 / fase 2 harga / provisioning masing-masing
+#  panen sesi sendiri = 3× buka browser per toko per siklus → rawan anti-bot & lambat).
+#  Fase yg jalan ikut config.FASE_AKTIF (bisa dioverride param `fase`, mis. command
+#  `grab` = fase [1] doang). Fase 2 pakai data fase 1 yg BARUSAN di-grab (fresh).
+#  Tier modul tetap: JAM (produk+promo_toko+harga poin 1-4) · HARIAN (fakta harian +
+#  prov paket/voucher/garansi) · MINGGUAN (kategori+housekeeping + prov campaign/flash).
 # ══════════════════════════════════════════════════════════════════
-def siklus_fase1(paksa_semua=False):
-    """FASE 1 — grab fakta (READ-ONLY). paksa_semua=True → semua tier dipaksa (buat `grab full`).
-    Modul yg di-grab ngikut config.MODUL_AKTIF (produk = base, selalu jalan)."""
+def siklus_terpadu(paksa_semua=False, fase=None):
+    from modules import fase2_harga as F2
+    from modules import provisioning as P
     jam_siklus.kunci()
+    fase = list(config.FASE_AKTIF if fase is None else fase)
     skr = jam_siklus.now()
     jam = skr.hour
     hari = config.HARI_ID.get(skr.strftime("%A"), "")
 
     due_harian = paksa_semua or (jam == int(config.JAM_FAKTA_HARIAN))
     due_mingguan = paksa_semua or (hari == config.HARI_FAKTA_MINGGUAN and jam == int(config.JAM_FAKTA_MINGGUAN))
-    aktif = lambda m: m in config.MODUL_AKTIF          # modul di-grab kalau ada di MODUL_AKTIF
+    aktif = lambda m: m in config.MODUL_AKTIF          # modul jalan kalau ada di MODUL_AKTIF
 
     toko = config.daftar_toko_aktif()
     tier = "JAM" + (" +HARIAN" if due_harian else "") + (" +MINGGUAN" if due_mingguan else "")
+    mode_txt = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
+    PROV = {"paket": P.paket, "voucher": P.voucher, "garansi": P.garansi,
+            "campaign": P.campaign, "flash": P.flash}
+    mprov = ((tuple(m for m in ("paket", "voucher", "garansi") if aktif(m)) if due_harian else ())
+             + (tuple(m for m in ("campaign", "flash") if aktif(m)) if due_mingguan else ())) if 2 in fase else ()
     print(colorama.Fore.LIGHTCYAN_EX
-          + f"\n[{_t()}] === FASE 1 (FAKTA) — {len(toko)} toko — tier: {tier} — modul: {config.MODUL_AKTIF} ==="
+          + f"\n[{_t()}] === SIKLUS — fase {fase} — {len(toko)} toko — tier: {tier} — modul: {config.MODUL_AKTIF} ==="
           + colorama.Style.RESET_ALL)
+    if 2 in fase and not config.DRY_RUN:
+        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE — Fase 2 (harga poin 1-4{' + prov ' + str(list(mprov)) if mprov else ''}) BENERAN ubah Shopee." + colorama.Style.RESET_ALL)
 
     T = {"grab": 0, "konteks": 0, "gagal": 0}
     for username, info in toko.items():
         nama = info["name"]
         try:
-            session = grab_session(shop=username, i=info["i"])     # HARVEST SESI 1x utk semua tier
-            # ── TIER JAM (selalu) ── produk (base, WAJIB) + Promo Toko
-            n, nk = fakta.fakta_produk(username, nama, session)
-            T["grab"] += n; T["konteks"] += nk
-            print(colorama.Fore.LIGHTGREEN_EX
-                  + f"[{_t()}] [{nama}] Produk: {n} variasi, {nk} promo->konteks"
-                  + colorama.Style.RESET_ALL)
-            if aktif("promo_toko"):
-                _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
-            # ── TIER HARIAN (Fakta) ──
-            if due_harian:
-                if aktif("garansi"):
-                    _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
-                    _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
-                if aktif("campaign"):
-                    _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
-                if aktif("flash"):
-                    _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
-                if aktif("voucher"):
-                    _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
-                if aktif("paket"):
-                    _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
-            # ── TIER MINGGUAN (Fakta) ──
-            if due_mingguan and aktif("kategori"):
-                _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))  # incremental (capped)
+            session = grab_session(shop=username, i=info["i"])     # HARVEST SESI 1x utk SEMUA fase toko ini
+            # ── FASE 1 — FAKTA (read-only) ──
+            if 1 in fase:
+                # TIER JAM (selalu): produk (base, WAJIB — fase 2 juga makai) + Promo Toko
+                n, nk = fakta.fakta_produk(username, nama, session)
+                T["grab"] += n; T["konteks"] += nk
+                print(colorama.Fore.LIGHTGREEN_EX
+                      + f"[{_t()}] [{nama}] Produk: {n} variasi, {nk} promo->konteks"
+                      + colorama.Style.RESET_ALL)
+                if aktif("promo_toko"):
+                    _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
+                # TIER HARIAN (Fakta)
+                if due_harian:
+                    if aktif("garansi"):
+                        _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
+                        _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
+                    if aktif("campaign"):
+                        _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
+                    if aktif("flash"):
+                        _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
+                    if aktif("voucher"):
+                        _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
+                    if aktif("paket"):
+                        _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
+                # TIER MINGGUAN (Fakta)
+                if due_mingguan and aktif("kategori"):
+                    _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))  # incremental (capped)
+
+            # ── FASE 2 — AKSI (pakai SESI yg sama + data fase 1 barusan) ──
+            if 2 in fase:
+                if 1 not in fase:
+                    fakta.fakta_produk(username, nama, session)    # fase 1 di-skip → grab fresh sendiri
+                d = F2.diagnosa_toko(nama)
+                kasus, aksi = F2.ringkas(d)
+                print(colorama.Fore.WHITE + f"[{_t()}] [{nama}] diagnosa: {kasus} | aksi {aksi}" + colorama.Style.RESET_ALL)
+                _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
+                _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
+                _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
+                _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
+                for m in mprov:                                    # poin 5 per cadence (harian/mingguan)
+                    _aman(nama, f"prov {m}", lambda f=PROV[m]: f(username, nama, session))
+
             print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] --- SELESAI ---" + colorama.Style.RESET_ALL)
         except Exception as e:
             T["gagal"] += 1
             print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
     close_session()
 
-    # ── TIER HARIAN: GRAB KOMISI via BROWSER (abis loop + close_session, port bebas). ──
-    if due_harian and aktif("komisi"):
-        _aman("-", "komisi (browser)", lambda: grab_komisi_browser(interaktif=False))
+    if 1 in fase:
+        # ── TIER HARIAN: GRAB KOMISI via BROWSER (abis loop + close_session, port bebas). ──
+        if due_harian and aktif("komisi"):
+            _aman("-", "komisi (browser)", lambda: grab_komisi_browser(interaktif=False))
 
-    # Pass akhir (butuh data semua toko): isi Harga Diskon utk SKU baru yg kosong.
-    try:
-        nd = isi_harga_diskon_kosong()
-        if nd:
-            print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] {nd} SKU: Harga Diskon diisi dari mode" + colorama.Style.RESET_ALL)
-    except Exception as e:
-        print(colorama.Fore.RED + f"[{_t()}] isi Harga Diskon GAGAL: {e}" + colorama.Style.RESET_ALL)
+        # Pass akhir (butuh data semua toko): isi Harga Diskon utk SKU baru yg kosong.
+        try:
+            nd = isi_harga_diskon_kosong()
+            if nd:
+                print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] {nd} SKU: Harga Diskon diisi dari mode" + colorama.Style.RESET_ALL)
+        except Exception as e:
+            print(colorama.Fore.RED + f"[{_t()}] isi Harga Diskon GAGAL: {e}" + colorama.Style.RESET_ALL)
 
-    # ── HOUSEKEEPING (prune fakta yatim) — di tier MINGGUAN (dulu bulanan, dihapus) ──
-    if due_mingguan:
-        _aman("-", "housekeeping", fakta.housekeeping)
+        # ── HOUSEKEEPING (prune fakta yatim) — di tier MINGGUAN ──
+        if due_mingguan:
+            _aman("-", "housekeeping", fakta.housekeeping)
 
-    # ── CATAT JEJAK tiap tier -> dashboard (menu Log) ──
-    g = f", {T['gagal']} toko gagal" if T["gagal"] else ""
-    catat_fase("grab", status="gagal" if (T["grab"] == 0 and T["gagal"]) else "ok",
-               keterangan=f"{T['grab']} variasi, {T['konteks']} promo, {len(toko)} toko{g}")
-    if due_harian:
-        catat_fase("fakta_harian", keterangan=f"{len(toko)} toko | modul {config.MODUL_AKTIF}")
-    if due_mingguan:
-        catat_fase("fakta_mingguan", keterangan=f"{len(toko)} toko | Kategori + housekeeping")
+        # ── CATAT JEJAK tiap tier -> dashboard (menu Log) ──
+        g = f", {T['gagal']} toko gagal" if T["gagal"] else ""
+        catat_fase("grab", status="gagal" if (T["grab"] == 0 and T["gagal"]) else "ok",
+                   keterangan=f"{T['grab']} variasi, {T['konteks']} promo, {len(toko)} toko{g}")
+        if due_harian:
+            catat_fase("fakta_harian", keterangan=f"{len(toko)} toko | modul {config.MODUL_AKTIF}")
+        if due_mingguan:
+            catat_fase("fakta_mingguan", keterangan=f"{len(toko)} toko | Kategori + housekeeping")
 
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 1 (FAKTA) SELESAI — tier: {tier} ===" + colorama.Style.RESET_ALL)
+    if 2 in fase:
+        catat_fase("rubah_harga", keterangan=f"Fase 2 harga (promo toko + harga dasar + takedown flash/campaign, {mode_txt})")
+        if mprov:
+            catat_fase("provisioning", keterangan=f"poin 5 {list(mprov)} ({mode_txt})")
+
+    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SIKLUS SELESAI — fase {fase} · tier: {tier} ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -197,24 +237,47 @@ def jalankan_provisioning(modul=("paket",)):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  FASE 2 (AKSI) — orkestrasi buat SCHEDULER (dipanggil kalau 2 ada di FASE_AKTIF).
-#  Poin 1–4 (harga) = tiap JAM · Poin 5 (provisioning) = per CADENCE (ikut MODUL_AKTIF).
-#  Mode ikut config.MODE_LIVE (semua modul live/DRY bareng). Data fresh (tiap sub-langkah grab sendiri).
+#  TES 1 SIKLUS SEKARANG (tes_harga.bat) — ga nunggu MENIT_RUNNING.
+#  Fase/modul/toko/mode ikut config: FASE_AKTIF · MODUL_AKTIF · TOKO_AKTIF · MODE_LIVE.
+#  python run.py tes [jam] [hari] — jam & hari DISIMULASIKAN (jam_siklus.set_simulasi)
+#  biar tier HARIAN (jam == JAM_FAKTA_HARIAN) / MINGGUAN (hari+jam) bisa dites kapan aja.
 # ══════════════════════════════════════════════════════════════════
-def siklus_fase2(paksa_semua=False):
-    skr = jam_siklus.now()
-    jam = skr.hour
-    hari = config.HARI_ID.get(skr.strftime("%A"), "")
-    due_harian = paksa_semua or (jam == int(config.JAM_FAKTA_HARIAN))
-    due_mingguan = paksa_semua or (hari == config.HARI_FAKTA_MINGGUAN and jam == int(config.JAM_FAKTA_MINGGUAN))
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (AKSI) — dari scheduler ===" + colorama.Style.RESET_ALL)
-    _aman("-", "fase2 harga (poin 1-4)", jalankan_fase2)                       # per JAM
-    mh = tuple(m for m in ("paket", "voucher", "garansi") if m in config.MODUL_AKTIF)
-    if due_harian and mh:
-        _aman("-", "provisioning harian", lambda: jalankan_provisioning(mh))   # poin 5 harian
-    mm = tuple(m for m in ("campaign", "flash") if m in config.MODUL_AKTIF)
-    if due_mingguan and mm:
-        _aman("-", "provisioning mingguan", lambda: jalankan_provisioning(mm)) # poin 5 mingguan
+def jalankan_tes(jam=None, hari=None):
+    from datetime import timedelta
+    paksa = str(jam or "").strip().lower() in ("full", "semua", "all")
+    skr = datetime.now()
+    if not paksa and jam is not None and str(jam).strip() != "":
+        skr = skr.replace(hour=int(jam), minute=0, second=0, microsecond=0)
+    if not paksa and hari and str(hari).strip():
+        target = str(hari).strip().upper()
+        for i in range(7):
+            d = skr + timedelta(days=i)
+            if config.HARI_ID.get(d.strftime("%A"), "") == target:
+                skr = d
+                break
+        else:
+            print(colorama.Fore.RED + f"[tes] hari '{hari}' ga dikenal — pakai: {' / '.join(config.HARI_ID.values())}" + colorama.Style.RESET_ALL)
+            return
+    jam_siklus.set_simulasi(skr)
+
+    hari_sim = config.HARI_ID.get(skr.strftime("%A"), "")
+    due_h = paksa or skr.hour == int(config.JAM_FAKTA_HARIAN)
+    due_m = paksa or (hari_sim == config.HARI_FAKTA_MINGGUAN and skr.hour == int(config.JAM_FAKTA_MINGGUAN))
+    tier = ("SEMUA — dipaksa FULL" if paksa else
+            "JAM" + (" +HARIAN" if due_h else "") + (" +MINGGUAN" if due_m else ""))
+    fase = config.FASE_AKTIF
+    toko = config.daftar_toko_aktif()
+    mode = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
+    print(colorama.Fore.LIGHTMAGENTA_EX + f"\n[{_t()}] === TES 1 SIKLUS — waktu simulasi {hari_sim} {skr:%H:%M} → tier: {tier} ===\n"
+          + f"  FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}\n"
+          + f"  {len(toko)} toko [{', '.join(toko)}] · MODE: {mode}" + colorama.Style.RESET_ALL)
+    if not config.DRY_RUN:
+        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE_LIVE=True — aksi Fase 2 bakal BENERAN ke Shopee!" + colorama.Style.RESET_ALL)
+    if 2 in fase and not due_h:
+        print(colorama.Fore.YELLOW + f"[{_t()}] info: provisioning paket/voucher/garansi cuma jalan di tier HARIAN — set JAM_TES={config.JAM_FAKTA_HARIAN} (atau FULL) biar ikut." + colorama.Style.RESET_ALL)
+
+    siklus_terpadu(paksa_semua=paksa)          # 1 loop toko, 1 sesi per toko utk semua fase
+    print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] === TES 1 SIKLUS SELESAI (tier: {tier}) ===" + colorama.Style.RESET_ALL)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -262,11 +325,8 @@ def scheduler():
         if now.minute == menit and now.hour != jam_terakhir:
             jam_terakhir = now.hour
             try:
-                if 1 in fase:                          # FASE 1 — grab (read-only)
-                    siklus_fase1()
-                if 2 in fase:                          # FASE 2 — aksi (harga DRY + provisioning)
-                    siklus_fase2()
-                # if 3 in fase: FASE 3 laporan — belum dibikin
+                siklus_terpadu()                       # 1 loop toko, 1 sesi per toko — fase ikut FASE_AKTIF
+                # (fase 3 laporan — belum dibikin)
             except Exception as e:
                 print(colorama.Fore.RED + f"[{_t()}] SIKLUS GAGAL (di-skip, lanjut jam berikutnya): {e}"
                       + colorama.Style.RESET_ALL)
@@ -1040,9 +1100,13 @@ if __name__ == "__main__":
         takedown_komisi_browser(dry=False, konfirmasi=False, limit=1)   # klik Hapus -> dump modal -> CANCEL
     elif arg in ("komisi_takedown_live", "takedown_live"):
         takedown_komisi_browser(dry=False, konfirmasi=True, limit=1)
+    elif arg == "tes":
+        # TES 1 SIKLUS sekarang (tes_harga.bat): python run.py tes [jam] [hari]
+        jalankan_tes(sys.argv[2] if len(sys.argv) > 2 else None,
+                     sys.argv[3] if len(sys.argv) > 3 else None)
     elif arg in ("grab", "fase1", "test", "1"):
         paksa = len(sys.argv) > 2 and sys.argv[2].lower() in ("full", "semua", "all")
-        siklus_fase1(paksa_semua=paksa)
+        siklus_terpadu(paksa_semua=paksa, fase=[1])    # grab doang (fase 1), apapun FASE_AKTIF
     elif arg in ("kategori", "category"):
         jalankan_kategori()
     elif arg in ("fase2", "rubah2"):

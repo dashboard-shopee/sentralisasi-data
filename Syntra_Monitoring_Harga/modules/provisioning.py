@@ -72,43 +72,146 @@ def paket(shop, nama_toko, session):
     return {"paket": bid, "baru": baru, **r}
 
 
-def _kode_voucher(nama_toko):
-    """Kode voucher deterministik ber-prefix UP (alnum, maks 14) — buat idempotent (deteksi via prefix)."""
-    return ("UP" + re.sub(r"[^A-Za-z0-9]", "", nama_toko).upper())[:14]
+_B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _b36(n, lebar):
+    s = ""
+    n = int(n)
+    while n:
+        s = _B36[n % 36] + s
+        n //= 36
+    return s.rjust(lebar, "0")[-lebar:]
+
+
+def _kode_voucher(vouchers, username, now, idx):
+    """Kode = PREFIX_TOKO (4 char, WAJIB — aturan Shopee) + 'U' + band (1 char b36) +
+    day-of-year (2 char b36) [+ 1 char pembeda kalau nabrak] = 8-9 char (custom maks 5).
+    Kode ga boleh dobel sama voucher yg ada (1400101001) — cek ke list, bump kalau kepake.
+    Deteksi punya-bot via NAMA, bukan kode."""
+    doy = int(time.strftime("%j", time.localtime(now)))
+    base = V.prefix_kode_toko(vouchers, username) + "U" + _b36(idx, 1) + _b36(doy, 2)
+    ada = {str(v.get("voucher_code") or "").upper() for v in (vouchers or [])}
+    if base not in ada:
+        return base
+    for a in range(36):
+        if base + _b36(a, 1) not in ada:
+            return base + _b36(a, 1)
+    return base + "Z"
 
 
 def voucher(shop, nama_toko, session):
-    """Voucher harian — pastikan ADA 1 voucher `UPSELL <toko>` (ikuti_toko, shop-wide).
-    Idempotent: kalau voucher ber-kode `UP*` yg masih valid udah ada → auto-perpanjang yg mau mati
-    (sisa ≤ 1 hari); kalau belum ada → buat baru. min_price = 2×AOV (V.min_price_toko). DRY_RUN:
-    buat/perpanjang balik None/simulasi. Return ringkasan.
-    ⚠️ mulai dari tipe `ikuti_toko` (voucher PRODUK per-band = fase lanjutan)."""
+    """Voucher PRODUK per-BAND harga (KPI owner 13 Jul) — maksa pembeli ambil >1 pcs.
+      Band: 1..14999 (KPI_VOUCHER_BAND1_MAKS), lanjut per 20rb (KPI_VOUCHER_BAND_LEBAR),
+      grid FIX. Min belanja = batas atas band + 1 (1-14999→15rb · 15000-34999→35rb · dst).
+      ⚠️ CAP 2×AOV (keputusan owner 13 Jul): band yg min belanjanya > 2×AOV×buffer
+      (V.min_price_toko) DIBUANG — produk mahal (≥ batas band terakhir yg lolos) TANPA
+      voucher, biar ga ngelanggar aturan Shopee min order ≤ 2×AOV & poin ≥2 pcs kejaga.
+      Harga acuan per ITEM = MAX target antar model (harga_akhir; fallback harga_real)
+      → harga berubah = item PINDAH band (items voucher di-reconcile tambah/keluar tiap run).
+      1 voucher per band, idempotent via NAMA 'UPSELL <toko> B<low>'. Jelang-expire (H-1)
+      → buat baru nyambung. Voucher UPSELL yg ga match band manapun (skema lama / band
+      kebuang cap) → coba diakhiri (voucher jalan bakal gagal → warning akhiri manual).
+      DRY_RUN-aware (modul voucher handle)."""
+    from modules import sql_harga as SQL
     now = int(time.time())
+    jelang = config.JELANG_EXPIRE_HARI * 86400
+
+    # 1) harga acuan per ITEM (MAX antar model; target kalau ada, else harga real)
+    harga = {}
+    for b in SQL.baca_baris_rubah(nama_toko):
+        h = b["harga_akhir"] or b["harga_real"]
+        if h > 0:
+            harga[b["item_id"]] = max(harga.get(b["item_id"], 0), h)
+    if not harga:
+        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] 0 produk berharga di olah_data — skip (grab Fase 1 dulu)" + colorama.Style.RESET_ALL)
+        return {"voucher": None, "produk": 0}
+
+    cap = V.min_price_toko(nama_toko)          # 2×AOV×buffer — batas min belanja (aturan Shopee)
+    if cap <= 0:
+        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] AOV kosong (fact_pesanan) — cap 2×AOV ga bisa dihitung, skip" + colorama.Style.RESET_ALL)
+        return {"voucher": None, "produk": len(harga), "cap": 0}
+
+    semua_band = V.bagi_produk_per_band(harga)
+    bands = [(low, high, ids) for low, high, ids in semua_band if ids and high + 1 <= cap]
+    tanpa = sum(len(ids) for low, high, ids in semua_band if ids and high + 1 > cap)
+    if tanpa:
+        print(colorama.Fore.WHITE + f"[prov voucher] [{nama_toko}] {tanpa} produk mahal (band min > cap Rp{cap:,}) TANPA voucher (keputusan owner)" + colorama.Style.RESET_ALL)
+
+    # 2) voucher UPSELL existing → petakan ke band via nama "UPSELL <toko> B<low>"
     vouchers = V.list_vouchers(session, promotion_type=0) or []
     ours = [v for v in vouchers
-            if str(v.get("voucher_code") or v.get("code") or "").upper().startswith("UP")
+            if str(v.get("name") or "").startswith(config.NAMA_UPSELL)
             and int(v.get("end_time") or 0) > now]
+    awalan = f"{config.NAMA_UPSELL} {nama_toko} B"
+    peta = {}
+    for v in ours:
+        m = re.match(re.escape(awalan) + r"(\d+)$", str(v.get("name") or ""))
+        if m:
+            peta.setdefault(int(m.group(1)), []).append(v)
 
-    if ours:
-        diperpanjang = 0
-        for v in ours:
-            if V.perlu_perpanjang(v, now):
-                V.perpanjang_voucher(session, v.get("voucher_id") or v.get("id"),
-                                     now + config.DURASI_PROMO_HARI * 86400, voucher_detail=v)
-                diperpanjang += 1
-        print(colorama.Fore.GREEN + f"[prov voucher] [{nama_toko}] udah ada {len(ours)} voucher UP, {diperpanjang} diperpanjang" + colorama.Style.RESET_ALL)
-        return {"voucher": "ada", "jumlah": len(ours), "perpanjang": diperpanjang}
+    buat = tambah_n = keluar_n = diakhiri = 0
+    dipakai, sudah_diakhiri = set(), set()
+    for idx, (low, high, ids) in enumerate(bands):
+        min_b = high + 1
+        kandidat = peta.get(low) or []
+        # prioritas: min belanja cocok & masih segar → reuse; else yg ada (nyambung/diganti)
+        v = next((x for x in kandidat
+                  if int(float(x.get("min_price") or 0)) == min_b
+                  and int(x.get("end_time") or 0) - now > jelang), None) or (kandidat[0] if kandidat else None)
+        vid = (v.get("voucher_id") or v.get("id")) if v else None
+        segar = bool(v) and int(v.get("end_time") or 0) - now > jelang
+        min_sama = bool(v) and int(float(v.get("min_price") or 0)) == min_b
 
-    # belum ada → buat baru (ikuti_toko, shop-wide)
-    mp = V.min_price_toko(nama_toko)
-    code = _kode_voucher(nama_toko)
-    vid = V.buat_voucher(session, f"{config.NAMA_UPSELL} {nama_toko}", code, now + 300,
-                         now + config.DURASI_PROMO_HARI * 86400,
-                         discount=config.KPI_VOUCHER_DISKON_PCT, min_price=mp, max_value=None,
-                         **V.TIPE["ikuti_toko"])
-    warna = colorama.Fore.YELLOW if not vid else colorama.Fore.CYAN
-    print(warna + f"[prov voucher] [{nama_toko}] {'(DRY) bakal buat' if not vid else 'buat'} voucher '{code}' diskon {config.KPI_VOUCHER_DISKON_PCT}% min Rp{mp:,}" + colorama.Style.RESET_ALL)
-    return {"voucher": vid or "DRY-baru", "code": code, "min_price": mp}
+        if v and segar and min_sama:
+            # reuse → reconcile items (produk pindah band ikut harga terbaru)
+            dipakai.add(vid)
+            det = V.get_voucher(session, vid)
+            skrg = {int(x.get("itemid")) for x in ((det.get("rule") or {}).get("items") or [])
+                    if isinstance(x, dict) and x.get("itemid")}
+            tambah, keluar = set(ids) - skrg, skrg - set(ids)
+            try:
+                if tambah:
+                    V.masukkan_item(session, vid, tambah, detail=det); tambah_n += len(tambah)
+                if keluar:
+                    det = V.get_voucher(session, vid) if tambah else det   # detail fresh abis PUT
+                    V.keluarkan_item(session, vid, keluar, detail=det); keluar_n += len(keluar)
+            except Exception as e:
+                print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] B{low} reconcile GAGAL: {e}" + colorama.Style.RESET_ALL)
+            continue
+
+        if v and segar:                      # min belanja geser (band terakhir) → ganti
+            if V.akhiri_voucher(session, vid):
+                diakhiri += 1
+            sudah_diakhiri.add(vid)
+            start = now + 300
+        elif v:                              # jelang-expire → buat baru nyambung
+            dipakai.add(vid)                 # biarin mati sendiri, jangan diakhiri
+            start = int(v.get("end_time") or 0)
+        else:
+            start = now + 300
+        kode = _kode_voucher(vouchers, shop, now, idx)
+        try:
+            V.buat_voucher(session, f"{awalan}{low}", kode, start,
+                           start + config.KPI_VOUCHER_DURASI_HARI * 86400,
+                           discount=config.KPI_VOUCHER_DISKON_PCT, min_price=min_b,
+                           max_value=None, item_ids=sorted(ids), **V.TIPE["produk"])
+            buat += 1
+        except Exception as e:
+            print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] B{low} buat GAGAL: {e}" + colorama.Style.RESET_ALL)
+
+    # 3) voucher UPSELL yg ga kepakai band manapun → akhiri (skema lama / band ilang / dobel)
+    for v in ours:
+        vid = v.get("voucher_id") or v.get("id")
+        if vid not in dipakai and vid not in sudah_diakhiri:
+            if V.akhiri_voucher(session, vid):
+                diakhiri += 1
+            sudah_diakhiri.add(vid)
+
+    print(colorama.Fore.CYAN + f"[prov voucher] [{nama_toko}] {len(harga)} produk → {len(bands)} band | "
+          f"buat {buat} · item +{tambah_n}/−{keluar_n} · diakhiri {diakhiri}" + colorama.Style.RESET_ALL)
+    return {"produk": len(harga), "band": len(bands), "buat": buat,
+            "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri}
 
 
 def campaign(shop, nama_toko, session):
