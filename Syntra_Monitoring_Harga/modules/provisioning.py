@@ -118,14 +118,21 @@ def voucher(shop, nama_toko, session):
     now = int(time.time())
     jelang = config.JELANG_EXPIRE_HARI * 86400
 
-    # 1) harga acuan per ITEM (MAX antar model; target kalau ada, else harga real)
-    harga = {}
+    # 1) harga acuan per ITEM (MAX antar model; target kalau ada, else harga real) + stok per item.
+    #    ⚠️ Shopee TOLAK voucher produk kalau ada 1 aja item STOK 0 (verified 13 Jul: item 2197126886
+    #    stok-0 bikin seluruh create ERROR_PARAM) → item yg SEMUA modelnya stok 0 DIBUANG dari voucher.
+    harga, stok_item = {}, {}
     for b in SQL.baca_baris_rubah(nama_toko):
         h = b["harga_akhir"] or b["harga_real"]
         if h > 0:
             harga[b["item_id"]] = max(harga.get(b["item_id"], 0), h)
+            stok_item[b["item_id"]] = max(stok_item.get(b["item_id"], 0), int(b.get("stok") or 0))
+    n_stok0 = sum(1 for i in harga if stok_item.get(i, 0) <= 0)
+    harga = {i: h for i, h in harga.items() if stok_item.get(i, 0) > 0}
+    if n_stok0:
+        print(colorama.Fore.WHITE + f"[prov voucher] [{nama_toko}] {n_stok0} produk stok-0 dibuang dari voucher (Shopee tolak)" + colorama.Style.RESET_ALL)
     if not harga:
-        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] 0 produk berharga di olah_data — skip (grab Fase 1 dulu)" + colorama.Style.RESET_ALL)
+        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] 0 produk berstok+berharga di olah_data — skip (grab Fase 1 dulu)" + colorama.Style.RESET_ALL)
         return {"voucher": None, "produk": 0}
 
     cap = V.min_price_toko(nama_toko)          # 2×AOV×buffer — batas min belanja (aturan Shopee)

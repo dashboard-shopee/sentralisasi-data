@@ -712,7 +712,7 @@ export default function RisetKompetitorPage() {
                   {detailProduct.sales_per_toko && Object.keys(detailProduct.sales_per_toko).length > 0 && (
                     <div className="mb-6">
                       <div className="text-[11.5px] font-bold text-[#8a90a2] mb-2.5 uppercase tracking-wide">
-                        📊 Detail Penjualan per Toko Kita (Sheet Source)
+                        📊 Detail Penjualan per Toko Kita
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                         {Object.entries(detailProduct.sales_per_toko).map(([storeName, salesCount]) => (
