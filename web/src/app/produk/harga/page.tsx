@@ -448,6 +448,7 @@ export default function HargaPage() {
         <table className="w-full text-left border-collapse" style={{ minWidth: "1900px" }}>
           <thead>
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
+              <th className="px-2 py-2 text-[11px] font-bold text-[#6b7180] w-[50px] text-center">No</th>
               <th onClick={() => handleSort("sku")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
                 SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
@@ -489,6 +490,7 @@ export default function HargaPage() {
           <tbody className="divide-y divide-[#eef0f6] text-[12px]">
             {list.map((r, i) => (
               <tr key={r.sku} className="hover:bg-[#fcfdfe] transition-colors">
+                <td className="px-2 py-2 text-[#9aa0b2] text-center align-middle font-medium">{(page - 1) * size + i + 1}</td>
                 <td className="px-2 py-2 font-bold text-[#161a27] align-middle">{r.sku}</td>
                 <td className="px-2 py-2 align-middle">
                   <span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[10px] font-semibold rounded">
@@ -673,6 +675,7 @@ export default function HargaPage() {
         <table className="w-full text-left border-collapse" style={{ minWidth: "1500px" }}>
           <thead>
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
+              <th className="p-3.5 text-[12px] font-bold text-[#6b7180] w-[50px] text-center">No</th>
               <th onClick={() => handleSort("toko")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px]">
                 Toko {sortCol === "toko" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
@@ -734,6 +737,9 @@ export default function HargaPage() {
               return (
                 <React.Fragment key={rowKey}>
                 <tr onClick={() => toggleDetail(r)} className={`cursor-pointer transition-colors ${isOpen ? "bg-[#fff8f6]" : "hover:bg-[#fcfdfe]"}`}>
+                  <td className="p-3.5 text-[#9aa0b2] text-center align-middle font-medium">
+                    {(page - 1) * size + i + 1}
+                  </td>
                   <td className="p-3.5 font-semibold text-[#161a27]">
                     <span className="inline-block w-3 text-[#ee4d2d] mr-1 select-none">{isOpen ? "▾" : "▸"}</span>
                     {r.toko}
@@ -782,7 +788,7 @@ export default function HargaPage() {
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={14} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
+                    <td colSpan={15} className="p-0 bg-[#fafbfe] border-b-2 border-[#ffddcc]">
                       {renderPromoDetail(rowKey)}
                     </td>
                   </tr>
@@ -803,19 +809,22 @@ export default function HargaPage() {
         <table className="w-full text-left border-collapse" style={{ minWidth: "1400px" }}>
           <thead>
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
-              <th onClick={() => handleSort("sku")} style={{ left: 0, width: 170, minWidth: 170 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
+              <th style={{ left: 0, width: 50, minWidth: 50 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider sticky z-20 bg-[#f6f7fb] text-center">
+                No
+              </th>
+              <th onClick={() => handleSort("sku")} style={{ left: 50, width: 170, minWidth: 170 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
                 SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("parent_sku")} style={{ left: 170, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
+              <th onClick={() => handleSort("parent_sku")} style={{ left: 220, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
                 Parent {sortCol === "parent_sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("category")} style={{ left: 280, width: 90, minWidth: 90 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
+              <th onClick={() => handleSort("category")} style={{ left: 330, width: 90, minWidth: 90 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb]">
                 Category {sortCol === "category" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("net_price")} style={{ left: 370, width: 100, minWidth: 100 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right">
+              <th onClick={() => handleSort("net_price")} style={{ left: 420, width: 100, minWidth: 100 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right">
                 Net Price {sortCol === "net_price" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => handleSort("harga_diskon")} style={{ left: 470, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right shadow-[inset_-2px_0_0_#eef0f6]">
+              <th onClick={() => handleSort("harga_diskon")} style={{ left: 520, width: 110, minWidth: 110 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors sticky z-20 bg-[#f6f7fb] text-right shadow-[inset_-2px_0_0_#eef0f6]">
                 Harga Diskon {sortCol === "harga_diskon" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               
@@ -837,11 +846,12 @@ export default function HargaPage() {
           <tbody className="divide-y divide-[#eef0f6] text-[13px]">
             {list.map((r, i) => (
               <tr key={r.sku} className="hover:bg-[#fcfdfe] transition-colors">
-                <td style={{ left: 0 }} className="p-3.5 font-bold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.sku}</td>
-                <td style={{ left: 170 }} className="p-3.5 sticky z-10 bg-white group-hover:bg-[#fcfdfe]"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
-                <td style={{ left: 280 }} className="p-3.5 text-[#6b7180] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.category || "-"}</td>
-                <td style={{ left: 370 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{formatRp(r.netPrice)}</td>
-                <td style={{ left: 470 }} className="p-3.5 text-right font-semibold text-[#ee4d2d] sticky z-10 bg-white group-hover:bg-[#fcfdfe] shadow-[inset_-2px_0_0_#eef0f6]">{formatRp(r.hargaDiskon)}</td>
+                <td style={{ left: 0, width: 50 }} className="p-3.5 text-[#9aa0b2] text-center align-middle font-medium sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{(page - 1) * size + i + 1}</td>
+                <td style={{ left: 50 }} className="p-3.5 font-bold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.sku}</td>
+                <td style={{ left: 220 }} className="p-3.5 sticky z-10 bg-white group-hover:bg-[#fcfdfe]"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
+                <td style={{ left: 330 }} className="p-3.5 text-[#6b7180] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.category || "-"}</td>
+                <td style={{ left: 420 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{formatRp(r.netPrice)}</td>
+                <td style={{ left: 520 }} className="p-3.5 text-right font-semibold text-[#ee4d2d] sticky z-10 bg-white group-hover:bg-[#fcfdfe] shadow-[inset_-2px_0_0_#eef0f6]">{formatRp(r.hargaDiskon)}</td>
                 
                 {tokos.map((tk) => {
                   const tkData = r.tokos?.[tk.username];

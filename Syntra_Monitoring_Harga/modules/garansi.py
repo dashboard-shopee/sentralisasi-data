@@ -159,13 +159,16 @@ def list_ongoing_status(session, page_size=100, maks_halaman=50):
     return list(hasil.values())
 
 
-def entri_enroll(item_id, item_name, model_id, model_name, cspu_id, floor_rp, ceiling_rp, bid_stock=0):
-    """Bangun 1 entri cspu_product utk submit_bidding_online. bid_price = ceiling (Harga Program),
-    floor/ceiling dari rekomendasi. Harga ×FAKTOR (string)."""
+def entri_enroll(item_id, item_name, model_id, model_name, cspu_id, floor_rp, ceiling_rp, bid_stock=0, bid_rp=None):
+    """Bangun 1 entri cspu_product utk submit_bidding_online. floor/ceiling = rentang IZIN.
+    bid_price (harga yg di-commit) = `bid_rp` kalau diisi, else DEFAULT ceiling (Harga Program).
+    Dipakai owner 13 Jul: rekomendasi/enroll baru → bid @ Program (default); re-submit dari
+    'perlu ditinjau' → bid @ Harga Terbaik (bid_rp=floor) biar kompetitif. Harga ×FAKTOR (string)."""
+    bid = int(bid_rp) if bid_rp else int(ceiling_rp)
     return {
         "cspu_id": str(cspu_id), "item_id": str(item_id), "item_name": item_name,
         "model_id": str(model_id), "model_name": model_name,
-        "bid_price": str(int(ceiling_rp) * FAKTOR), "floor_price": str(int(floor_rp) * FAKTOR),
+        "bid_price": str(bid * FAKTOR), "floor_price": str(int(floor_rp) * FAKTOR),
         "ceiling_price": str(int(ceiling_rp) * FAKTOR), "bid_stock": str(bid_stock),
         "bid_source": 0, "accept_rebate": 1,
     }

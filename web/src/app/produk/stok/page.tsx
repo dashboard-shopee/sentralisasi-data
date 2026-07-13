@@ -195,6 +195,7 @@ export default function StokPage() {
                 <thead>
                   <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
                     <th className="p-3.5 w-[40px]"></th>
+                    <th className="p-3.5 w-[55px] text-center text-[12px] font-bold text-[#6b7180] tracking-wider">No</th>
                     <th onClick={() => handleSort("sku")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[150px]">
                       SKU {sortCol === "sku" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                     </th>
@@ -225,7 +226,7 @@ export default function StokPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#eef0f6] text-[13px]">
-                  {rows.map((r) => {
+                  {rows.map((r, index) => {
                     const isOpen = expandedSku === r.sku;
                     const st = getStockStatus(r);
                     return (
@@ -237,6 +238,9 @@ export default function StokPage() {
                         >
                           <td className="p-3.5 text-center text-[#8a90a2] font-bold text-[10px] select-none">
                             {isOpen ? "▼" : "▶"}
+                          </td>
+                          <td className="p-3.5 text-center text-[#9aa0b2] font-semibold">
+                            {(page - 1) * size + index + 1}
                           </td>
                           <td className="p-3.5 font-bold text-[#161a27]">{r.sku}</td>
                           <td className="p-3.5"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
@@ -268,7 +272,7 @@ export default function StokPage() {
                         {/* Expandable detailed drawer */}
                         {isOpen && (
                           <tr className="bg-[#fafbfc] border-t border-b border-[#eef0f6]">
-                            <td colSpan={10} className="p-5">
+                            <td colSpan={11} className="p-5">
                               {loadingDetail ? (
                                 <div className="flex items-center justify-center py-6 gap-2">
                                   <div className="w-5 h-5 rounded-full border-2 border-t-transparent border-[#ee4d2d] animate-spin"></div>

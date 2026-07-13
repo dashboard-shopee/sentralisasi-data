@@ -7,7 +7,6 @@ Orkestrasi tipis di atas modul low-level yg SUDAH ada (paket_diskon/voucher/…)
 Sumber produk = `harga_olah_data` (hasil grab Fase 1) → Fase 1 harus udah jalan (produk di DB).
 Cadence: paket & voucher = HARIAN.
 """
-import re
 import time
 import colorama; colorama.init()
 import config
@@ -109,9 +108,11 @@ def voucher(shop, nama_toko, session):
       voucher, biar ga ngelanggar aturan Shopee min order ≤ 2×AOV & poin ≥2 pcs kejaga.
       Harga acuan per ITEM = MAX target antar model (harga_akhir; fallback harga_real)
       → harga berubah = item PINDAH band (items voucher di-reconcile tambah/keluar tiap run).
-      1 voucher per band, idempotent via NAMA 'UPSELL <toko> B<low>'. Jelang-expire (H-1)
-      → buat baru nyambung. Voucher UPSELL yg ga match band manapun (skema lama / band
-      kebuang cap) → coba diakhiri (voucher jalan bakal gagal → warning akhiri manual).
+      ⚠️ Band > KPI_VOUCHER_MAKS_ITEM (500) item DIPECAH jadi >1 voucher (Shopee tolak
+      voucher >~570 item — verified 13 Jul). Slot: 'UPSELL <toko> B<low>' (chunk 0) ·
+      '...B<low>#2/#3' (lanjutan), min belanja & diskon sama. Idempotent via NAMA slot.
+      Jelang-expire (H-1) → buat baru nyambung. Voucher UPSELL yg ga match slot manapun
+      (skema lama / band kebuang cap) → coba diakhiri (voucher jalan gagal → warning manual).
       DRY_RUN-aware (modul voucher handle)."""
     from modules import sql_harga as SQL
     now = int(time.time())
@@ -138,23 +139,34 @@ def voucher(shop, nama_toko, session):
     if tanpa:
         print(colorama.Fore.WHITE + f"[prov voucher] [{nama_toko}] {tanpa} produk mahal (band min > cap Rp{cap:,}) TANPA voucher (keputusan owner)" + colorama.Style.RESET_ALL)
 
-    # 2) voucher UPSELL existing → petakan ke band via nama "UPSELL <toko> B<low>"
+    # 2) band → SLOT: item > KPI_VOUCHER_MAKS_ITEM dipecah (Shopee tolak voucher >~570 item).
+    #    1 slot = 1 voucher. Band gede jadi >1 voucher (min belanja & diskon SAMA, item dibagi).
+    #    Nama: "UPSELL <toko> B<low>" (chunk 0, kompat lama) · "...B<low>#2/#3.." (chunk lanjut).
+    awalan = f"{config.NAMA_UPSELL} {nama_toko} B"
+    MAKS = config.KPI_VOUCHER_MAKS_ITEM
+    slots = []                                  # (nama_slot, min_b, ids_chunk)
+    for low, high, ids in bands:
+        min_b = high + 1
+        ids_sorted = sorted(ids)
+        for k in range(0, max(len(ids_sorted), 1), MAKS):
+            chunk = ids_sorted[k:k + MAKS]
+            nama = f"{awalan}{low}" + (f"#{k // MAKS + 1}" if k else "")
+            slots.append((nama, min_b, chunk))
+
+    # voucher UPSELL existing → petakan by NAMA persis (biar cocok per slot)
     vouchers = V.list_vouchers(session, promotion_type=0) or []
     ours = [v for v in vouchers
             if str(v.get("name") or "").startswith(config.NAMA_UPSELL)
             and int(v.get("end_time") or 0) > now]
-    awalan = f"{config.NAMA_UPSELL} {nama_toko} B"
     peta = {}
     for v in ours:
-        m = re.match(re.escape(awalan) + r"(\d+)$", str(v.get("name") or ""))
-        if m:
-            peta.setdefault(int(m.group(1)), []).append(v)
+        peta.setdefault(str(v.get("name") or ""), []).append(v)
 
-    buat = tambah_n = keluar_n = diakhiri = 0
+    buat = tambah_n = keluar_n = diakhiri = gagal = 0
     dipakai, sudah_diakhiri = set(), set()
-    for idx, (low, high, ids) in enumerate(bands):
-        min_b = high + 1
-        kandidat = peta.get(low) or []
+    for idx, (nama_slot, min_b, chunk) in enumerate(slots):
+        ids = set(chunk)
+        kandidat = peta.get(nama_slot) or []
         # prioritas: min belanja cocok & masih segar → reuse; else yg ada (nyambung/diganti)
         v = next((x for x in kandidat
                   if int(float(x.get("min_price") or 0)) == min_b
@@ -164,12 +176,12 @@ def voucher(shop, nama_toko, session):
         min_sama = bool(v) and int(float(v.get("min_price") or 0)) == min_b
 
         if v and segar and min_sama:
-            # reuse → reconcile items (produk pindah band ikut harga terbaru)
+            # reuse → reconcile items (produk pindah band/slot ikut harga terbaru)
             dipakai.add(vid)
             det = V.get_voucher(session, vid)
             skrg = {int(x.get("itemid")) for x in ((det.get("rule") or {}).get("items") or [])
                     if isinstance(x, dict) and x.get("itemid")}
-            tambah, keluar = set(ids) - skrg, skrg - set(ids)
+            tambah, keluar = ids - skrg, skrg - ids
             try:
                 if tambah:
                     V.masukkan_item(session, vid, tambah, detail=det); tambah_n += len(tambah)
@@ -177,10 +189,10 @@ def voucher(shop, nama_toko, session):
                     det = V.get_voucher(session, vid) if tambah else det   # detail fresh abis PUT
                     V.keluarkan_item(session, vid, keluar, detail=det); keluar_n += len(keluar)
             except Exception as e:
-                print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] B{low} reconcile GAGAL: {e}" + colorama.Style.RESET_ALL)
+                print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] {nama_slot} reconcile GAGAL: {e}" + colorama.Style.RESET_ALL)
             continue
 
-        if v and segar:                      # min belanja geser (band terakhir) → ganti
+        if v and segar:                      # min belanja geser → ganti
             if V.akhiri_voucher(session, vid):
                 diakhiri += 1
             sudah_diakhiri.add(vid)
@@ -192,13 +204,15 @@ def voucher(shop, nama_toko, session):
             start = now + 300
         kode = _kode_voucher(vouchers, shop, now, idx)
         try:
-            V.buat_voucher(session, f"{awalan}{low}", kode, start,
-                           start + config.KPI_VOUCHER_DURASI_HARI * 86400,
-                           discount=config.KPI_VOUCHER_DISKON_PCT, min_price=min_b,
-                           max_value=None, item_ids=sorted(ids), **V.TIPE["produk"])
+            vidbaru = V.buat_voucher(session, nama_slot, kode, start,
+                                     start + config.KPI_VOUCHER_DURASI_HARI * 86400,
+                                     discount=config.KPI_VOUCHER_DISKON_PCT, min_price=min_b,
+                                     max_value=None, item_ids=sorted(ids), **V.TIPE["produk"])
             buat += 1
+            vouchers.append({"voucher_code": kode})   # cegah kode dobel di slot berikutnya (1 sesi)
         except Exception as e:
-            print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] B{low} buat GAGAL: {e}" + colorama.Style.RESET_ALL)
+            gagal += 1
+            print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] {nama_slot} buat GAGAL: {e}" + colorama.Style.RESET_ALL)
 
     # 3) voucher UPSELL yg ga kepakai band manapun → akhiri (skema lama / band ilang / dobel)
     for v in ours:
@@ -208,10 +222,12 @@ def voucher(shop, nama_toko, session):
                 diakhiri += 1
             sudah_diakhiri.add(vid)
 
-    print(colorama.Fore.CYAN + f"[prov voucher] [{nama_toko}] {len(harga)} produk → {len(bands)} band | "
-          f"buat {buat} · item +{tambah_n}/−{keluar_n} · diakhiri {diakhiri}" + colorama.Style.RESET_ALL)
-    return {"produk": len(harga), "band": len(bands), "buat": buat,
-            "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri}
+    warna = colorama.Fore.RED if gagal else colorama.Fore.CYAN
+    print(warna + f"[prov voucher] [{nama_toko}] {len(harga)} produk → {len(bands)} band / {len(slots)} slot | "
+          f"buat {buat} · item +{tambah_n}/−{keluar_n} · diakhiri {diakhiri}"
+          + (f" · ⚠️ {gagal} GAGAL" if gagal else "") + colorama.Style.RESET_ALL)
+    return {"produk": len(harga), "band": len(bands), "slot": len(slots), "buat": buat,
+            "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal}
 
 
 def campaign(shop, nama_toko, session):
@@ -260,59 +276,69 @@ def flash(shop, nama_toko, session):
 
 
 def garansi(shop, nama_toko, session):
-    """Garansi Harga Terbaik harian. qualify = best(floor) ≥ target−500 DAN margin@best ≥ 7%.
-      (a) REKOMENDASI (belum-didaftar): qualify & stok>0 → DAFTAR (enroll).
-      (b) TERBAIK (bid_status 30): TIDAK qualify → TAKEDOWN (withdraw). qualify → biarin.
-      (c) PERLU-DITINJAU (bid_status 40): qualify & stok>0 → RE-DAFTAR (enroll ulang); selain itu →
-          TAKEDOWN (refresh balik ke belum-didaftar). DRY_RUN-aware (modul garansi handle)."""
+    """Garansi Harga Terbaik harian (spec owner 13 Jul — margin dicek di HARGA BEDA per kondisi):
+      LOLOS = harga_acuan ≥ target−SELISIH DAN margin(harga_acuan) ≥ MARGIN_MIN.
+      (a) REKOMENDASI (belum-daftar): cek @ Harga PROGRAM (ceiling) → LOLOS & stok>0 → DAFTAR
+          (bid @ Program). HPP kosong → SKIP.
+      (b) TERBAIK (bid_status 30): cek @ Harga PROGRAM → GAGAL (kebukti langgar) → TAKEDOWN.
+          LOLOS/HPP-kosong → biarin.
+      (c) PERLU-DITINJAU (bid_status 40): cek @ Harga TERBAIK (floor) → LOLOS & stok>0 → RE-DAFTAR
+          bid @ Harga Terbaik (turun biar kompetitif). GAGAL → TAKEDOWN (refresh). HPP-kosong /
+          stok-0-doang → biarin. DRY_RUN-aware (modul garansi handle)."""
     from modules import garansi as G
     from modules import sql_harga as SQL
     from modules.fase2_harga import _margin
 
     # KPI garansi dari CONFIG (bisa diubah sewaktu2 di config.py blok "KPI PER-MODUL"):
-    SELISIH = config.KPI_GARANSI_SELISIH        # best minimal target − ini (default 500)
-    MARGIN_MIN = config.KPI_GARANSI_MARGIN_MIN  # margin@best minimal ini (default 0.07 = 7%)
+    SELISIH = config.KPI_GARANSI_SELISIH        # harga acuan minimal target − ini (default 500)
+    MARGIN_MIN = config.KPI_GARANSI_MARGIN_MIN  # margin@harga acuan minimal ini (default 0.07 = 7%)
 
     baris = SQL.baca_baris_rubah(nama_toko)
     tgt = {(b["item_id"], b["model_id"]): b for b in baris}          # target (harga_akhir) + sku per (item,model)
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
 
-    def qualify(best, item_id, model_id):
-        """None=ga ada target (skip). True/False=lolos kondisi (best≥target−SELISIH & margin@best≥MARGIN_MIN)."""
+    def qualify(harga, item_id, model_id):
+        """Status kelayakan garansi DI HARGA ACUAN (Program utk rekom/terbaik, Terbaik utk perlu-tinjau):
+          "SKIP"   = ga ada target / harga acuan 0 (produk ga dikelola)
+          "GAGAL"  = kebukti langgar KPI (harga < target−SELISIH ATAU margin < MIN) → boleh takedown
+          "NO_HPP" = target ada tapi HPP ga kebaca → ga bisa dibuktiin (jangan takedown, jangan daftar)
+          "LOLOS"  = harga ≥ target−SELISIH DAN margin ≥ MIN."""
         b = tgt.get((int(item_id), int(model_id)))
-        if not b or not b.get("harga_akhir") or best <= 0:
-            return None
-        if best < b["harga_akhir"] - SELISIH:
-            return False
-        m = _margin(best, biaya.get((b["sku"] or "").strip().upper()))
-        if m is not None and m < MARGIN_MIN:
-            return False
-        return True
+        if not b or not b.get("harga_akhir") or harga <= 0:
+            return "SKIP"
+        if harga < b["harga_akhir"] - SELISIH:      # −500: ga butuh HPP → bisa langsung GAGAL
+            return "GAGAL"
+        m = _margin(harga, biaya.get((b["sku"] or "").strip().upper()))
+        if m is None:                               # HPP ga kebaca
+            return "NO_HPP"
+        return "GAGAL" if m < MARGIN_MIN else "LOLOS"
 
-    # (a) REKOMENDASI → enroll yg qualify & stok>0
+    # (a) REKOMENDASI → cek @ Harga PROGRAM (ceiling), enroll bid @ Program (default entri_enroll)
     entri = []
     for it in G.list_rekomendasi(session):
         if it["stok"] <= 0:
             continue
         for m in it["models"]:
-            if qualify(it["floor"], it["item_id"], m["model_id"]) is True:
+            if qualify(it["ceiling"], it["item_id"], m["model_id"]) == "LOLOS":
                 entri.append(G.entri_enroll(it["item_id"], it["item_name"], m["model_id"], m["model_name"],
-                                            m["cspu_id"], it["floor"], it["ceiling"]))
+                                            m["cspu_id"], it["floor"], it["ceiling"]))   # bid @ ceiling (Program)
     ok_daftar = G.enroll(session, entri)[0] if entri else 0
 
     # (b)/(c) ONGOING
     withdraw_ids, redaftar = [], []
     for o in G.list_ongoing_status(session):
-        q = qualify(o["floor"], o["item_id"], o["model_id"])
         if o["bid_status"] == G.BID_STATUS_TERBAIK:
-            if q is False:                                  # (b) NOT qualify → takedown
+            if qualify(o["ceiling"], o["item_id"], o["model_id"]) == "GAGAL":   # (b) @Program, kebukti langgar → takedown
                 withdraw_ids.append(o["bid_id"])
+            # LOLOS / NO_HPP / SKIP → biarin
         elif o["bid_status"] == G.BID_STATUS_PERLU_TINJAU:
-            if q is True and o["stok"] > 0 and o["cspu_id"]:  # (c) qualify → re-daftar in-place
+            q = qualify(o["floor"], o["item_id"], o["model_id"])                # (c) @Harga Terbaik (floor)
+            if q == "LOLOS" and o["stok"] > 0 and o["cspu_id"]:                 # lolos → ajuin ulang, bid @ Terbaik
                 redaftar.append(G.entri_enroll(o["item_id"], o["item_name"], o["model_id"], o["model_name"],
-                                               o["cspu_id"], o["floor"], o["ceiling"]))
-            else:                                            # (c) selain itu → takedown (refresh)
+                                               o["cspu_id"], o["floor"], o["ceiling"], bid_rp=o["floor"]))
+            elif q == "GAGAL":                                                  # kebukti langgar → takedown (refresh)
                 withdraw_ids.append(o["bid_id"])
+            # NO_HPP / SKIP / (LOLOS tapi stok 0) → biarin
 
     ok_redaftar = G.enroll(session, redaftar)[0] if redaftar else 0
     ok_takedown = G.withdraw(session, withdraw_ids)[0] if withdraw_ids else 0

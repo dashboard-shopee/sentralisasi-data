@@ -430,6 +430,7 @@ export default function RisetKompetitorPage() {
             <table className="w-full text-left border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-[#f0f2f7] text-[#8a90a2] font-semibold">
+                  <th className="py-3 px-2 w-[40px] text-center">No</th>
                   <th className="py-3 px-2 w-[80px]">Gambar</th>
                   <th className="py-3 px-2">Info SKU</th>
                   <th className="py-3 px-2 text-right">Sales</th>
@@ -440,7 +441,7 @@ export default function RisetKompetitorPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-[#8a90a2]">
+                    <td colSpan={6} className="py-12 text-center text-[#8a90a2]">
                       <div className="flex flex-col items-center gap-2">
                         <span className="w-8 h-8 rounded-full border-3 border-[#fff1ed] border-t-[#ee4d2d] animate-spin" />
                         <span>Memuat data riset...</span>
@@ -449,12 +450,12 @@ export default function RisetKompetitorPage() {
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-[#8a90a2]">
+                    <td colSpan={6} className="py-12 text-center text-[#8a90a2]">
                       Tidak ada produk riset yang cocok.
                     </td>
                   </tr>
                 ) : (
-                  products.map((p) => {
+                  products.map((p, index) => {
                     const isSelected = selectedId === p.id;
                     const dateOld = p.tanggal_update 
                       ? (new Date().getTime() - new Date(p.tanggal_update).getTime()) / (1000 * 3600 * 24) >= 10
@@ -468,6 +469,10 @@ export default function RisetKompetitorPage() {
                           isSelected ? "bg-[#fff1ed]/40 hover:bg-[#fff1ed]/40" : ""
                         }`}
                       >
+                        {/* No */}
+                        <td className="py-3.5 px-2 text-[#9aa0b2] text-center align-middle font-medium">
+                          {(page - 1) * limit + index + 1}
+                        </td>
                         {/* Image */}
                         <td className="py-3.5 px-2">
                           <div className="w-[54px] h-[54px] rounded-xl overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">

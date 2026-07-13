@@ -580,7 +580,7 @@ export default function ServerTable({
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className="border-t border-[#f3f4f8] hover:bg-[#fafbfd]">
-                <td className="px-3 py-2 text-[#9aa0b2]">{(page - 1) * pageSize + i + 1}</td>
+                <td className="px-3 py-2 text-[#9aa0b2]">{(page - 1) * pageSizeState + i + 1}</td>
                 {columns.map((c) => {
                   if (c.key === "gambar") {
                     const url = r.gambar ? String(r.gambar) : "";

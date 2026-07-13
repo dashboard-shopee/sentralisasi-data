@@ -101,6 +101,9 @@ KPI_VOUCHER_BAND_LEBAR      = 20000   # lebar band harga voucher produk (per 20r
 KPI_VOUCHER_BAND1_MAKS      = 14999   # band pertama: 1 .. ini (min belanja 15000)
 KPI_VOUCHER_USAGE_QTY       = 100000  # kuota pemakaian voucher
 KPI_VOUCHER_DURASI_HARI     = 90      # durasi voucher baru (90 verified live 13 Jul; >90 belum dites)
+KPI_VOUCHER_MAKS_ITEM       = 500     # maks produk per voucher — Shopee TOLAK (ERROR_PARAM) kalau >~570
+                                      # (verified 13 Jul: 570 lolos, 575 gagal). Band >ini dipecah jadi
+                                      # >1 voucher (min belanja & diskon sama). 500 = aman (553 kebukti jalan).
 KPI_VOUCHER_MINPRICE_FAKTOR = 2.0     # CAP band = faktor × AOV (aturan Shopee: min order ≤ 2×AOV)
 KPI_VOUCHER_MINPRICE_BUFFER = 0.97    # buffer < 1 biar cap aman DI BAWAH batas Shopee
 KPI_VOUCHER_AOV_WINDOW_HARI = 30      # jendela hari hitung AOV (fact_pesanan)
