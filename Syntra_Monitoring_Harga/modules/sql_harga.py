@@ -674,6 +674,17 @@ def baca_garansi_best(toko):
     return out
 
 
+def baca_komisi_shopee_aktif(nama_toko):
+    """set(item_id) produk yg komisi affiliate-nya AKTIF di SHOPEE (dari `harga_fakta_komisi`,
+    hasil grab browser). Trigger PEG komisi tambahan (selain Syntra harga_jual): produk Shopee-
+    komisi-aktif TAPI belum ada `harga_jual` Syntra → JAGA harga (jangan diturunin, tunggu owner
+    isi patokan di dashboard). `nama_toko` = nama (kolom `toko`)."""
+    with get_engine().connect() as c:
+        rows = c.execute(text("select item_id from harga_fakta_komisi where toko = :t"),
+                         {"t": nama_toko}).fetchall()
+    return {int(r.item_id) for r in rows}
+
+
 def baca_komisi_patokan(username_toko):
     """{SKU_UPPER: {harga_jual, persen}} produk yg KOMISI-nya AKTIF (`harga_jual > 0`) di toko ini,
     dari `harga_komisi_toko` (SYNTRA = sumber kebenaran komisi; NO anti-bot). Komisi aktif ⇒

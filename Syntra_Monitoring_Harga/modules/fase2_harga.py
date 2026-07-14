@@ -121,7 +121,8 @@ def diagnosa_toko(nama_toko):
     garansi = SQL.baca_garansi_best(nama_toko)
     penjualan = SQL.baca_penjualan_per_hari([b["item_id"] for b in baris])
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
-    komisi = SQL.baca_komisi_patokan(config.username_dari_nama(nama_toko))   # {SKU_UPPER: {harga_jual, persen}}
+    komisi = SQL.baca_komisi_patokan(config.username_dari_nama(nama_toko))   # {SKU_UPPER: {harga_jual, persen}} — SYNTRA
+    shopee_kom = SQL.baca_komisi_shopee_aktif(nama_toko)                     # set(item_id) komisi aktif di SHOPEE
 
     out = []
     for b in baris:
@@ -134,9 +135,14 @@ def diagnosa_toko(nama_toko):
         komisi_patokan = kom["harga_jual"] if (kom and kom["harga_jual"] > 0) else None
         target = komisi_patokan if komisi_patokan else b["harga_akhir"]
         hd = b.get("harga_diskon", 0)          # Harga Diskon MENTAH (acuan rem 40%)
+        # Trigger komisi Shopee (tanpa patokan Syntra): produk komisi-aktif di Shopee tapi harga_jual
+        # belum diisi → bot ga tau Harga Komisi → JAGA harga (jangan diubah, tunggu owner isi patokan).
+        shopee_hold = (b["item_id"] in shopee_kom) and not komisi_patokan
 
         if not target or target <= 0:
             kasus, aksi = "tanpa_target", []
+        elif shopee_hold:
+            kasus, aksi = "komisi_hold", []
         elif real == target:
             kasus, aksi = "sesuai", []
         elif hd > 0 and target < hd * (1 - REM_MAKS_TURUN):
@@ -182,6 +188,9 @@ def bangun_alasan(d):
     kasus = d.get("kasus")
     if kasus == "tanpa_target":
         return "Tanpa target (Harga Diskon kosong) — harga tidak diubah"
+    if kasus == "komisi_hold":
+        return ("Komisi AKTIF di Shopee (belum ada patokan Harga Jual di dashboard) — "
+                "harga DIJAGA, tidak diubah. Isi Harga Jual komisi biar bot bisa patok.")
     src = "komisi aktif" if d.get("komisi_patokan") else "Harga Diskon"
     bits = [f"Target {F(d.get('target'))} ({src})"]
     if kasus == "rem_turun":
