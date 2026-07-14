@@ -130,9 +130,11 @@ def grab_params(session, cursor="", page_size=48):   # Shopee batasi max ~48; 96
 
 
 # GRAB PRODUK — kumpulkan semua model dari satu toko.
-# Return (baris, konteks):
+# Return (baris, konteks, lengkap):
 #   baris   = variasi berstok (>0) utk harga_olah_data (dashboard). Elemen ke-10 = stok.
 #   konteks = SEMUA keikutsertaan promo (termasuk stok 0) utk harga_promo_konteks.
+#   lengkap = True kalau grab kelar natural (semua halaman kebaca); False kalau kena cap
+#             halaman>500 (potensi TAK lengkap → caller JANGAN nol-in stok produk tak-kegrab).
 def grab_produk(shop, nama_toko, session):
     baris = []
     konteks = []
@@ -141,6 +143,7 @@ def grab_produk(shop, nama_toko, session):
     collected = 0
     halaman = 0
     dilewati = 0   # jumlah model dilewati karena stok 0
+    lengkap = True
     while True:
         halaman += 1
         data = api_get(
@@ -202,11 +205,14 @@ def grab_produk(shop, nama_toko, session):
 
         collected += len(produk_list)
         cursor = page_info.get("cursor", "")
-        if (not produk_list) or (total and collected >= total) or (not cursor) or (halaman > 500):
+        if halaman > 500:               # cap keamanan → grab BELUM tentu lengkap
+            lengkap = False
+            break
+        if (not produk_list) or (total and collected >= total) or (not cursor):
             break
     log(f"grab selesai: {len(baris)} variasi berstok, {dilewati} dilewati (stok 0), {len(konteks)} keikutsertaan promo terekam",
         level="detail", fase="F1", toko=shop, modul="grab")
-    return baris, konteks
+    return baris, konteks, lengkap
 
 
 def _log(shop, n, kode, harga, sumber=""):

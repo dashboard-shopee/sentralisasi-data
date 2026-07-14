@@ -28,13 +28,9 @@ export async function middleware(req: NextRequest) {
 
     const role = user.role as string;
     const allowedMenus = (user.allowed_menus || []) as string[];
-    const canViewMargin = role === "owner" || user.can_view_margin !== false;
-
-    // Kalkulator = full-page HPP/margin -> tutup total kalau data sensitif dikunci,
-    // walau menu ini masih tercentang di allowed_menus (izin lama sebelum toggle ada).
-    if (pathname.startsWith("/produk/kalkulator") && !canViewMargin) {
-      return NextResponse.redirect(new URL("/", req.url));
-    }
+    // Catatan: gating tab (single/batch di Kalkulator, dst) & field sensitif (Margin/HPP/
+    // Net Price/Harga Jual Komisi) DILAKUKAN DI API (lib/permissions.ts, live dari DB),
+    // bukan di sini — biar konsisten dgn tab-tab lain (Harga & Komisi, Pusat Promosi).
 
     // Proteksi halaman manajemen akses admin (hanya Owner yang boleh)
     if (pathname.startsWith("/pengaturan-akses") || pathname.startsWith("/api/users")) {

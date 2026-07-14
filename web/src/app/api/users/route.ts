@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { q } from "@/lib/db";
+import { TABS_BY_PAGE } from "@/lib/permissions";
+
+// Bersihin input allowed_tabs dari client: cuma terima key & value yang valid,
+// default ke "semua tab" (page) kalau key tidak ada / bukan array.
+function sanitizeAllowedTabs(raw: any): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const page of Object.keys(TABS_BY_PAGE)) {
+    const val = raw && Array.isArray(raw[page]) ? raw[page] : null;
+    out[page] = val ? val.filter((t: string) => TABS_BY_PAGE[page].includes(t)) : [...TABS_BY_PAGE[page]];
+  }
+  return out;
+}
 
 // Helper untuk verifikasi hak akses Owner
 async function verifyOwner() {
@@ -26,13 +38,14 @@ export async function GET() {
 
   try {
     const users = await q(
-      "select id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days from dashboard_user order by id asc"
+      "select id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_net_price, can_view_margin, can_view_hpp, can_view_harga_jual_komisi, allowed_tabs, avatar_emoji, session_duration_days from dashboard_user order by id asc"
     );
-    
-    // Parse allowed_menus dari string jika disimpan sebagai string JSON di DB
+
+    // Parse allowed_menus/allowed_tabs dari string jika disimpan sebagai string JSON di DB
     const parsedUsers = users.map((u: any) => ({
       ...u,
-      allowed_menus: typeof u.allowed_menus === "string" ? JSON.parse(u.allowed_menus) : u.allowed_menus
+      allowed_menus: typeof u.allowed_menus === "string" ? JSON.parse(u.allowed_menus) : u.allowed_menus,
+      allowed_tabs: sanitizeAllowedTabs(typeof u.allowed_tabs === "string" ? JSON.parse(u.allowed_tabs) : u.allowed_tabs),
     }));
 
     return NextResponse.json({ ok: true, users: parsedUsers });
@@ -51,7 +64,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days } = body;
+    const { username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_net_price, can_view_margin, can_view_hpp, can_view_harga_jual_komisi, allowed_tabs, avatar_emoji, session_duration_days } = body;
 
     if (!username || !password) {
       return NextResponse.json({ ok: false, error: "Username dan password wajib diisi" }, { status: 400 });
@@ -65,8 +78,8 @@ export async function POST(req: Request) {
 
     // Insert user
     await q(
-      `insert into dashboard_user (username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `insert into dashboard_user (username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_net_price, can_view_margin, can_view_hpp, can_view_harga_jual_komisi, allowed_tabs, avatar_emoji, session_duration_days)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         username.trim(),
         password.trim(),
@@ -76,7 +89,11 @@ export async function POST(req: Request) {
         !!can_edit_harga,
         !!can_edit_komisi,
         !!can_edit_kalkulator,
+        can_view_net_price !== false,
         can_view_margin !== false,
+        can_view_hpp !== false,
+        can_view_harga_jual_komisi !== false,
+        JSON.stringify(sanitizeAllowedTabs(allowed_tabs)),
         avatar_emoji ? avatar_emoji.trim() : null,
         Number(session_duration_days || 7)
       ]
@@ -98,7 +115,7 @@ export async function PUT(req: Request) {
 
   try {
     const body = await req.json();
-    const { id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days } = body;
+    const { id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_net_price, can_view_margin, can_view_hpp, can_view_harga_jual_komisi, allowed_tabs, avatar_emoji, session_duration_days } = body;
 
     if (!id || !username || !password) {
       return NextResponse.json({ ok: false, error: "ID, username, dan password wajib diisi" }, { status: 400 });
@@ -117,21 +134,29 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: false, error: "Nama akun Owner tidak boleh diubah" }, { status: 400 });
     }
 
+    const isOwner = currentUsername === "Owner";
+    const fullTabs: Record<string, string[]> = {};
+    for (const page of Object.keys(TABS_BY_PAGE)) fullTabs[page] = [...TABS_BY_PAGE[page]];
+
     // Update data
     await q(
       `update dashboard_user
-       set username = $1, password = $2, allowed_menus = $3, can_edit_ads = $4, can_edit_competitor = $5, can_edit_harga = $6, can_edit_komisi = $7, can_edit_kalkulator = $8, can_view_margin = $9, avatar_emoji = $10, session_duration_days = $11
-       where id = $12`,
+       set username = $1, password = $2, allowed_menus = $3, can_edit_ads = $4, can_edit_competitor = $5, can_edit_harga = $6, can_edit_komisi = $7, can_edit_kalkulator = $8, can_view_net_price = $9, can_view_margin = $10, can_view_hpp = $11, can_view_harga_jual_komisi = $12, allowed_tabs = $13, avatar_emoji = $14, session_duration_days = $15
+       where id = $16`,
       [
         username.trim(),
         password.trim(),
         JSON.stringify(allowed_menus || []),
-        currentUsername === "Owner" ? true : !!can_edit_ads,
-        currentUsername === "Owner" ? true : !!can_edit_competitor,
-        currentUsername === "Owner" ? true : !!can_edit_harga,
-        currentUsername === "Owner" ? true : !!can_edit_komisi,
-        currentUsername === "Owner" ? true : !!can_edit_kalkulator,
-        currentUsername === "Owner" ? true : can_view_margin !== false,
+        isOwner ? true : !!can_edit_ads,
+        isOwner ? true : !!can_edit_competitor,
+        isOwner ? true : !!can_edit_harga,
+        isOwner ? true : !!can_edit_komisi,
+        isOwner ? true : !!can_edit_kalkulator,
+        isOwner ? true : can_view_net_price !== false,
+        isOwner ? true : can_view_margin !== false,
+        isOwner ? true : can_view_hpp !== false,
+        isOwner ? true : can_view_harga_jual_komisi !== false,
+        JSON.stringify(isOwner ? fullTabs : sanitizeAllowedTabs(allowed_tabs)),
         avatar_emoji ? avatar_emoji.trim() : null,
         Number(session_duration_days || 30),
         id

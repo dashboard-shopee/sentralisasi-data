@@ -24,13 +24,14 @@ export async function POST(req: Request) {
       );
 
       // Kirim ke Email
-      const emailTarget = (process.env.EMAIL_TO || "restualamwa@gmail.com").trim();
+      const emailTarget = (process.env.EMAIL_TO || "beverramarketing@gmail.com").trim();
       
       // Kirim secara async
       await sendOtpEmail(emailTarget, otp);
 
       return NextResponse.json({
         requiresOtp: true,
+        email: emailTarget,
         message: "Kode OTP telah dikirim ke Email Anda."
       });
     } catch (err: any) {

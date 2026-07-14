@@ -123,7 +123,10 @@ export default function HargaPage() {
   const [total, setTotal] = useState(0);
   const [tokos, setTokos] = useState<TokoInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [canViewMargin, setCanViewMargin] = useState(true);
+  const [perm, setPerm] = useState({ netPrice: true, margin: true, hpp: true, hargaJualKomisi: true });
+  const ALL_TABS_HARGA = ["all", "olah", "komisi", "riwayat"] as const;
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([...ALL_TABS_HARGA]);
+  const [tabDenied, setTabDenied] = useState(false);
 
   // Inline edit state for Custom Harga Diskon
   const [editingDiskonSku, setEditingDiskonSku] = useState<string | null>(null);
@@ -193,12 +196,26 @@ export default function HargaPage() {
       }
 
       const res = await fetch(`/api/produk/harga?${params.toString()}`);
+      const d = await res.json();
+      if (res.status === 403) {
+        const allowed: string[] = d.allowedTabs || [];
+        setAllowedTabs(allowed);
+        if (allowed.length > 0 && !allowed.includes(tab)) {
+          setTab(allowed[0] as any);
+          return; // useEffect akan fetch ulang otomatis dgn tab baru
+        }
+        setTabDenied(true);
+        setRows([]);
+        setTotal(0);
+        return;
+      }
+      setTabDenied(false);
       if (res.ok) {
-        const d = await res.json();
         setRows(d.rows || []);
         setTotal(d.total || 0);
         if (d.tokos) setTokos(d.tokos);
-        setCanViewMargin(d.canViewMargin !== false);
+        if (d.perm) setPerm(d.perm);
+        if (d.allowedTabs) setAllowedTabs(d.allowedTabs);
       }
     } catch (e) {
       console.error("Gagal mengambil data monitoring harga:", e);
@@ -304,7 +321,7 @@ export default function HargaPage() {
   };
 
   const handleMassJual = async (toko: string) => {
-    if (!canViewMargin) return alert("Akses ditolak: fitur ini butuh data Net Price yang sedang dikunci untuk akun Anda.");
+    if (!perm.netPrice) return alert("Akses ditolak: fitur ini butuh data Net Price yang sedang dikunci untuk akun Anda.");
     const skipHigher = confirm(`Lewati (jangan turunkan harga) jika Harga Real Saat Ini sudah lebih mahal dari Harga Rekomendasi?`);
     const updates: any[] = [];
     rows.forEach((r: any) => {
@@ -504,12 +521,12 @@ export default function HargaPage() {
                   {r.nama_produk || "-"}
                 </td>
                 <td className="px-2 py-2 text-[#6b7180] align-middle">{r.category || "-"}</td>
-                <td className="px-2 py-2 text-right text-[#4b5563] align-middle">{!canViewMargin ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
-                <td className="px-2 py-2 text-right font-medium text-[#0369a1] bg-[#e0f2fe]/10 align-middle">{!canViewMargin ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
+                <td className="px-2 py-2 text-right text-[#4b5563] align-middle">{!perm.netPrice ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
+                <td className="px-2 py-2 text-right font-medium text-[#0369a1] bg-[#e0f2fe]/10 align-middle">{!perm.netPrice ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
                 
                 {/* Margin Persen */}
                 <td className="px-2 py-2 text-right font-bold align-middle">
-                  {!canViewMargin ? (
+                  {!perm.margin ? (
                     <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
                   ) : r.margin_persen !== null && r.margin_persen !== undefined ? (
                     <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
@@ -765,7 +782,7 @@ export default function HargaPage() {
                   <td className="p-3.5 text-right font-bold text-[#ee4d2d] bg-[#fff1ed]/20">{formatRp(r.hargaAkhirTarget)}</td>
                   <td className="p-3.5 text-right font-bold text-[#16b8a6] bg-[#e7f7f4]/20">{formatRp(r.hargaTampil)}</td>
                   <td className="p-3.5 text-right font-bold" title="Margin dari Harga Real">
-                    {!canViewMargin ? (
+                    {!perm.margin ? (
                       <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
                     ) : r.marginPersen !== null && r.marginPersen !== undefined ? (
                       <span className={r.marginPersen >= 0.12 ? "text-[#047857]" : r.marginPersen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
@@ -857,7 +874,7 @@ export default function HargaPage() {
                 <td style={{ left: 50 }} className="p-3.5 font-bold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.sku}</td>
                 <td style={{ left: 220 }} className="p-3.5 sticky z-10 bg-white group-hover:bg-[#fcfdfe]"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
                 <td style={{ left: 330 }} className="p-3.5 text-[#6b7180] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.category || "-"}</td>
-                <td style={{ left: 420 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{canViewMargin ? formatRp(r.netPrice) : <span className="text-[#c3c6d1]">🔒</span>}</td>
+                <td style={{ left: 420 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{perm.netPrice ? formatRp(r.netPrice) : <span className="text-[#c3c6d1]">🔒</span>}</td>
                 <td style={{ left: 520 }} className="p-3.5 text-right font-semibold text-[#ee4d2d] sticky z-10 bg-white group-hover:bg-[#fcfdfe] shadow-[inset_-2px_0_0_#eef0f6]">{formatRp(r.hargaDiskon)}</td>
                 
                 {tokos.map((tk) => {
@@ -884,7 +901,7 @@ export default function HargaPage() {
                               className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] hover:bg-[#e9d5ff] cursor-pointer transition-colors text-[10px] font-bold rounded whitespace-nowrap"
                               title={`Edit persentase komisi (Saat ini: ${tkData.komisiPersen}%)`}
                             >
-                              {canViewMargin ? formatRp(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "🔒"} ({tkData.komisiPersen}%)
+                              {perm.netPrice ? formatRp(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "🔒"} ({tkData.komisiPersen}%)
                             </span>
                           )}
 
@@ -900,11 +917,11 @@ export default function HargaPage() {
                             </div>
                           ) : (
                             <span 
-                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : (canViewMargin ? String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "")); }}
-                              className={`font-bold cursor-pointer whitespace-nowrap ${tkData.manualHargaJual > 0 ? 'text-[#0ea5e9] hover:underline' : 'text-[#c3c6d1] hover:text-[#0ea5e9]'}`}
-                              title={tkData.manualHargaJual > 0 ? "Harga manual. Klik untuk edit" : "Belum diset manual. Klik untuk set"}
+                              onClick={() => { if (!perm.hargaJualKomisi) return; setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : (perm.netPrice ? String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "")); }}
+                              className={`font-bold whitespace-nowrap ${!perm.hargaJualKomisi ? 'text-[#c3c6d1] cursor-default' : tkData.manualHargaJual > 0 ? 'text-[#0ea5e9] hover:underline cursor-pointer' : 'text-[#c3c6d1] hover:text-[#0ea5e9] cursor-pointer'}`}
+                              title={!perm.hargaJualKomisi ? "Akses data sensitif dikunci" : tkData.manualHargaJual > 0 ? "Harga manual. Klik untuk edit" : "Belum diset manual. Klik untuk set"}
                             >
-                              {tkData.manualHargaJual > 0 ? formatRp(tkData.manualHargaJual) : '-'}
+                              {!perm.hargaJualKomisi ? "🔒" : tkData.manualHargaJual > 0 ? formatRp(tkData.manualHargaJual) : '-'}
                             </span>
                           )}
                         </div>
@@ -1069,39 +1086,55 @@ export default function HargaPage() {
 
       {/* Tabs Row */}
       <div className="flex border-b border-[#eef0f6] mb-5 overflow-x-auto gap-6 text-[14px]">
-        <button
-          onClick={() => handleTabChange("all")}
-          className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
-            tab === "all" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
-          }`}
-        >
-          🗂️ All Produk (Katalog)
-        </button>
-        <button
-          onClick={() => handleTabChange("olah")}
-          className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
-            tab === "olah" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
-          }`}
-        >
-          ⚖️ Olah Data (Price Monitor)
-        </button>
-        <button
-          onClick={() => handleTabChange("komisi")}
-          className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
-            tab === "komisi" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
-          }`}
-        >
-          🤝 Komisi Affiliate
-        </button>
-        <button
-          onClick={() => handleTabChange("riwayat")}
-          className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
-            tab === "riwayat" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
-          }`}
-        >
-          📜 Riwayat Update
-        </button>
+        {allowedTabs.includes("all") && (
+          <button
+            onClick={() => handleTabChange("all")}
+            className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
+              tab === "all" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
+            }`}
+          >
+            🗂️ All Produk (Katalog)
+          </button>
+        )}
+        {allowedTabs.includes("olah") && (
+          <button
+            onClick={() => handleTabChange("olah")}
+            className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
+              tab === "olah" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
+            }`}
+          >
+            ⚖️ Olah Data (Price Monitor)
+          </button>
+        )}
+        {allowedTabs.includes("komisi") && (
+          <button
+            onClick={() => handleTabChange("komisi")}
+            className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
+              tab === "komisi" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
+            }`}
+          >
+            🤝 Komisi Affiliate
+          </button>
+        )}
+        {allowedTabs.includes("riwayat") && (
+          <button
+            onClick={() => handleTabChange("riwayat")}
+            className={`pb-2.5 font-bold cursor-pointer transition-all border-b-2 whitespace-nowrap ${
+              tab === "riwayat" ? "border-[#ee4d2d] text-[#ee4d2d]" : "border-transparent text-[#6b7180] hover:text-[#161a27]"
+            }`}
+          >
+            📜 Riwayat Update
+          </button>
+        )}
       </div>
+
+      {tabDenied && (
+        <div className="p-6 text-center bg-white border border-[#eef0f6] rounded-2xl mb-5">
+          <div className="text-3xl mb-2">🔒</div>
+          <div className="font-bold text-[#161a27]">Tidak ada tab yang bisa diakses</div>
+          <p className="text-xs text-[#8a90a2] mt-1">Hubungi Owner untuk memberi izin lihat tab di halaman ini.</p>
+        </div>
+      )}
 
       {/* Specific Filters for Olah Data */}
       {tab === "olah" && (

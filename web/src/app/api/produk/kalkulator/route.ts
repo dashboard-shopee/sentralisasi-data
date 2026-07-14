@@ -2,24 +2,23 @@ import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
-import { getCanViewMargin } from "@/lib/permissions";
+import { getViewPerms, isTabAllowed } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const tab = p.get("tab") || "batch";
-
-  if (!(await getCanViewMargin())) {
-    return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin melihat data sensitif (Margin/HPP)." }, { status: 403 });
-  }
+  const perms = await getViewPerms();
+  const perm = { netPrice: perms.netPrice, margin: perms.margin, hpp: perms.hpp, hargaJualKomisi: perms.hargaJualKomisi };
+  const allowedTabs = perms.allowedTabs.kalkulator;
 
   try {
     // 1. Ambil settings kalkulator dari database
     const dbSettings = await q<{ key: string; value: string }>(
       "select key, value from kalkulator_settings"
     );
-    
+
     // Default fallback values
     const defaultSettings = {
       admin_fee_pct: 0.16,
@@ -51,8 +50,16 @@ export async function GET(req: Request) {
       }
     });
 
+    // Settings dipakai kedua mode (Single & Batch) -> boleh diambil kalau salah satu tab diizinkan.
     if (tab === "settings") {
-      return NextResponse.json({ ok: true, single: singleSettings, batch: batchSettings });
+      if (allowedTabs.length === 0) {
+        return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin ke halaman Kalkulator.", allowedTabs }, { status: 403 });
+      }
+      return NextResponse.json({ ok: true, single: singleSettings, batch: batchSettings, perm, allowedTabs });
+    }
+
+    if (!isTabAllowed(perms, "kalkulator", "batch")) {
+      return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin melihat tab Batch.", allowedTabs }, { status: 403 });
     }
 
     // 2. Fetch paginated batch list
@@ -195,14 +202,17 @@ export async function GET(req: Request) {
       order by ${order} 
       limit $${params.length - 1} offset $${params.length}
     `;
-    const rows = await q<any>(rowsSql, params);
+    let rows = await q<any>(rowsSql, params);
+    if (!perm.hpp) rows = rows.map((r: any) => ({ ...r, hpp: null }));
+    if (!perm.margin) rows = rows.map((r: any) => ({ ...r, actual_margin: null, margin_status: null }));
 
     return NextResponse.json({
       ok: true,
       rows,
       total,
       single: singleSettings,
-      batch: batchSettings
+      batch: batchSettings,
+      perm, allowedTabs,
     });
 
   } catch (err: any) {
@@ -213,10 +223,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    if (!(await getCanViewMargin())) {
-      return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin melihat data sensitif (Margin/HPP)." }, { status: 403 });
-    }
-
     const body = await req.json().catch(() => ({}));
     const { action } = body;
 

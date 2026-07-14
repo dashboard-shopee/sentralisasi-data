@@ -6,6 +6,7 @@ import { useState } from "react";
 export default function Login() {
   const [pw, setPw] = useState("");
   const [otp, setOtp] = useState("");
+  const [emailTarget, setEmailTarget] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [err, setErr] = useState("");
@@ -27,6 +28,7 @@ export default function Login() {
       if (r.ok) {
         if (data.requiresOtp) {
           setShowOtpInput(true);
+          setEmailTarget(data.email || "beverramarketing@gmail.com");
           setErr("");
         } else {
           // Staf biasa langsung login, reload halaman
@@ -117,7 +119,7 @@ export default function Login() {
             <div className="text-center mb-4">
               <div className="text-[14px] font-semibold text-[#3a3f4d]">Verifikasi Dua Langkah</div>
               <div className="text-[11.5px] text-[#6b7180] mt-1">
-                Masukkan 6 digit kode OTP yang telah dikirim ke email <span className="font-semibold">restualamwa@gmail.com</span>.
+                Masukkan 6 digit kode OTP yang telah dikirim ke email <span className="font-semibold">{emailTarget || "beverramarketing@gmail.com"}</span>.
               </div>
             </div>
 

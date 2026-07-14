@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
-import { getCanViewMargin } from "@/lib/permissions";
+import { getViewPerms, isTabAllowed } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +10,17 @@ const MASK_FIELDS: Record<string, string[]> = {
   garansi: ["marginCurrent", "marginBest", "marginProgram"],
   garansi_nom: ["marginReal", "marginBest", "marginProgram"],
 };
-function maskRows(rows: any[], fields: string[]) {
+function maskFields(rows: any[], fields: string[]) {
   if (!fields.length) return rows;
   return rows.map((r) => {
     const copy = { ...r };
     for (const f of fields) copy[f] = null;
     return copy;
   });
+}
+// tab param API "garansi_nom" pakai kunci izin "garansi" (tab dashboard yg sama)
+function permTabKey(tab: string) {
+  return tab === "garansi_nom" ? "garansi" : tab;
 }
 
 // Pusat Promosi — fakta per-program (diisi bot Syntra Monitoring Harga Fase 1).
@@ -27,7 +31,9 @@ export async function GET(req: Request) {
   const search = (p.get("q") || "").trim();
   const filterToko = (p.get("toko") || "").trim();      // NAMA toko (mis. 'Kimmioshop')
   const page = parseInt(p.get("page") || "1") || 1;
-  const canViewMargin = await getCanViewMargin();
+  const perms = await getViewPerms();
+  const perm = { netPrice: perms.netPrice, margin: perms.margin, hpp: perms.hpp, hargaJualKomisi: perms.hargaJualKomisi };
+  const allowedTabs = perms.allowedTabs.promosi;
   const size = Math.min(parseInt(p.get("size") || "50") || 50, 200);
   const offset = (page - 1) * size;
 
@@ -49,7 +55,7 @@ export async function GET(req: Request) {
          from harga_fakta_garansi where toko=$1 and item_id=$2 and model_id=$3`,
         [tk, item, model || 0]
       );
-      const komisi = sku
+      let komisi = sku
         ? await q<Record<string, unknown>>(
             `select d.nama "toko", k.komisi_persen "komisiPersen", k.harga_jual "hargaJual"
              from harga_komisi_toko k left join dim_toko d on d.username=k.username_toko
@@ -57,12 +63,14 @@ export async function GET(req: Request) {
             [sku]
           )
         : [];
+      if (!perm.hargaJualKomisi) komisi = maskFields(komisi, ["hargaJual"]);
       return NextResponse.json({ promos, garansi, komisi });
     }
 
     // PRODUK dalam 1 voucher (buat expand-row tab Voucher). item_scope jsonb = daftar itemid
     // (voucher produk); null = voucher SEMUA produk toko.
     if (tab === "voucher_produk") {
+      if (!isTabAllowed(perms, "promosi", "voucher")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
       const vid = p.get("voucher_id");
       const tk = p.get("toko");
       if (!vid || !tk) return NextResponse.json({ error: "voucher_id & toko wajib" }, { status: 400 });
@@ -83,6 +91,7 @@ export async function GET(req: Request) {
 
     // PRODUK dalam 1 Paket Diskon (expand-row tab Paket). items jsonb = daftar item_id (keanggotaan).
     if (tab === "paket_produk") {
+      if (!isTabAllowed(perms, "promosi", "paket")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
       const bid = p.get("bundle_deal_id");
       const tk = p.get("toko");
       if (!bid || !tk) return NextResponse.json({ error: "bundle_deal_id & toko wajib" }, { status: 400 });
@@ -103,6 +112,7 @@ export async function GET(req: Request) {
 
     // PRODUK dalam 1 Promo Toko (expand-row tab Promo Toko).
     if (tab === "promo_toko_produk") {
+      if (!isTabAllowed(perms, "promosi", "promo_toko")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
       const pid = p.get("promotion_id");
       const tk = p.get("toko");
       if (!pid || !tk) return NextResponse.json({ error: "promotion_id & toko wajib" }, { status: 400 });
@@ -119,10 +129,11 @@ export async function GET(req: Request) {
 
     // SKU variasi dalam 1 item komisi (expand-row tab Komisi). Sisi SYNTRA (harga_komisi_toko).
     if (tab === "komisi_produk") {
+      if (!isTabAllowed(perms, "promosi", "komisi")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
       const item = p.get("item_id");
       const tk = p.get("toko");
       if (!item || !tk) return NextResponse.json({ error: "item_id & toko wajib" }, { status: 400 });
-      const produk = await q<Record<string, unknown>>(
+      let produk = await q<Record<string, unknown>>(
         `select o.sku, max(o.nama_produk) "namaProduk",
                 max(k.komisi_persen) "komisiPersen", max(k.harga_jual) "hargaJual"
          from harga_olah_data o
@@ -132,7 +143,12 @@ export async function GET(req: Request) {
          group by o.sku order by o.sku`,
         [tk, item]
       );
+      if (!perm.hargaJualKomisi) produk = maskFields(produk, ["hargaJual"]);
       return NextResponse.json({ produk });
+    }
+
+    if (!isTabAllowed(perms, "promosi", permTabKey(tab))) {
+      return NextResponse.json({ error: "Akses ditolak: Anda tidak memiliki izin melihat tab ini.", allowedTabs }, { status: 403 });
     }
 
     const tokos = await q<{ username: string; nama: string }>(
@@ -303,10 +319,10 @@ export async function GET(req: Request) {
     const totalRes = await q<{ count: string }>(`select count(*) ${base} ${W}`, params);
     const total = parseInt(totalRes[0]?.count || "0");
 
-    const maskFields = MASK_FIELDS[tab] || [];
+    const marginCols = MASK_FIELDS[tab] || [];
     return NextResponse.json({
-      rows: !canViewMargin && maskFields.length ? maskRows(rows, maskFields) : rows,
-      total, tokos, tab, canViewMargin,
+      rows: !perm.margin && marginCols.length ? maskFields(rows, marginCols) : rows,
+      total, tokos, tab, perm, allowedTabs,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

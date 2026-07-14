@@ -66,6 +66,25 @@ def simpan_olah_data(rows):
     return len(params)
 
 
+def db_now():
+    """Timestamp now() dari DB (bukan jam app) — buat penanda 'sebelum grab' yg konsisten
+    sama diperbarui_pada yg diset now() waktu upsert. Hindari skew jam app vs DB."""
+    with get_engine().connect() as c:
+        return c.execute(text("select now()")).scalar()
+
+
+def nolkan_stok_habis(toko, ref_ts):
+    """Set stok=0 utk baris harga_olah_data toko ini yg TAK ke-refresh grab barusan
+    (diperbarui_pada < ref_ts = variasi jatuh STOK-0, ga muncul lagi di grab berstok).
+    AKAR voucher/paket poison: baris stok-0 basi bikin Shopee tolak SELURUH voucher.
+    HANYA panggil abis grab LENGKAP (lengkap=True). Return jumlah baris di-nol-in."""
+    with get_engine().begin() as c:
+        r = c.execute(text("""update harga_olah_data set stok = 0, diperbarui_pada = now()
+                              where toko = :t and stok > 0 and diperbarui_pada < :ref"""),
+                      {"t": toko, "ref": ref_ts})
+        return r.rowcount or 0
+
+
 _SQL_KONTEKS_INSERT = text("""
     insert into harga_promo_konteks
         (toko, item_id, model_id, jenis, campaign_type, promotion_id,
