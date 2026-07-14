@@ -56,16 +56,21 @@ export default function FilterBar({ options, filter }: { options: Options; filte
       {/* Toko */}
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#f0f2f7]">
         <span className="text-[12px] text-[#8a90a2] mr-1">Toko:</span>
-        <select
-          value={semua ? "" : filter.toko[0] || ""}
-          onChange={(e) => go({ t: e.target.value ? e.target.value : null })}
-          className="px-3 py-1.5 rounded-lg border border-[#eef0f6] text-[13px] bg-white text-[#3a3f4d] outline-none focus:border-[#ee4d2d]"
-        >
-          <option value="">Semua Toko</option>
-          {allToko.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={semua ? "" : filter.toko[0] || ""}
+            onChange={(e) => go({ t: e.target.value ? e.target.value : null })}
+            className="appearance-none bg-white border border-[#eef0f6] pl-3.5 pr-9 py-1.5 rounded-xl text-[13px] font-semibold text-[#3a3f4d] outline-none focus:border-[#ee4d2d] focus:ring-2 focus:ring-[#ee4d2d]/10 transition-all hover:border-[#ee4d2d]/30 cursor-pointer"
+          >
+            <option value="">Semua Toko</option>
+            {allToko.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] text-[#8a90a2]">
+            ▼
+          </span>
+        </div>
       </div>
     </div>
   );
