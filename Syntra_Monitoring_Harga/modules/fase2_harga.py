@@ -205,7 +205,7 @@ def bangun_alasan(d):
         return ". ".join(bits) + "."
     if kasus == "harga_dasar":
         bits.append(f"target ≥ harga awal {F(d.get('harga_awal'))} → ubah HARGA DASAR "
-                    "(keluar semua promo, pasang balik paket+voucher)")
+                    "(keluar semua promo; paket+voucher dipasang balik oleh provisioning harian, band ikut harga baru)")
         return ". ".join(bits) + "."
     # koreksi_turun → jabarin aksi per-promo
     for a in d.get("aksi", []):
@@ -413,37 +413,28 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
               for d in hd if (d["item_id"], d["model_id"]) in baris_map]
     alasan = edit_harga_dasar(shop, session, daftar, nama_toko=nama_toko)
 
-    # 4) RE-ADD paket + voucher (WAJIB selalu aktif). Paket -> deal UTAMA (deal aktif pertama;
-    #    kalau toko belum punya deal, provisioning yg bikin -> ⏳, di sini di-skip + catat).
-    readd_paket = readd_voucher = 0
-    if tgt_paket:
-        if paket_aktif:
-            utama = paket_aktif[0]
-            try:
-                ok, _ = PD.masukkan_item(session, utama["bundle_deal_id"], tgt_paket, utama["start"], utama["end"])
-                readd_paket = ok
-            except Exception as e:
-                log(f"re-add paket gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="paket")
-        else:
-            log(f"⚠️ {len(tgt_paket)} item perlu re-add paket TAPI toko belum punya deal aktif (provisioning ⏳)",
-                level="warning", fase="F2", toko=nama_toko, modul="paket")
-    for vid, items in vouch_grup.items():
-        try:
-            if V.masukkan_item(session, vid, items):
-                readd_voucher += len(items)
-        except Exception as e:
-            log(f"re-add voucher {vid} gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="voucher")
+    # 4) RE-ADD paket + voucher → DISERAHKAN ke PROVISIONING HARIAN (keputusan owner M3).
+    #    Alasan: harga awal berubah = produk bisa PINDAH BAND voucher (min-belanja per band).
+    #    Re-add inline ke voucher/paket LAMA = salah band. Provisioning harian (poin 5) yg
+    #    reconcile: masukin produk ke band voucher yg BENER + paket UPSELL sesuai harga baru.
+    #    Gap sementara (produk tanpa paket/voucher s/d provisioning next) diterima — ubah harga
+    #    dasar jarang, provisioning harian nutup. (paket_aktif/vouch_grup di atas cuma buat takedown.)
+    n_defer_paket = len(tgt_paket)
+    n_defer_voucher = sum(len(v) for v in vouch_grup.values())
+    if n_defer_paket or n_defer_voucher:
+        log(f"re-attach {n_defer_paket} paket + {n_defer_voucher} voucher item DISERAHKAN provisioning harian (band bisa geser ikut harga baru)",
+            level="detail", fase="F2", toko=nama_toko, modul="harga")
 
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(daftar)} variasi | garansi withdraw {len(bids)} | "
-          f"paket takedown {len(tgt_paket)}→re-add {readd_paket} | voucher {len(vouch_grup)} voucher→re-add {readd_voucher} item",
+          f"paket takedown {len(tgt_paket)} | voucher takedown {n_defer_voucher} item → re-attach via provisioning harian",
           status=("live" if (not config.DRY_RUN and len(daftar)) else "ok"),
           fase="F2", toko=nama_toko, modul="harga",
           detail={"variasi": len(daftar), "garansi_withdraw": len(bids), "paket_takedown": len(tgt_paket),
-                  "paket_readd": readd_paket, "voucher_readd": readd_voucher, "dry": config.DRY_RUN})
+                  "voucher_takedown": n_defer_voucher, "reattach": "provisioning_harian", "dry": config.DRY_RUN})
     return {"harga_dasar": len(daftar), "garansi_takedown": len(bids), "alasan": len(alasan),
-            "paket_takedown": len(tgt_paket), "paket_readd": readd_paket,
-            "voucher_takedown": sum(len(v) for v in vouch_grup.values()), "voucher_readd": readd_voucher}
+            "paket_takedown": len(tgt_paket), "voucher_takedown": n_defer_voucher,
+            "reattach_via": "provisioning_harian"}
 
 
 def _kunci_takedown(diagnosa, promo):
