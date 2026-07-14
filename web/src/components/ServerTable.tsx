@@ -240,6 +240,19 @@ const VARS_ANALISA: VarDef[] = [
   { key: "acos", label: "ACOS", fmt: "pct", ikon: "📊" },
 ];
 
+const SHOP_ID_BY_NAME: Record<string, string> = {
+  "Kimmioshop": "1772452045",
+  "lollysweet": "1770737480",
+  "Ravella Shop": "1482379795",
+  "Topikece Store": "1086654958",
+  "Alialia Store": "1083692044",
+  "OLIOLIO.ID": "552378634",
+  "NOMIDE STORE": "416053468",
+  "YARRA STORE": "144416606",
+  "ZIOSCARF SUPPLIER HIJAB IMPORT": "93819147",
+  "BEVERRA OFFICIAL STORE": "13556329"
+};
+
 export type SCol = {
   key: string;
   label: string;
@@ -584,15 +597,48 @@ export default function ServerTable({
                 {columns.map((c) => {
                   if (c.key === "gambar") {
                     const url = r.gambar ? String(r.gambar) : "";
+                    const shopId = r.toko ? (SHOP_ID_BY_NAME[String(r.toko)] || "") : "";
+                    const itemId = r.kode ? String(r.kode) : "";
+                    const shopeeUrl = shopId && itemId ? `https://shopee.co.id/product/${shopId}/${itemId}` : "#";
+
                     return (
                       <td key={c.key} className="px-2 py-1.5">
                         {url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer"
-                            className="w-12 h-12 rounded-md object-cover border border-[#eef0f6] bg-[#fafbfd]" />
+                          <a
+                            href={shopeeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block hover:opacity-85 transition-opacity"
+                            title="Buka di Shopee"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer"
+                              className="w-12 h-12 rounded-md object-cover border border-[#eef0f6] bg-[#fafbfd] cursor-pointer" />
+                          </a>
                         ) : (
                           <div className="w-12 h-12 rounded-md bg-[#f3f4f8] grid place-items-center text-[#c4c8d4] text-[14px]">🖼️</div>
                         )}
+                      </td>
+                    );
+                  }
+                  if (c.key === "skuInduk") {
+                    const sku = r.skuInduk ? String(r.skuInduk) : "";
+                    const itemId = r.kode ? String(r.kode) : "";
+                    return (
+                      <td
+                        key={c.key}
+                        className="px-3 py-2 text-slate-700 font-medium text-[12px]"
+                        style={{
+                          width: c.w ? c.w : 120,
+                          minWidth: c.w ? c.w : 120,
+                          maxWidth: c.w ? c.w : 120,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                          lineHeight: "1.35",
+                        }}
+                      >
+                        <div className="font-semibold text-slate-700">{sku || <span className="text-[#c4c8d4]">—</span>}</div>
+                        {itemId && <div className="text-[#8a90a2] text-[11px] font-normal mt-0.5">{itemId}</div>}
                       </td>
                     );
                   }

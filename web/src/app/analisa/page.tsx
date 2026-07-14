@@ -16,9 +16,8 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 const COLS: SCol[] = [
   { key: "toko", label: "Nama Toko", w: 120, sort: "toko" },
   { key: "gambar", label: "Foto", w: 64 },
-  { key: "kode", label: "Kode Produk", w: 110, sort: "kode" },
-  { key: "produk", label: "Nama Produk", w: 180, sort: "produk" },
-  { key: "skuInduk", label: "SKU Induk", w: 100, sort: "skuInduk" },
+  { key: "skuInduk", label: "SKU Induk", w: 120, sort: "skuInduk" },
+  { key: "produk", label: "Nama Produk", w: 220, sort: "produk" },
   { key: "roas", label: "ROAS Saat Ini", fmt: "ratio", sort: "roas" },
   // kolom disiapkan untuk fitur otomasi ROAS/budget (diisi menyusul)
   { key: "targetRoas", label: "Target ROAS", w: 100 },

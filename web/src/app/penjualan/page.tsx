@@ -11,11 +11,10 @@ export const dynamic = "force-dynamic";
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
 const COLS: SCol[] = [
-  { key: "gambar", label: "Foto", w: 52 },
-  { key: "kode", label: "Kode Produk", w: 110, sort: "kode" },
-  { key: "skuInduk", label: "SKU Induk", w: 100, sort: "skuInduk" },
-  { key: "produk", label: "Nama Produk", w: 240, sort: "produk" },
-  { key: "toko", label: "Toko", w: 120, sort: "toko" },
+  { key: "toko", label: "Nama Toko", w: 120, sort: "toko" },
+  { key: "gambar", label: "Foto", w: 64 },
+  { key: "skuInduk", label: "SKU Induk", w: 120, sort: "skuInduk" },
+  { key: "produk", label: "Nama Produk", w: 220, sort: "produk" },
   { key: "omzet", label: "Omzet", fmt: "rp", sort: "omzet" },
   { key: "pesanan", label: "Pesanan", fmt: "num", sort: "pesanan" },
   { key: "unit", label: "Unit Terjual", fmt: "num", sort: "unit" },

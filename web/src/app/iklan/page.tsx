@@ -13,9 +13,8 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 const COLS: SCol[] = [
   { key: "toko", label: "Nama Toko", w: 120, sort: "toko" },
   { key: "gambar", label: "Foto", w: 64 },
-  { key: "produk", label: "Nama Produk", w: 180, sort: "produk" },
-  { key: "kode", label: "Kode Produk", w: 110, sort: "kode" },
-  { key: "skuInduk", label: "SKU", w: 90, sort: "skuInduk" },
+  { key: "skuInduk", label: "SKU Induk", w: 120, sort: "skuInduk" },
+  { key: "produk", label: "Nama Produk", w: 220, sort: "produk" },
   { key: "targetRoas", label: "Target ROAS", w: 100 },
   { key: "dilihat", label: "Dilihat", fmt: "num", sort: "dilihat" },
   { key: "klik", label: "Klik", fmt: "num", sort: "klik" },
