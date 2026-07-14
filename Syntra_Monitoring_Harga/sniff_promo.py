@@ -141,10 +141,16 @@ def jalankan(nama_file):
       -> buka pengaturan program itu -> NONAKTIFKAN utk 1 produk
       -> klik SIMPAN sampai notif tersimpan.
 
-  [C] FLASH SALE (kalau ada sesi aktif/terjadwal) — opsional:
-      Flash Sale Toko -> buka sesi -> HAPUS 1 produk -> SIMPAN.
+  [C] FLASH SALE — AKHIRI SESI (PENTING buat M4, bukan hapus per-item):
+      set_shop_flash_sale_items DITOLAK Shopee (code 1001) -> takedown per-item MATI.
+      Solusi: AKHIRI SELURUH SESI flash. Yang mau ditangkep = endpoint END-SESSION.
+      Flash Sale Toko -> buka 1 sesi yg BERJALAN/TERJADWAL
+      -> klik "Akhiri Sekarang" / "Hapus" / "Batalkan Sesi" (bukan hapus produk)
+      -> KONFIRMASI di popup sampai sesi beneran berakhir.
+      (kalau ga ada sesi yg rela diakhirin, minimal buka menu titik-tiga sesi &
+       screenshot tombolnya — tapi endpoint cuma ketangkep kalau beneran di-klik-simpan.)
 
-  Lakukan A dulu (wajib), lalu B. Selesai? Balik ke sini & tekan ENTER.
+  Lakukan A dulu (wajib), lalu B, lalu C (buat M4 flash). Selesai? Balik ke sini & ENTER.
 ================================================================
 """ + colorama.Style.RESET_ALL)
     input("Tekan ENTER setelah aksi tersimpan... ")
