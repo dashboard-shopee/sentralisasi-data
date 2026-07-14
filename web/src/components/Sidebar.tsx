@@ -99,7 +99,7 @@ export default function Sidebar({
   return (
     <aside
       className={
-        "relative hidden md:flex shrink-0 flex-col bg-white border-r border-[#eef0f6] py-6 sticky top-0 h-screen transition-all duration-300 ease-in-out " +
+        "z-30 relative hidden md:flex shrink-0 flex-col bg-white border-r border-[#eef0f6] py-6 sticky top-0 h-screen transition-all duration-300 ease-in-out " +
         (minimized ? "w-[76px] px-2.5" : "w-[240px] px-4")
       }
     >
@@ -144,10 +144,10 @@ export default function Sidebar({
                     
                     {/* Floating sub-menu */}
                     <div 
-                      className="absolute left-[52px] top-1/2 -translate-y-1/2 z-50 bg-white/95 backdrop-blur-md border border-[#eef0f6] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] p-2 min-w-[180px] flex flex-col gap-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 origin-left scale-95 group-hover:scale-100"
+                      className="absolute left-[52px] top-1/2 -translate-y-1/2 z-50 bg-white/95 backdrop-blur-md border border-[#eef0f6] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] p-1.5 min-w-[155px] flex flex-col gap-0.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 origin-left scale-95 group-hover:scale-100"
                     >
                       {/* Sub-menu title */}
-                      <div className="px-3 py-1.5 text-[11px] font-bold text-[#ee4d2d] uppercase tracking-wider border-b border-[#eef0f6] mb-1">
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-[#ee4d2d] uppercase tracking-wider border-b border-[#eef0f6] mb-1">
                         {n.label}
                       </div>
                       
@@ -159,7 +159,7 @@ export default function Sidebar({
                             key={s.href}
                             href={s.href}
                             className={
-                              "px-3 py-2 text-[12.5px] rounded-xl font-medium transition-all duration-150 text-left block w-full " +
+                              "px-2.5 py-1.5 text-[12px] rounded-lg font-medium transition-all duration-150 text-left block w-full " +
                               (active ? "text-[#ee4d2d] bg-[#fff1ed]" : "text-[#6b7180] hover:bg-[#f6f7fb] hover:text-[#ee4d2d]")
                             }
                           >
