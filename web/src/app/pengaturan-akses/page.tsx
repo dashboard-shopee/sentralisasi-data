@@ -12,7 +12,11 @@ interface UserAccount {
   can_edit_harga: boolean;
   can_edit_komisi: boolean;
   can_edit_kalkulator: boolean;
+  can_view_net_price: boolean;
   can_view_margin: boolean;
+  can_view_hpp: boolean;
+  can_view_harga_jual_komisi: boolean;
+  allowed_tabs: Record<string, string[]>;
   avatar_emoji: string | null;
   session_duration_days: number;
 }
@@ -23,32 +27,76 @@ const MENU_LIST = [
   { path: "/penjualan", label: "📦 Penjualan & Pesanan" },
   { path: "/iklan", label: "📢 Performa Iklan" },
   { path: "/produk/harga", label: "🏷️ Harga & Komisi" },
+  { path: "/produk/pusat-promosi", label: "🎯 Pusat Promosi" },
   { path: "/produk/stok", label: "📦 Stok Katalog" },
   { path: "/produk/kalkulator", label: "🧮 Kalkulator" },
   { path: "/riset-kompetitor", label: "🔍 Riset Kompetitor" },
   { path: "/log", label: "🧾 Log Otomatisasi" }
 ];
 
+// Tab internal per halaman (page key -> path menu + daftar tab). Cuma dipakai
+// utk halaman yg punya navigasi tab beneran (bukan modal drill-down).
+const TAB_DEFS: Record<string, { menuPath: string; label: string; tabs: { key: string; label: string }[] }> = {
+  harga: {
+    menuPath: "/produk/harga",
+    label: "🏷️ Harga & Komisi",
+    tabs: [
+      { key: "all", label: "All Produk (Katalog)" },
+      { key: "olah", label: "Olah Data (Price Monitor)" },
+      { key: "komisi", label: "Komisi Affiliate" },
+      { key: "riwayat", label: "Riwayat Update" },
+    ],
+  },
+  promosi: {
+    menuPath: "/produk/pusat-promosi",
+    label: "🎯 Pusat Promosi",
+    tabs: [
+      { key: "promo_toko", label: "Promo Toko" },
+      { key: "garansi", label: "Garansi (3 sub-tab jadi 1)" },
+      { key: "campaign", label: "Campaign" },
+      { key: "flash", label: "Flash Sale" },
+      { key: "voucher", label: "Voucher" },
+      { key: "paket", label: "Paket Diskon" },
+      { key: "komisi", label: "Komisi" },
+    ],
+  },
+  kalkulator: {
+    menuPath: "/produk/kalkulator",
+    label: "🧮 Kalkulator",
+    tabs: [
+      { key: "single", label: "Simulasi Produk Baru (Single)" },
+      { key: "batch", label: "Katalog Produk (Batch)" },
+    ],
+  },
+};
+const ALL_TABS_DEFAULT: Record<string, string[]> = Object.fromEntries(
+  Object.entries(TAB_DEFS).map(([page, def]) => [page, def.tabs.map((t) => t.key)])
+);
+
 export default function PengaturanAkses() {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  
+
   // Modals state
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
-  
+
   // Form state
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [durationInput, setDurationInput] = useState(7);
   const [selectedMenus, setSelectedMenus] = useState<string[]>([]);
+  const [allowedTabsInput, setAllowedTabsInput] = useState<Record<string, string[]>>({ ...ALL_TABS_DEFAULT });
   const [canEditAdsInput, setCanEditAdsInput] = useState(false);
   const [canEditCompInput, setCanEditCompInput] = useState(false);
   const [canEditHargaInput, setCanEditHargaInput] = useState(false);
   const [canEditKomisiInput, setCanEditKomisiInput] = useState(false);
   const [canEditKalkulatorInput, setCanEditKalkulatorInput] = useState(false);
+  const [canViewNetPriceInput, setCanViewNetPriceInput] = useState(true);
   const [canViewMarginInput, setCanViewMarginInput] = useState(true);
+  const [canViewHppInput, setCanViewHppInput] = useState(true);
+  const [canViewHargaJualKomisiInput, setCanViewHargaJualKomisiInput] = useState(true);
   const [avatarEmojiInput, setAvatarEmojiInput] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -82,12 +130,16 @@ export default function PengaturanAkses() {
     setPasswordInput("");
     setDurationInput(7);
     setSelectedMenus(["/"]); // default view Ringkasan
+    setAllowedTabsInput({ ...ALL_TABS_DEFAULT });
     setCanEditAdsInput(false);
     setCanEditCompInput(false);
     setCanEditHargaInput(false);
     setCanEditKomisiInput(false);
     setCanEditKalkulatorInput(false);
+    setCanViewNetPriceInput(true);
     setCanViewMarginInput(true);
+    setCanViewHppInput(true);
+    setCanViewHargaJualKomisiInput(true);
     setAvatarEmojiInput("");
     setShowModal(true);
   }
@@ -99,12 +151,16 @@ export default function PengaturanAkses() {
     setPasswordInput(u.password);
     setDurationInput(u.session_duration_days);
     setSelectedMenus(u.allowed_menus || []);
+    setAllowedTabsInput(u.allowed_tabs && Object.keys(u.allowed_tabs).length > 0 ? u.allowed_tabs : { ...ALL_TABS_DEFAULT });
     setCanEditAdsInput(u.can_edit_ads);
     setCanEditCompInput(u.can_edit_competitor);
     setCanEditHargaInput(u.can_edit_harga || false);
     setCanEditKomisiInput(u.can_edit_komisi || false);
     setCanEditKalkulatorInput(u.can_edit_kalkulator || false);
+    setCanViewNetPriceInput(u.can_view_net_price !== false);
     setCanViewMarginInput(u.can_view_margin !== false);
+    setCanViewHppInput(u.can_view_hpp !== false);
+    setCanViewHargaJualKomisiInput(u.can_view_harga_jual_komisi !== false);
     setAvatarEmojiInput(u.avatar_emoji || "");
     setShowModal(true);
   }
@@ -114,18 +170,22 @@ export default function PengaturanAkses() {
     e.preventDefault();
     if (!usernameInput || !passwordInput) return;
     setSaving(true);
-    
+
     const payload = {
       id: editingUser?.id,
       username: usernameInput,
       password: passwordInput,
       allowed_menus: selectedMenus,
+      allowed_tabs: allowedTabsInput,
       can_edit_ads: canEditAdsInput,
       can_edit_competitor: canEditCompInput,
       can_edit_harga: canEditHargaInput,
       can_edit_komisi: canEditKomisiInput,
       can_edit_kalkulator: canEditKalkulatorInput,
+      can_view_net_price: canViewNetPriceInput,
       can_view_margin: canViewMarginInput,
+      can_view_hpp: canViewHppInput,
+      can_view_harga_jual_komisi: canViewHargaJualKomisiInput,
       avatar_emoji: avatarEmojiInput,
       session_duration_days: Number(durationInput)
     };
@@ -138,7 +198,7 @@ export default function PengaturanAkses() {
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         setShowModal(false);
         fetchUsers();
@@ -184,26 +244,27 @@ export default function PengaturanAkses() {
     });
   }
 
-  // Matiin akses Data Sensitif -> otomatis cabut menu Kalkulator (isinya HPP/margin doang)
-  function handleToggleViewMargin(checked: boolean) {
-    setCanViewMarginInput(checked);
-    if (!checked) {
-      setSelectedMenus(prev => prev.filter(p => p !== "/produk/kalkulator"));
-    }
+  // Toggle checkbox tab dalam 1 halaman (page key: harga | promosi | kalkulator)
+  function handleTabToggle(page: string, tabKey: string) {
+    setAllowedTabsInput(prev => {
+      const cur = prev[page] || [];
+      const next = cur.includes(tabKey) ? cur.filter(t => t !== tabKey) : [...cur, tabKey];
+      return { ...prev, [page]: next };
+    });
   }
 
   return (
     <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto p-1 text-[#3a3f4d]">
-      
+
       {/* Header */}
       <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-[22px] font-extrabold tracking-tight">⚙️ Pengaturan Akses Dashboard</h1>
           <p className="text-[13px] text-[#8a90a2] mt-0.5">
-            Kelola hak akses menu, izin edit data, dan masa berlaku cookie login per pengguna.
+            Kelola hak akses menu, tab, data sensitif, izin edit, dan masa berlaku cookie login per pengguna.
           </p>
         </div>
-        
+
         <button
           onClick={openAddModal}
           className="px-4 py-2 text-[13px] font-bold text-white rounded-xl shadow-md transition-all duration-200 cursor-pointer hover:scale-102 flex items-center gap-1.5 align-middle"
@@ -231,6 +292,7 @@ export default function PengaturanAkses() {
                 <th className="px-4 py-3 font-semibold w-[150px]">Nama Akun</th>
                 <th className="px-4 py-3 font-semibold w-[150px]">Password Masuk</th>
                 <th className="px-4 py-3 font-semibold">Izin Akses Menu (Lihat)</th>
+                <th className="px-4 py-3 font-semibold w-[150px]">Data Sensitif</th>
                 <th className="px-4 py-3 font-semibold w-[150px]">Izin Edit Data</th>
                 <th className="px-4 py-3 font-semibold w-[120px]">Durasi Sesi</th>
                 <th className="px-4 py-3 font-semibold text-center w-[120px]">Aksi</th>
@@ -269,12 +331,34 @@ export default function PengaturanAkses() {
                             const name = MENU_LIST.find(m => m.path === path)?.label || path;
                             return (
                               <span key={path} className="px-2 py-0.5 rounded bg-[#f6f7fb] text-[#6b7180] border border-[#eef0f6] text-[10.5px]">
-                                {name.replace(/[🏠📊📦📢🏷️🔍]/g, "").trim()}
+                                {name.replace(/[🏠📊📦📢🏷️🎯🔍🧮🧾]/g, "").trim()}
                               </span>
                             );
                           })
                         ) : (
                           <span className="text-[#c4c8d4] italic">Tidak ada akses menu</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-col gap-1 text-[11px] font-medium">
+                        {isOwner ? (
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">✅ Semua Data</span>
+                        ) : (
+                          <>
+                            <span className={u.can_view_net_price !== false ? "text-emerald-700" : "text-rose-500"}>
+                              {u.can_view_net_price !== false ? "✅ Net Price" : "🔒 Net Price"}
+                            </span>
+                            <span className={u.can_view_margin !== false ? "text-emerald-700" : "text-rose-500"}>
+                              {u.can_view_margin !== false ? "✅ Margin" : "🔒 Margin"}
+                            </span>
+                            <span className={u.can_view_hpp !== false ? "text-emerald-700" : "text-rose-500"}>
+                              {u.can_view_hpp !== false ? "✅ HPP" : "🔒 HPP"}
+                            </span>
+                            <span className={u.can_view_harga_jual_komisi !== false ? "text-emerald-700" : "text-rose-500"}>
+                              {u.can_view_harga_jual_komisi !== false ? "✅ Harga Jual Komisi" : "🔒 Harga Jual Komisi"}
+                            </span>
+                          </>
                         )}
                       </div>
                     </td>
@@ -298,9 +382,6 @@ export default function PengaturanAkses() {
                             </span>
                             <span className={u.can_edit_kalkulator ? "text-emerald-700" : "text-gray-400"}>
                               {u.can_edit_kalkulator ? "✅ Edit Kalkulator" : "❌ Edit Kalkulator"}
-                            </span>
-                            <span className={u.can_view_margin !== false ? "text-emerald-700" : "text-rose-500"}>
-                              {u.can_view_margin !== false ? "✅ Lihat Margin/HPP" : "🔒 Margin/HPP disembunyikan"}
                             </span>
                           </>
                         )}
@@ -340,9 +421,9 @@ export default function PengaturanAkses() {
       {/* CREATE / EDIT MODAL POPUP */}
       {showModal && (
         <div className="fixed inset-0 bg-[#161a27]/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
-          <form 
-            onSubmit={handleSave} 
-            className="bg-white rounded-2xl border border-[#eef0f6] shadow-2xl p-6 w-full max-w-[500px] max-h-[90vh] overflow-y-auto animate-scale-up text-[#3a3f4d]"
+          <form
+            onSubmit={handleSave}
+            className="bg-white rounded-2xl border border-[#eef0f6] shadow-2xl p-6 w-full max-w-[560px] max-h-[90vh] overflow-y-auto animate-scale-up text-[#3a3f4d]"
           >
             <h2 className="font-extrabold text-[16px] mb-4 text-[#161a27]">
               {editingUser ? `✏️ Edit Pengguna: ${editingUser.username}` : "➕ Tambah Pengguna Baru"}
@@ -437,17 +518,15 @@ export default function PengaturanAkses() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd]">
                     {MENU_LIST.map((menu) => {
                       const checked = selectedMenus.includes(menu.path);
-                      const lockedByMargin = menu.path === "/produk/kalkulator" && !canViewMarginInput;
                       return (
-                        <label key={menu.path} className={`flex items-center gap-2 text-[12px] transition-all py-0.5 ${lockedByMargin ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:text-[#ee4d2d]"}`}>
+                        <label key={menu.path} className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] transition-all py-0.5">
                           <input
                             type="checkbox"
-                            checked={checked && !lockedByMargin}
-                            disabled={lockedByMargin}
+                            checked={checked}
                             onChange={() => handleMenuToggle(menu.path)}
                             className="rounded accent-[#ee4d2d]"
                           />
-                          <span>{menu.label}{lockedByMargin && <span className="ml-1 text-[10px] text-[#c4c8d4]">(butuh akses Data Sensitif)</span>}</span>
+                          <span>{menu.label}</span>
                         </label>
                       );
                     })}
@@ -455,27 +534,55 @@ export default function PengaturanAkses() {
                 )}
               </div>
 
-              {/* Data Sensitif (view-level, terpisah dari izin edit) */}
+              {/* Tab-level: cuma tampil kalau halamannya dicentang & punya tab internal */}
+              {editingUser?.username !== "Owner" && Object.entries(TAB_DEFS).map(([page, def]) => {
+                if (!selectedMenus.includes(def.menuPath)) return null;
+                const current = allowedTabsInput[page] || [];
+                return (
+                  <div key={page} className="ml-3 -mt-2">
+                    <label className="text-[11.5px] font-bold text-[#8a90a2] block mb-1.5">↳ Tab di {def.label} (Lihat)</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd]">
+                      {def.tabs.map((t) => (
+                        <label key={t.key} className="flex items-center gap-2 text-[11.5px] cursor-pointer hover:text-[#ee4d2d] transition-all py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={current.includes(t.key)}
+                            onChange={() => handleTabToggle(page, t.key)}
+                            className="rounded accent-[#ee4d2d]"
+                          />
+                          <span>{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Data Sensitif (view-level per-field, terpisah dari izin edit) */}
               <div>
-                <label className="text-[12.5px] font-bold text-[#6b7180] block mb-1.5">Data Sensitif</label>
+                <label className="text-[12.5px] font-bold text-[#6b7180] block mb-1.5">Data Sensitif (Lihat)</label>
                 {editingUser?.username === "Owner" ? (
                   <div className="text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 font-medium">
                     Owner selalu bisa lihat semua data sensitif.
                   </div>
                 ) : (
-                  <div className="border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd]">
+                  <div className="border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd] flex flex-col gap-1">
                     <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={canViewMarginInput}
-                        onChange={(e) => handleToggleViewMargin(e.target.checked)}
-                        className="rounded accent-[#ee4d2d]"
-                      />
-                      <span>🔒 Bisa Lihat Margin / HPP / Net Price (data untung-rugi)</span>
+                      <input type="checkbox" checked={canViewNetPriceInput} onChange={(e) => setCanViewNetPriceInput(e.target.checked)} className="rounded accent-[#ee4d2d]" />
+                      <span>🔒 Net Price <span className="text-[10px] text-[#9aa0b2]">(All Produk, Komisi)</span></span>
                     </label>
-                    <p className="text-[10.5px] text-[#9aa0b2] mt-1 ml-6">
-                      Kalau dimatikan: kolom Margin/HPP/Net Price di Harga & Pusat Promosi jadi 🔒, dan menu Kalkulator ikut tertutup.
-                    </p>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input type="checkbox" checked={canViewMarginInput} onChange={(e) => setCanViewMarginInput(e.target.checked)} className="rounded accent-[#ee4d2d]" />
+                      <span>🔒 Margin % <span className="text-[10px] text-[#9aa0b2]">(All Produk, Olah Data, Garansi, Kalkulator)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input type="checkbox" checked={canViewHppInput} onChange={(e) => setCanViewHppInput(e.target.checked)} className="rounded accent-[#ee4d2d]" />
+                      <span>🔒 HPP <span className="text-[10px] text-[#9aa0b2]">(Kalkulator)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input type="checkbox" checked={canViewHargaJualKomisiInput} onChange={(e) => setCanViewHargaJualKomisiInput(e.target.checked)} className="rounded accent-[#ee4d2d]" />
+                      <span>🔒 Harga Jual Komisi <span className="text-[10px] text-[#9aa0b2]">(tab Komisi Affiliate)</span></span>
+                    </label>
                   </div>
                 )}
               </div>

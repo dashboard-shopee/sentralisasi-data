@@ -1172,7 +1172,7 @@ export default function HargaPage() {
       )}
 
       {/* Main Card */}
-      <div className="card w-full overflow-hidden">
+      {!tabDenied && <div className="card w-full overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-8 h-8 rounded-full border-2 border-t-transparent border-[#ee4d2d] animate-spin"></div>
@@ -1239,7 +1239,7 @@ export default function HargaPage() {
             </div>
           </>
         )}
-      </div>
+      </div>}
 
       {/* Mass Update Modal */}
       {showMassModal && (

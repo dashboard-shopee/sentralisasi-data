@@ -26,7 +26,9 @@ interface CostSettings {
 
 export default function KalkulatorPage() {
   const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
-  const [forbidden, setForbidden] = useState(false);
+  const ALL_TABS_KALKULATOR = ["single", "batch"];
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([...ALL_TABS_KALKULATOR]);
+  const [perm, setPerm] = useState({ netPrice: true, margin: true, hpp: true, hargaJualKomisi: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -142,9 +144,15 @@ export default function KalkulatorPage() {
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/produk/kalkulator?tab=settings");
-      if (res.status === 403) { setForbidden(true); return; }
+      const data = await res.json();
+      if (data.allowedTabs) setAllowedTabs(data.allowedTabs);
+      if (res.status === 403) {
+        const allowed: string[] = data.allowedTabs || [];
+        if (allowed.length > 0 && !allowed.includes(activeTab)) setActiveTab(allowed[0] as "single" | "batch");
+        return;
+      }
       if (res.ok) {
-        const data = await res.json();
+        if (data.perm) setPerm(data.perm);
         if (data.single && data.batch) {
           setSingleSettings(data.single);
           setBatchSettings(data.batch);
@@ -169,8 +177,11 @@ export default function KalkulatorPage() {
         dir: sortDir,
       });
       const res = await fetch(`/api/produk/kalkulator?${params.toString()}`);
+      const data = await res.json();
+      if (data.allowedTabs) setAllowedTabs(data.allowedTabs);
+      if (res.status === 403) { setRows([]); setTotal(0); return; }
       if (res.ok) {
-        const data = await res.json();
+        if (data.perm) setPerm(data.perm);
         setRows(data.rows || []);
         setTotal(data.total || 0);
         if (data.single) setSingleSettings(data.single);
@@ -188,10 +199,10 @@ export default function KalkulatorPage() {
   }, [fetchSettings]);
 
   useEffect(() => {
-    if (activeTab === "batch") {
+    if (activeTab === "batch" && allowedTabs.includes("batch")) {
       fetchProducts();
     }
-  }, [activeTab, fetchProducts]);
+  }, [activeTab, fetchProducts, allowedTabs]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,14 +290,14 @@ export default function KalkulatorPage() {
   const detailCommFeeRp = selectedProductDetail ? (settings.commission_pct * selectedProductDetail.harga_jual_net) : 0;
   const detailMarginRp = selectedProductDetail ? (selectedProductDetail.harga_jual_net - detailAdminFeeRp - detailAdsFeeRp - detailSalaryFeeRp - detailCommFeeRp - detailBiayaTetap - selectedProductDetail.hpp) : 0;
 
-  if (forbidden) {
+  if (allowedTabs.length === 0) {
     return (
       <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8 flex items-center justify-center">
         <div className="max-w-[420px] text-center bg-white border border-[#eef0f6] rounded-2xl p-8 shadow-sm">
           <div className="text-4xl mb-3">🔒</div>
           <h1 className="text-lg font-extrabold text-[#161a27] mb-2">Akses Ditolak</h1>
           <p className="text-[13px] text-[#8a90a2]">
-            Akun Anda tidak memiliki izin melihat data sensitif (Margin/HPP). Hubungi Owner kalau Anda merasa harus punya akses ke halaman ini.
+            Anda tidak memiliki izin melihat tab manapun di halaman Kalkulator. Hubungi Owner kalau Anda merasa harus punya akses ke halaman ini.
           </p>
         </div>
       </div>
@@ -318,26 +329,30 @@ export default function KalkulatorPage() {
 
       {/* Tabs Menu */}
       <div className="flex border-b border-[#e2e8f0] mb-6">
-        <button
-          onClick={() => setActiveTab("single")}
-          className={`px-6 py-3 font-semibold text-sm transition-all border-b-2 -mb-[2px] ${
-            activeTab === "single"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          Simulasi Produk Baru (Single)
-        </button>
-        <button
-          onClick={() => setActiveTab("batch")}
-          className={`px-6 py-3 font-semibold text-sm transition-all border-b-2 -mb-[2px] ${
-            activeTab === "batch"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          Katalog Produk (Batch)
-        </button>
+        {allowedTabs.includes("single") && (
+          <button
+            onClick={() => setActiveTab("single")}
+            className={`px-6 py-3 font-semibold text-sm transition-all border-b-2 -mb-[2px] ${
+              activeTab === "single"
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Simulasi Produk Baru (Single)
+          </button>
+        )}
+        {allowedTabs.includes("batch") && (
+          <button
+            onClick={() => setActiveTab("batch")}
+            className={`px-6 py-3 font-semibold text-sm transition-all border-b-2 -mb-[2px] ${
+              activeTab === "batch"
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Katalog Produk (Batch)
+          </button>
+        )}
       </div>
 
       {/* ────────────────────────────────────────────────────────
@@ -658,33 +673,37 @@ export default function KalkulatorPage() {
                       <td className="px-6 py-3.5 max-w-xs truncate" title={row.nama_produk}>
                         {row.nama_produk}
                       </td>
-                      <td className="px-6 py-3.5 text-right font-medium">{formatRp(row.hpp)}</td>
+                      <td className="px-6 py-3.5 text-right font-medium">{perm.hpp ? formatRp(row.hpp) : <span className="text-slate-300">🔒</span>}</td>
                       <td className="px-6 py-3.5 text-right font-medium text-slate-500">
                         {row.override_net > 0 ? formatRp(row.override_net) : "-"}
                       </td>
                       <td className="px-6 py-3.5 text-right font-bold text-indigo-600">{formatRp(row.harga_jual_net)}</td>
                       <td className="px-6 py-3.5 text-right font-semibold">
-                        {formatPct(row.actual_margin)}
+                        {perm.margin ? formatPct(row.actual_margin) : <span className="text-slate-300">🔒</span>}
                       </td>
                       <td className="px-6 py-3.5 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 border text-xs font-bold rounded-full ${
-                          getStatusLabel(row.actual_margin).bg
-                        }`}>
-                          {row.margin_status}
-                        </span>
+                        {perm.margin ? (
+                          <span className={`inline-block px-2.5 py-0.5 border text-xs font-bold rounded-full ${
+                            getStatusLabel(row.actual_margin).bg
+                          }`}>
+                            {row.margin_status}
+                          </span>
+                        ) : <span className="text-slate-300">🔒</span>}
                       </td>
                       <td className="px-6 py-3.5 text-center flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => setEditingProduct({
-                            sku: row.sku,
-                            nama: row.nama_produk,
-                            hpp: row.hpp,
-                            override_net: row.override_net,
-                          })}
-                          className="px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-md transition"
-                        >
-                          Edit
-                        </button>
+                        {perm.hpp && (
+                          <button
+                            onClick={() => setEditingProduct({
+                              sku: row.sku,
+                              nama: row.nama_produk,
+                              hpp: row.hpp,
+                              override_net: row.override_net,
+                            })}
+                            className="px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-md transition"
+                          >
+                            Edit
+                          </button>
+                        )}
                         <button
                           onClick={() => setSelectedProductDetail(row)}
                           className="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 rounded-md transition"
@@ -1024,11 +1043,13 @@ export default function KalkulatorPage() {
                   <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">
                     Status Profit
                   </span>
-                  <span className={`inline-block px-2 py-0.5 border text-xs font-bold rounded-full ${
-                    getStatusLabel(selectedProductDetail.actual_margin).bg
-                  }`}>
-                    {selectedProductDetail.margin_status}
-                  </span>
+                  {perm.margin ? (
+                    <span className={`inline-block px-2 py-0.5 border text-xs font-bold rounded-full ${
+                      getStatusLabel(selectedProductDetail.actual_margin).bg
+                    }`}>
+                      {selectedProductDetail.margin_status}
+                    </span>
+                  ) : <span className="text-slate-300 text-xs font-bold">🔒</span>}
                 </div>
               </div>
 
@@ -1044,7 +1065,7 @@ export default function KalkulatorPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500 font-semibold">Harga Pokok Produksi (HPP)</span>
-                  <span className="font-bold text-slate-700">{formatRp(selectedProductDetail.hpp)}</span>
+                  <span className="font-bold text-slate-700">{perm.hpp ? formatRp(selectedProductDetail.hpp) : "🔒"}</span>
                 </div>
               </div>
 
@@ -1082,9 +1103,11 @@ export default function KalkulatorPage() {
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-3 font-bold text-slate-800 text-base">
                     <span>Margin Aktual (Rp)</span>
-                    <span className={detailMarginRp >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                      {formatRp(detailMarginRp)} ({formatPct(selectedProductDetail.actual_margin)})
-                    </span>
+                    {perm.margin ? (
+                      <span className={detailMarginRp >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                        {formatRp(detailMarginRp)} ({formatPct(selectedProductDetail.actual_margin)})
+                      </span>
+                    ) : <span className="text-slate-300">🔒</span>}
                   </div>
                 </div>
               </div>

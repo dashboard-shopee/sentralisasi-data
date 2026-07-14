@@ -105,7 +105,9 @@ export default function PusatPromosiPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [canViewMargin, setCanViewMargin] = useState(true);
+  const [perm, setPerm] = useState({ netPrice: true, margin: true, hpp: true, hargaJualKomisi: true });
+  const ALL_TABS_PROMOSI = ["promo_toko", "garansi", "campaign", "flash", "voucher", "paket", "komisi"];
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([...ALL_TABS_PROMOSI]);
   const size = 50;
 
   const load = useCallback(async () => {
@@ -121,11 +123,24 @@ export default function PusatPromosiPage() {
       if (search) u.searchParams.set("q", search);
       const r = await fetch(u.toString(), { cache: "no-store" });
       const d = await r.json();
+      if (r.status === 403) {
+        const allowed: string[] = d.allowedTabs || [];
+        setAllowedTabs(allowed);
+        if (allowed.length > 0 && !allowed.includes(tab)) {
+          setTab(allowed[0]);
+          return;
+        }
+        setErr(allowed.length === 0 ? "Anda tidak memiliki izin lihat tab manapun di halaman ini." : (d.error || "Akses ditolak"));
+        setRows([]);
+        setTotal(0);
+        return;
+      }
       if (!r.ok) throw new Error(d.error || "Gagal memuat");
       setRows(d.rows || []);
       setTotal(d.total || 0);
       if (d.tokos) setTokos(d.tokos);
-      setCanViewMargin(d.canViewMargin !== false);
+      if (d.perm) setPerm(d.perm);
+      if (d.allowedTabs) setAllowedTabs(d.allowedTabs);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setRows([]);
@@ -213,7 +228,7 @@ export default function PusatPromosiPage() {
 
       {/* Tab bar */}
       <div className="flex flex-wrap gap-1.5 mb-4">
-        {TABS.map((t) => (
+        {TABS.filter((t) => allowedTabs.includes(t.key)).map((t) => (
           <button
             key={t.key}
             onClick={() => { setTab(t.key); setPage(1); setExpanded(null); }}
@@ -325,7 +340,7 @@ export default function PusatPromosiPage() {
                               : "❌ Harusnya dicabut"}
                           </span>
                         ) : c.f === "margin" ? (
-                          !canViewMargin ? (
+                          !perm.margin ? (
                             <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
                           ) : row[c.k] === null || row[c.k] === undefined || row[c.k] === "" ? (
                             <span className="text-[#c3c6d1]">-</span>
