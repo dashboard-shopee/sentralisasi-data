@@ -198,12 +198,26 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 - **Config refactor (13 Jul):** `config.py` jadi CONTROL PANEL — `FASE_AKTIF` (arsitektur 3-fase, skrg [1]) · `TOKO_AKTIF` · `MODUL_AKTIF` (nyala/matiin modul) · trigger jam. Trigger **bulanan DIHAPUS** (housekeeping → mingguan). Legacy Sheet block dibersihin (cuma `KOL` disisain, dipake `update_harga`). `RUN.bat` echo dibetulin. Scheduler honor `FASE_AKTIF`+`MODUL_AKTIF`. KPI dicek — udah sesuai.
 - **⏳ Belum dikerjain (nunggu owner):** konsolidasi paket → owner **hapus manual** paket non-UPSELL tiap toko, baru jalanin `provisioning paket` (bot isi sisanya ke 1 UPSELL).
 
-**LANGKAH LANJUT (urutan):**
-1. ✅ ~~Tes live voucher~~ BERES 13 Jul (kimmioshop). Sisa: **rollout voucher 9 toko lain** (`python run.py provisioning voucher` dengan `TOKO_AKTIF=[]`) — nunggu go owner.
-2. Konsolidasi paket: owner hapus paket non-UPSELL manual → jalanin `provisioning paket` → cek semua produk masuk 1 UPSELL.
-3. Lanjut modul lain live: **Garansi → Campaign → Flash**.
-4. **Poin 1–4 (kontrol harga)** — belum pernah diverifikasi live, paling berisiko (ngubah harga jual tiap jam). Sekarang ikut `MODE_LIVE` (ga ada rem paksa-DRY lagi) → hati2, tes scope 1 toko dulu.
-5. **Fase 3 (laporan)** — belum mulai.
+**▶️ RENCANA BESAR (grilling 13–14 Jul) — 7 MILESTONE, aman→berisiko.**
+Spec lengkap 29 keputusan (3 fase · 7 modul · log · config) di plan detail (sesi 14 Jul).
+Ringkas per-milestone:
+- **M−1 Rekonsiliasi** ✅ (14 Jul) — checkpoint kode bersih. Artifact tes `DIAGV*` di YARRA self-expire.
+- **M0 Fondasi** 🔧 — config 3-blok + KPI rem (✅ commit) · **log CMD terpusat `log()`** (✅ commit, fondasi) · SISA: route semua `print(colorama)`→`log()`, `catat()` unified, migrasi `siklus_log` struktur event, rombak dashboard log jadi tabel filterable.
+- **M1 Fase 1 lengkap** ⏳ — Garansi 2-kolom (Terbaik+Program dari `bidding_info`) · Voucher `fe_status` · `_buang_berakhir` semua modul · **produk stok-habis→stok=0** (akar masalah voucher!) · auto-isi harga diskon jalan di Fase 1 & 3.
+- **M2 Loop A→B + Fase 3 + alasan** ⏳ — siklus jadi Loop A(fase1+2)→Loop B(fase3, ulang kimmio→beverra) · grab-ulang fase 3 · **tulis `alasan` ke DB** (1 baris/produk gabung, buat laporan).
+- **M3 Poin 1–4 harga + REM** ⏳🔴 — rem 30%/40% · komisi peg (+trigger Shopee-aktif) · garansi takedown jam (sumber 2-kolom) · poin 4 re-attach→serahin provisioning harian. PALING RISIKO (harga live).
+- **M4 Poin 5 provisioning** ⏳ — verif live per modul: garansi · **voucher (verif poison KELAR abis stok-fix M1)** · paket (fix `baca_item_deal` over-count) · campaign · flash (**sniff endpoint akhiri-SESI** — cabut = akhiri sesi, bukan per-item).
+- **M5 Open problems** ⏳🔴 — 3 toko flaky (Topikece/ZIO/BEVERRA: deal numpuk 30-70, list non-deterministik → cleanup + rem anti-dobel) · voucher bisect-on-failure (kalau M4 nunjukin poison non-stok-0) · voucher lama ga bisa diakhirin via API.
+
+**Keputusan kunci grilling** (biar ga nanya ulang):
+- Fase 3 = grab-ulang semua modul abis Fase 2 (Loop B, jeda propagasi dari lamanya loop). Status TERKINI + alasan (bukan histori).
+- Garansi: margin dicek per-TABEL (Program utk rekomendasi/terbaik · Terbaik utk perlu-ditinjau); bid re-submit @Terbaik; HPP kosong = biarin (jangan takedown); stok-0 sendiri bukan alasan takedown.
+- Voucher poison = item STOK-0 (Shopee tolak seluruh voucher). Fix = stok-habis→0 (M1) + filter. Verif ulang M4.
+- Komisi: peg harga kalau aktif Syntra ATAU Shopee. Harga Komisi ≥ Harga Diskon (rem ga salah-trigger).
+- Flash cabut = akhiri SESI (50/sesi, collateral diterima). Campaign pasang jalan, verif cabut live.
+- Log: tabel event filterable, catet NOTABLE + heartbeat/siklus. CMD = progress+perubahan (model iklan). 1 fungsi `catat()` buat CMD+dashboard.
+
+⚠️ `config.py` skrg `MODE_LIVE=True` + `TOKO_AKTIF=[]` — jangan jalanin tanpa scope!
 
 **CARA JALANIN:**
 - Scheduler 24 jam: `python run.py` / double-klik `RUN.bat` (jalan tiap jam di menit `MENIT_RUNNING`).

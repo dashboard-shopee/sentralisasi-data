@@ -106,5 +106,5 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_t
 - 🟡 Garansi / Promo Toko / Campaign / Flash — logika beres, belum tes live
 - ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (logika beres, belum PERNAH diverifikasi live — hati2 pas nyalain MODE_LIVE)
 
-**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — langkah lanjut & open items.
-⚠️ Open lain: takedown flash endpoint RUSAK · paket ZIOSCARF/BEVERRA flaky Shopee (hold).
+**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 🔧 (config KPI rem + log terpusat udah commit, sisa route prints + dashboard log + migrasi).
+⚠️ Open lain: takedown flash endpoint RUSAK (fix: akhiri-sesi, M4) · 3 toko flaky deal-numpuk (M5).
