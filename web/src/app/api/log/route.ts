@@ -30,6 +30,7 @@ const KATALOG = [
       { key: "fakta_bulanan", label: "Log Housekeeping Bulanan" },
       { key: "rubah_harga", label: "Log Rubah Harga" },
       { key: "provisioning", label: "Log Provisioning (Pasang Promo)" },
+      { key: "laporan", label: "Log Fase 3 (Laporan — Grab Ulang Status Terkini)" },
     ],
   },
   {
