@@ -193,6 +193,29 @@ def alasan_dari_diagnosa(diagnosa):
     return {(d["item_id"], d["model_id"]): bangun_alasan(d) for d in diagnosa}
 
 
+def alasan_terkini(keputusan_a, diagnosa_b):
+    """FASE 3: gabung NARASI aksi (diagnosa Loop A `keputusan_a`) + VERIFIKASI status terkini
+    (diagnosa Loop B `diagnosa_b`, hasil grab-ulang abis fase 2). Return {(item,model): teks}.
+    Suffix: '✓ harga sesuai target' kalau real==target sekarang · '⚠ belum (real X)' kalau belum.
+    Kalau produk ga ada di keputusan Loop A (mis. fase 2 skip) → pakai bangun_alasan(b) apa adanya."""
+    F = config.fmt_angka
+    peta_a = {(d["item_id"], d["model_id"]): d for d in (keputusan_a or [])}
+    out = {}
+    for b in diagnosa_b:
+        key = (b["item_id"], b["model_id"])
+        dasar = peta_a.get(key) or b                       # narasi dari Loop A kalau ada
+        teks = bangun_alasan(dasar)
+        target, real = b.get("target"), b.get("real")
+        if not target or target <= 0:
+            suffix = ""
+        elif real and real == target:
+            suffix = " ✓ harga sesuai target."
+        else:
+            suffix = f" ⚠ belum sesuai (real {F(real)})."
+        out[key] = teks + suffix
+    return out
+
+
 def ringkas(diagnosa):
     """Ringkasan jumlah per kasus + per jenis aksi + berapa variasi ke-anchor komisi (log/verifikasi)."""
     from collections import Counter

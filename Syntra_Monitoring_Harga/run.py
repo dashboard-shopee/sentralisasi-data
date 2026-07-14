@@ -62,6 +62,30 @@ def _aman(nama, label, fn):
 #  Tier modul tetap: JAM (produk+promo_toko+harga poin 1-4) · HARIAN (fakta harian +
 #  prov paket/voucher/garansi) · MINGGUAN (kategori+housekeeping + prov campaign/flash).
 # ══════════════════════════════════════════════════════════════════
+def _grab_fakta(username, nama, session, due_harian, due_mingguan, aktif, fase_tag="F1"):
+    """Grab SEMUA modul fakta 1 toko sesuai tier (dipakai Fase 1 DAN Fase 3 grab-ulang).
+    Return (n_variasi, n_konteks). READ-ONLY."""
+    n, nk = fakta.fakta_produk(username, nama, session)   # TIER JAM: produk (WAJIB) + base
+    log(f"Produk: {n} variasi, {nk} promo→konteks", level="detail", fase=fase_tag, toko=nama)
+    if aktif("promo_toko"):
+        _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
+    if due_harian:                                          # TIER HARIAN
+        if aktif("garansi"):
+            _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
+            _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
+        if aktif("campaign"):
+            _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
+        if aktif("flash"):
+            _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
+        if aktif("voucher"):
+            _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
+        if aktif("paket"):
+            _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
+    if due_mingguan and aktif("kategori"):                 # TIER MINGGUAN
+        _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))
+    return n, nk
+
+
 def siklus_terpadu(paksa_semua=False, fase=None):
     from modules import fase2_harga as F2
     from modules import provisioning as P
@@ -87,41 +111,25 @@ def siklus_terpadu(paksa_semua=False, fase=None):
     if 2 in fase and not config.DRY_RUN:
         log(f"⚠️  MODE LIVE — Fase 2 (harga poin 1-4{' + prov ' + str(list(mprov)) if mprov else ''}) BENERAN ubah Shopee.", level="live")
 
+    # ══ LOOP A — FASE 1 (grab) + FASE 2 (aksi) semua toko ══
+    # Keputusan fase 2 disimpen per toko → dipakai Fase 3 (Loop B) buat alasan status terkini.
     T = {"grab": 0, "konteks": 0, "gagal": 0}
+    keputusan = {}                                          # nama_toko -> diagnosa fase 2 (buat alasan Fase 3)
     for username, info in toko.items():
         nama = info["name"]
         try:
-            session = grab_session(shop=username, i=info["i"])     # HARVEST SESI 1x utk SEMUA fase toko ini
+            session = grab_session(shop=username, i=info["i"])     # HARVEST SESI 1x utk fase 1+2 toko ini
             # ── FASE 1 — FAKTA (read-only) ──
             if 1 in fase:
-                # TIER JAM (selalu): produk (base, WAJIB — fase 2 juga makai) + Promo Toko
-                n, nk = fakta.fakta_produk(username, nama, session)
+                n, nk = _grab_fakta(username, nama, session, due_harian, due_mingguan, aktif, "F1")
                 T["grab"] += n; T["konteks"] += nk
-                log(f"Produk: {n} variasi, {nk} promo→konteks", level="detail", fase="F1", toko=nama)
-                if aktif("promo_toko"):
-                    _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
-                # TIER HARIAN (Fakta)
-                if due_harian:
-                    if aktif("garansi"):
-                        _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
-                        _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
-                    if aktif("campaign"):
-                        _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
-                    if aktif("flash"):
-                        _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
-                    if aktif("voucher"):
-                        _aman(nama, "voucher", lambda: fakta.fakta_voucher(nama, session))
-                    if aktif("paket"):
-                        _aman(nama, "paket", lambda: fakta.fakta_paket(nama, session))
-                # TIER MINGGUAN (Fakta)
-                if due_mingguan and aktif("kategori"):
-                    _aman(nama, "kategori", lambda: fakta.fakta_kategori(nama, session))  # incremental (capped)
 
             # ── FASE 2 — AKSI (pakai SESI yg sama + data fase 1 barusan) ──
             if 2 in fase:
                 if 1 not in fase:
                     fakta.fakta_produk(username, nama, session)    # fase 1 di-skip → grab fresh sendiri
                 d = F2.diagnosa_toko(nama)
+                keputusan[nama] = d                                # simpen buat Fase 3
                 kasus, aksi = F2.ringkas(d)
                 log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
                 _aman(nama, "tulis alasan", lambda: tulis_alasan(nama, F2.alasan_dari_diagnosa(d)))
@@ -171,6 +179,29 @@ def siklus_terpadu(paksa_semua=False, fase=None):
         catat_fase("rubah_harga", keterangan=f"Fase 2 harga (promo toko + harga dasar + takedown flash/campaign, {mode_txt})")
         if mprov:
             catat_fase("provisioning", keterangan=f"poin 5 {list(mprov)} ({mode_txt})")
+
+    # ══ LOOP B — FASE 3 (LAPORAN): grab-ulang status TERKINI + alasan verifikasi ══
+    # Jeda propagasi GRATIS: pas balik grab toko ini, aksi fase 2-nya udah settle di Shopee
+    # (keburu lamanya Loop A jalanin toko lain). Alasan = narasi aksi (Loop A) + verif terkini.
+    if 3 in fase:
+        log("=== FASE 3 (LAPORAN) — grab-ulang status terkini semua toko ===", level="header")
+        n3 = a3 = gagal3 = 0
+        for username, info in toko.items():
+            nama = info["name"]
+            try:
+                session = grab_session(shop=username, i=info["i"])
+                _grab_fakta(username, nama, session, due_harian, due_mingguan, aktif, "F3")
+                d3 = F2.diagnosa_toko(nama)                     # diagnosa ulang = status terkini (post-aksi)
+                a3 += tulis_alasan(nama, F2.alasan_terkini(keputusan.get(nama), d3))
+                n3 += 1
+                log("--- LAPORAN SELESAI ---", level="detail", fase="F3", toko=nama)
+            except Exception as e:
+                gagal3 += 1
+                log(f"GAGAL: {e}", level="error", fase="F3", toko=nama)
+        close_session()
+        catat_fase("laporan", status="gagal" if (n3 == 0 and gagal3) else "ok",
+                   keterangan=f"Fase 3: {n3} toko grab-ulang, {a3} alasan terkini" + (f", {gagal3} gagal" if gagal3 else ""))
+        log(f"=== FASE 3 SELESAI — {n3} toko, {a3} alasan terkini ===", level="header")
 
     log(f"=== SIKLUS SELESAI — fase {fase} · tier: {tier} ===", level="header")
 
@@ -318,7 +349,7 @@ def scheduler():
         m = "🔴 LIVE (ubah Shopee)" if not config.DRY_RUN else "DRY (simulasi)"
         log(f"NOTE: FASE 2 aktif — mode {m} (ikut MODE_LIVE).", level="warning")
     if 3 in fase:
-        log("NOTE: FASE 3 (laporan) belum dibikin — di-skip.", level="warning")
+        log("NOTE: FASE 3 (laporan) aktif — grab-ulang status terkini + alasan tiap siklus.", level="warning")
     jam_terakhir = None
     while True:
         time.sleep(3)                                  # DETAK (tanpa log biar terminal bersih)
@@ -326,8 +357,7 @@ def scheduler():
         if now.minute == menit and now.hour != jam_terakhir:
             jam_terakhir = now.hour
             try:
-                siklus_terpadu()                       # 1 loop toko, 1 sesi per toko — fase ikut FASE_AKTIF
-                # (fase 3 laporan — belum dibikin)
+                siklus_terpadu()                       # Loop A (fase1+2) → Loop B (fase3) — fase ikut FASE_AKTIF
             except Exception as e:
                 log(f"SIKLUS GAGAL (di-skip, lanjut jam berikutnya): {e}", level="error")
 
