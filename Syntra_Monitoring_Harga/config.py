@@ -23,11 +23,11 @@ load_dotenv()
 #    True  = LIVE: SEMUA modul (harga poin 1-4 + provisioning poin 5) BENERAN ubah Shopee.
 MODE_LIVE = True
 
-# 2) FASE yang dijalankan scheduler (arsitektur 3 FASE):
+# 2) FASE yang dijalankan (arsitektur 3 FASE, orkestrasi `siklus_terpadu` 1-sesi/toko):
 #      1 = FAKTA          (grab data, READ-ONLY)
-#      2 = MASALAH+SOLUSI (benerin harga + pasang/cabut promo)  → skrg command TERPISAH, belum di-scheduler
-#      3 = LAPORAN        (rangkum aksi)                         → belum dibikin
-#    ⚠️ Sekarang scheduler cuma jalanin FASE 1. Fase 2 manual: `run.py provisioning [modul]` / `run.py fase2`.
+#      2 = MASALAH+SOLUSI (benerin harga poin 1-4 + pasang/cabut promo poin 5)
+#      3 = LAPORAN        (grab-ulang abis aksi, rangkum ke dashboard)  → dibikin bertahap
+#    Contoh: [1]=grab doang · [1,2]=grab+aksi · [1,2,3]=full. Live/DRY ikut MODE_LIVE.
 FASE_AKTIF = [1,2]
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
@@ -67,6 +67,16 @@ JAM_FAKTA_MINGGUAN  = "9"        # tier MINGGUAN: jam (09:00 di hari itu)
 # ║  sini (jangan hardcode di modul). "target" = Harga Diskon/pancing  ║
 # ║  per-SKU. "pjh" = penjualan/hari (rata2 30 hr). Ref: RENCANA_FASE2.║
 # ╚══════════════════════════════════════════════════════════════════╝
+
+# ── REM PENGAMAN HARGA (poin 1–4) — jaring kalau data ngaco, biar ga kebakaran massal ──
+#    Dicek SEBELUM eksekusi. Kelewat ambang → SKIP + warning (jangan eksekusi).
+KPI_HARGA_MAKS_UBAH_PCT  = 0.30   # maks fraksi produk 1 TOKO yg boleh keubah harganya per siklus jam.
+                                  #   >30% mau keubah sekaligus = curiga data salah → SKIP TOKO + warning.
+                                  #   Contoh: toko 900 produk, >270 mau keubah → skip toko itu.
+KPI_HARGA_MAKS_TURUN_PCT = 0.40   # maks fraksi penurunan 1 PRODUK vs HARGA DISKON (acuan manual owner).
+                                  #   target < Harga_Diskon × (1−0.40) = di bawah 60% Harga Diskon → curiga
+                                  #   pancing/komisi salah input → SKIP PRODUK + warning.
+                                  #   (FYI: Harga Komisi ≥ Harga Diskon, jadi komisi ga bakal salah-trigger.)
 
 # ── HARGA / poin 1–4 — ambang TAKEDOWN per-jam (fase2_harga._cek_koreksi_turun) ──
 KPI_GARANSI_SELISIH    = 500     # takedown garansi bila best  < target − ini (rupiah)
