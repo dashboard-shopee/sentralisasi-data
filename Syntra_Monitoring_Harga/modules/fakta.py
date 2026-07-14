@@ -21,6 +21,7 @@ import config
 from modules.grab_produk import grab_produk
 from modules import sql_harga as SQL
 from modules.log_siklus import log
+from modules.api_util import AntiBotError
 
 
 def _iso(epoch):
@@ -141,6 +142,9 @@ def fakta_campaign(nama_toko, session):
         })
         try:
             nominasi = campaign.get_nominated(session, sid)   # {(item_str,model_str): {...}}
+        except AntiBotError:
+            _log(nama_toko, "campaign nominasi kena ANTI-BOT Shopee (butuh SDK) → skip grab nominasi semua sesi", colorama.Fore.YELLOW)
+            break   # semua sesi bakal sama → stop, jangan badai
         except Exception as e:
             _log(nama_toko, f"get_nominated sesi {sid} gagal: {type(e).__name__}", colorama.Fore.RED)
             nominasi = {}

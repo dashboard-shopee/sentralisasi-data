@@ -4,6 +4,23 @@ from modules.log_siklus import log
 import requests
 
 
+class AntiBotError(RuntimeError):
+    """Endpoint kena anti-bot Shopee (butuh tanda-tangan SDK x-sap-sec) → GAGAL PERMANEN,
+    retry percuma. Signature: error 90309999 / redirect_to_error_page. Caller mesti SKIP,
+    bukan retry (mis. komisi & campaign-nominasi tertentu). Lihat modules/komisi_api.py."""
+
+
+# Kode error Shopee yang = gagal permanen (anti-bot) → jangan retry, langsung nyerah.
+_ANTI_BOT_ERR = {90309999}
+
+
+def _cek_anti_bot(data):
+    """True kalau respons = interstitial anti-bot Shopee (percuma di-retry)."""
+    if not isinstance(data, dict):
+        return False
+    return data.get("error") in _ANTI_BOT_ERR or bool(data.get("redirect_to_error_page"))
+
+
 def _valid(data, kunci):
     # respons normal = dict yang punya `kunci` berisi dict (mis. 'data' / 'result')
     return isinstance(data, dict) and isinstance(data.get(kunci), dict)
@@ -30,6 +47,11 @@ def _minta(method, url, headers, params, payload, kunci, attempts):
             else:
                 if _valid(data, kunci):
                     return data
+                if _cek_anti_bot(data):
+                    # gagal permanen (anti-bot) → JANGAN retry, langsung nyerah biar ga badai.
+                    raise AntiBotError(
+                        f'Endpoint kena anti-bot Shopee (error {data.get("error")}) di {url} — '
+                        f'butuh tanda-tangan SDK, ga bisa via requests. SKIP.')
                 cuplikan = f'HTTP {r.status_code}: {str(data)[:250]}'
         except requests.RequestException as e:
             cuplikan = f'{type(e).__name__}: {e}'

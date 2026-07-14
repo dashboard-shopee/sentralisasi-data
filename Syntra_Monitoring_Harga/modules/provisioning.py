@@ -12,6 +12,7 @@ import config
 from modules import paket_diskon as PD
 from modules import voucher as V
 from modules.log_siklus import log, catat
+from modules.api_util import AntiBotError
 
 
 def paket(shop, nama_toko, session):
@@ -267,13 +268,18 @@ def campaign(shop, nama_toko, session):
         level="detail", fase="F2", toko=nama_toko, modul="campaign")
 
     total = 0
-    for s in sesi:
-        sid = s["session_id"]
-        already = C.get_nominated(session, sid)         # {(iid_str,mid_str): {...}}
-        baru = [p for p in lolos
-                if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
-        r = C.nominate(session, sid, baru)
-        total += r.get("staged", 0)
+    try:
+        for s in sesi:
+            sid = s["session_id"]
+            already = C.get_nominated(session, sid)         # {(iid_str,mid_str): {...}}
+            baru = [p for p in lolos
+                    if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
+            r = C.nominate(session, sid, baru)
+            total += r.get("staged", 0)
+    except AntiBotError:
+        log("campaign nominasi kena ANTI-BOT Shopee (butuh SDK) → skip pasang campaign",
+            level="warning", fase="F2", toko=nama_toko, modul="campaign")
+        return {"campaign": total, "sesi": len(sesi), "lolos": len(lolos)}
     catat(f"total staged {total} produk ke {len(sesi)} sesi",
           status="live" if total else "ok", fase="F2", toko=nama_toko, modul="campaign",
           detail={"staged": total, "sesi": len(sesi), "lolos": len(lolos)})

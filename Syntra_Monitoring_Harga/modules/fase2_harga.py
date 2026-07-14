@@ -13,6 +13,7 @@ Penjualan/hari = rata2 30 hari unit terjual (fact_penjualan Shopee).
 import config
 from modules import sql_harga as SQL
 from modules.log_siklus import log, catat
+from modules.api_util import AntiBotError
 
 # Ambang KPI takedown — SATU sumber di config (jangan hardcode di sini). Alias biar
 # ringkas + kalau config di-tuning, cukup ubah di config.py.
@@ -478,13 +479,17 @@ def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
 
     sesi = C.open_sessions(session, window="sesi")   # sesi berjalan (buat takedown)
     total = 0
-    for s in sesi:
-        sid = s["session_id"]
-        nominated = C.get_nominated(session, sid)    # {(iid,mid): {nomination_id,...}}
-        nom_ids = [v["nomination_id"] for k, v in nominated.items()
-                   if k in kunci and v.get("nomination_id")]
-        if nom_ids:
-            total += C.takedown(session, sid, nom_ids)
+    try:
+        for s in sesi:
+            sid = s["session_id"]
+            nominated = C.get_nominated(session, sid)    # {(iid,mid): {nomination_id,...}}
+            nom_ids = [v["nomination_id"] for k, v in nominated.items()
+                       if k in kunci and v.get("nomination_id")]
+            if nom_ids:
+                total += C.takedown(session, sid, nom_ids)
+    except AntiBotError:
+        log("campaign takedown kena ANTI-BOT Shopee (butuh SDK) → skip",
+            level="warning", fase="F2", toko=nama_toko, modul="campaign")
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(kunci)} variasi target, {len(sesi)} sesi berjalan → {total} ter-takedown",
           status=("live" if (not config.DRY_RUN and total) else "ok"),

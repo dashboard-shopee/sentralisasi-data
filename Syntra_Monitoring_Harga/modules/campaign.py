@@ -22,7 +22,7 @@ CATATAN:
 import time
 from modules.log_siklus import log
 import config
-from modules.api_util import api_post
+from modules.api_util import api_post, AntiBotError
 
 ENTITY_PRODUK = 2   # entity_type produk
 
@@ -85,6 +85,8 @@ def get_nominated(session, session_id, page_size=50):
             r = api_post(config.URL_GET_NOMINATED_LIST, H, P,
                 {"session_id": str(session_id), "entity_type": [ENTITY_PRODUK], "entity_tab": 0,
                  "page_num": page, "page_size": page_size}, kunci="data")
+        except AntiBotError:
+            raise    # gagal permanen → biar caller (fakta_campaign) skip semua sesi, jangan telen
         except Exception:
             break
         ents = ((r.get("data") or {}).get("recruiting_entities")) or []
