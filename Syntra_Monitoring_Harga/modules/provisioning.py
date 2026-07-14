@@ -8,10 +8,10 @@ Sumber produk = `harga_olah_data` (hasil grab Fase 1) → Fase 1 harus udah jala
 Cadence: paket & voucher = HARIAN.
 """
 import time
-import colorama; colorama.init()
 import config
 from modules import paket_diskon as PD
 from modules import voucher as V
+from modules.log_siklus import log, catat
 
 
 def paket(shop, nama_toko, session):
@@ -26,18 +26,18 @@ def paket(shop, nama_toko, session):
     now = int(time.time())
     semua = set(PD.item_ids_toko(nama_toko))
     if not semua:
-        print(colorama.Fore.YELLOW + f"[prov paket] [{nama_toko}] 0 produk di olah_data — skip (grab Fase 1 dulu)" + colorama.Style.RESET_ALL)
+        log("0 produk di olah_data — skip (grab Fase 1 dulu)", level="warning", fase="F2", toko=nama_toko, modul="paket")
         return {"paket": None, "produk": 0}
 
     deals = PD.list_deals(session) or []
     terdaftar = PD.item_ids_terdaftar(session, deals)      # produk yg udah di paket manapun
     belum = sorted(semua - terdaftar)
     kap = PD.baca_kapasitas(session)
-    print(colorama.Fore.WHITE + f"[prov paket] [{nama_toko}] {len(semua)} produk | {len(terdaftar)} udah di paket | "
-          f"{len(belum)} BELUM | kapasitas {kap}" + colorama.Style.RESET_ALL)
+    log(f"{len(semua)} produk | {len(terdaftar)} udah di paket | {len(belum)} BELUM | kapasitas {kap}",
+        level="detail", fase="F2", toko=nama_toko, modul="paket")
 
     if not belum:
-        print(colorama.Fore.GREEN + f"[prov paket] [{nama_toko}] semua produk udah punya paket ✓ — ga ada yg didaftarin" + colorama.Style.RESET_ALL)
+        log("semua produk udah punya paket ✓ — ga ada yg didaftarin", level="ok", fase="F2", toko=nama_toko, modul="paket")
         return {"paket": None, "produk": len(semua), "belum_masuk": 0, "masuk": 0}
 
     prefix = config.NAMA_UPSELL
@@ -61,13 +61,14 @@ def paket(shop, nama_toko, session):
         start, end = now + 300, now + config.DURASI_PROMO_HARI * 86400
         bid = PD.buat_deal(session, f"{prefix} {nama_toko}", start, end)   # None kalau DRY_RUN
         if not bid:
-            print(colorama.Fore.YELLOW + f"[prov paket] [{nama_toko}] (DRY) bakal BUAT '{prefix} {nama_toko}' + enroll {len(belum)} produk belum-masuk" + colorama.Style.RESET_ALL)
+            log(f"(DRY) bakal BUAT '{prefix} {nama_toko}' + enroll {len(belum)} produk belum-masuk",
+                level="warning", fase="F2", toko=nama_toko, modul="paket")
             return {"paket": "DRY-baru", "baru": True, "belum_masuk": len(belum)}
         baru = True
 
     r = PD.enroll_dengan_overflow(session, belum, bid, nama_toko, start, end, prefix)
-    print((colorama.Fore.CYAN if baru else colorama.Fore.GREEN)
-          + f"[prov paket] [{nama_toko}] paket {'BARU' if baru else 'reuse'} {bid} → {r}" + colorama.Style.RESET_ALL)
+    catat(f"paket {'BARU' if baru else 'reuse'} {bid} → {r}",
+          status="live", fase="F2", toko=nama_toko, modul="paket", detail={"baru": baru, "paket": bid, **r})
     return {"paket": bid, "baru": baru, **r}
 
 
@@ -133,21 +134,22 @@ def voucher(shop, nama_toko, session):
     n_stok0 = sum(1 for i in harga if stok_item.get(i, 0) <= 0)
     if n_stok0:
         harga = {i: h for i, h in harga.items() if stok_item.get(i, 0) > 0}
-        print(colorama.Fore.WHITE + f"[prov voucher] [{nama_toko}] {n_stok0} produk stok-0 dibuang dari voucher (Shopee tolak)" + colorama.Style.RESET_ALL)
+        log(f"{n_stok0} produk stok-0 dibuang dari voucher (Shopee tolak)", level="detail", fase="F2", toko=nama_toko, modul="voucher")
     if not harga:
-        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] 0 produk berstok+berharga di olah_data — skip (grab Fase 1 dulu?)" + colorama.Style.RESET_ALL)
+        log("0 produk berstok+berharga di olah_data — skip (grab Fase 1 dulu?)", level="warning", fase="F2", toko=nama_toko, modul="voucher")
         return {"voucher": None, "produk": 0}
 
     cap = V.min_price_toko(nama_toko)          # 2×AOV×buffer — batas min belanja (aturan Shopee)
     if cap <= 0:
-        print(colorama.Fore.YELLOW + f"[prov voucher] [{nama_toko}] AOV kosong (fact_pesanan) — cap 2×AOV ga bisa dihitung, skip" + colorama.Style.RESET_ALL)
+        log("AOV kosong (fact_pesanan) — cap 2×AOV ga bisa dihitung, skip", level="warning", fase="F2", toko=nama_toko, modul="voucher")
         return {"voucher": None, "produk": len(harga), "cap": 0}
 
     semua_band = V.bagi_produk_per_band(harga)
     bands = [(low, high, ids) for low, high, ids in semua_band if ids and high + 1 <= cap]
     tanpa = sum(len(ids) for low, high, ids in semua_band if ids and high + 1 > cap)
     if tanpa:
-        print(colorama.Fore.WHITE + f"[prov voucher] [{nama_toko}] {tanpa} produk mahal (band min > cap Rp{cap:,}) TANPA voucher (keputusan owner)" + colorama.Style.RESET_ALL)
+        log(f"{tanpa} produk mahal (band min > cap Rp{cap:,}) TANPA voucher (keputusan owner)",
+            level="detail", fase="F2", toko=nama_toko, modul="voucher")
 
     # 2) band → SLOT: item > KPI_VOUCHER_MAKS_ITEM dipecah (Shopee tolak voucher >~570 item).
     #    1 slot = 1 voucher. Band gede jadi >1 voucher (min belanja & diskon SAMA, item dibagi).
@@ -199,7 +201,7 @@ def voucher(shop, nama_toko, session):
                     det = V.get_voucher(session, vid) if tambah else det   # detail fresh abis PUT
                     V.keluarkan_item(session, vid, keluar, detail=det); keluar_n += len(keluar)
             except Exception as e:
-                print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] {nama_slot} reconcile GAGAL: {e}" + colorama.Style.RESET_ALL)
+                log(f"{nama_slot} reconcile GAGAL: {e}", level="error", fase="F2", toko=nama_toko, modul="voucher")
             continue
 
         if v and segar:                      # min belanja geser → ganti
@@ -222,7 +224,7 @@ def voucher(shop, nama_toko, session):
             vouchers.append({"voucher_code": kode})   # cegah kode dobel di slot berikutnya (1 sesi)
         except Exception as e:
             gagal += 1
-            print(colorama.Fore.RED + f"[prov voucher] [{nama_toko}] {nama_slot} buat GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"{nama_slot} buat GAGAL: {e}", level="error", fase="F2", toko=nama_toko, modul="voucher")
 
     # 3) voucher UPSELL yg ga kepakai band manapun → akhiri (skema lama / band ilang / dobel)
     for v in ours:
@@ -232,10 +234,12 @@ def voucher(shop, nama_toko, session):
                 diakhiri += 1
             sudah_diakhiri.add(vid)
 
-    warna = colorama.Fore.RED if gagal else colorama.Fore.CYAN
-    print(warna + f"[prov voucher] [{nama_toko}] {len(harga)} produk → {len(bands)} band / {len(slots)} slot | "
-          f"buat {buat} · item +{tambah_n}/−{keluar_n} · diakhiri {diakhiri}"
-          + (f" · ⚠️ {gagal} GAGAL" if gagal else "") + colorama.Style.RESET_ALL)
+    catat(f"{len(harga)} produk → {len(bands)} band / {len(slots)} slot | buat {buat} · "
+          f"item +{tambah_n}/−{keluar_n} · diakhiri {diakhiri}" + (f" · ⚠️ {gagal} GAGAL" if gagal else ""),
+          status="gagal" if gagal else ("live" if (buat or tambah_n or keluar_n or diakhiri) else "ok"),
+          fase="F2", toko=nama_toko, modul="voucher",
+          detail={"produk": len(harga), "band": len(bands), "slot": len(slots), "buat": buat,
+                  "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal})
     return {"produk": len(harga), "band": len(bands), "slot": len(slots), "buat": buat,
             "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal}
 
@@ -249,7 +253,7 @@ def campaign(shop, nama_toko, session):
     from modules import sql_harga as SQL
     sesi = C.open_sessions(session, keywords=config.CAMPAIGN_KEYWORDS)   # cuma sesi buka nominasi
     if not sesi:
-        print(colorama.Fore.YELLOW + f"[prov campaign] [{nama_toko}] 0 sesi buka nominasi — skip" + colorama.Style.RESET_ALL)
+        log("0 sesi buka nominasi — skip", level="warning", fase="F2", toko=nama_toko, modul="campaign")
         return {"campaign": 0, "sesi": 0, "lolos": 0}
 
     prod_all = C.produk_toko(nama_toko)                 # semua produk berstok [{item_id, models}]
@@ -259,7 +263,8 @@ def campaign(shop, nama_toko, session):
     xf = config.KPI_CAMPAIGN_PASANG_STOK_X_PJH
     lolos = [p for p in prod_all
              if stok.get(p["item_id"], 0) > smin and stok.get(p["item_id"], 0) > xf * pjh.get(p["item_id"], 0.0)]
-    print(colorama.Fore.WHITE + f"[prov campaign] [{nama_toko}] {len(prod_all)} produk → {len(lolos)} lolos (stok>{smin} & >{xf}×pjh) | {len(sesi)} sesi" + colorama.Style.RESET_ALL)
+    log(f"{len(prod_all)} produk → {len(lolos)} lolos (stok>{smin} & >{xf}×pjh) | {len(sesi)} sesi",
+        level="detail", fase="F2", toko=nama_toko, modul="campaign")
 
     total = 0
     for s in sesi:
@@ -269,7 +274,9 @@ def campaign(shop, nama_toko, session):
                 if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
         r = C.nominate(session, sid, baru)
         total += r.get("staged", 0)
-    print(colorama.Fore.CYAN + f"[prov campaign] [{nama_toko}] total staged {total} produk ke {len(sesi)} sesi" + colorama.Style.RESET_ALL)
+    catat(f"total staged {total} produk ke {len(sesi)} sesi",
+          status="live" if total else "ok", fase="F2", toko=nama_toko, modul="campaign",
+          detail={"staged": total, "sesi": len(sesi), "lolos": len(lolos)})
     return {"campaign": total, "sesi": len(sesi), "lolos": len(lolos)}
 
 
@@ -281,7 +288,8 @@ def flash(shop, nama_toko, session):
     skrg cuma stok>0)."""
     from modules import flash_sale_daftar as FSD
     r = FSD.daftar_mingguan(session, nama_toko)
-    print(colorama.Fore.CYAN + f"[prov flash] [{nama_toko}] → {r}" + colorama.Style.RESET_ALL)
+    catat(f"flash → {r}", status="live" if r.get("sesi") else "ok",
+          fase="F2", toko=nama_toko, modul="flash", detail=dict(r))
     return {"flash_sesi": r.get("sesi", 0), **r}
 
 
@@ -352,5 +360,8 @@ def garansi(shop, nama_toko, session):
 
     ok_redaftar = G.enroll(session, redaftar)[0] if redaftar else 0
     ok_takedown = G.withdraw(session, withdraw_ids)[0] if withdraw_ids else 0
-    print(colorama.Fore.CYAN + f"[prov garansi] [{nama_toko}] daftar {ok_daftar} + re-daftar {ok_redaftar} + takedown {ok_takedown}" + colorama.Style.RESET_ALL)
+    catat(f"daftar {ok_daftar} + re-daftar {ok_redaftar} + takedown {ok_takedown}",
+          status="live" if (ok_daftar or ok_redaftar or ok_takedown) else "ok",
+          fase="F2", toko=nama_toko, modul="garansi",
+          detail={"daftar": ok_daftar, "redaftar": ok_redaftar, "takedown": ok_takedown})
     return {"daftar": ok_daftar, "redaftar": ok_redaftar, "takedown": ok_takedown}
