@@ -37,7 +37,7 @@ from modules.session import grab_session, close_session, buka_login
 from modules import jam_siklus
 from modules import fakta
 from modules.sql_harga import isi_harga_diskon_kosong
-from modules.log_siklus import catat_fase, log
+from modules.log_siklus import catat_fase, log, prune_log
 
 
 def _t():
@@ -153,6 +153,9 @@ def siklus_terpadu(paksa_semua=False, fase=None):
         # ── HOUSEKEEPING (prune fakta yatim) — di tier MINGGUAN ──
         if due_mingguan:
             _aman("-", "housekeeping", fakta.housekeeping)
+            nlog = prune_log(30)                       # buang log harga >30 hari (DB over-kapasitas)
+            if nlog:
+                log(f"housekeeping: {nlog} baris log lama (>30 hari) dibuang", level="detail", fase="F1")
 
         # ── CATAT JEJAK tiap tier -> dashboard (menu Log) ──
         g = f", {T['gagal']} toko gagal" if T["gagal"] else ""

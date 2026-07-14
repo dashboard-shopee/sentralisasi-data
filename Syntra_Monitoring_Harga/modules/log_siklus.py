@@ -76,6 +76,22 @@ def catat(aksi, status="ok", fase=None, toko=None, modul=None, keterangan=None,
         pass  # pencatatan TIDAK boleh menggagalkan bot
 
 
+def prune_log(hari=30):
+    """Buang baris siklus_log program='harga' > `hari` hari (DB Supabase over-kapasitas —
+    log numpuk ga kepake). CUMA program harga (jangan sentuh log iklan/riset). Aman-gagal.
+    Return jumlah baris kebuang (0 kalau gagal/kosong)."""
+    try:
+        with get_engine().begin() as c:
+            r = c.execute(
+                text("delete from siklus_log where program='harga' "
+                     "and waktu < now() - make_interval(days => :h)"),
+                {"h": int(hari)},
+            )
+            return r.rowcount or 0
+    except Exception:
+        return 0
+
+
 def catat_fase(pemicu, status="ok", keterangan=None):
     """LEGACY (struktur siklus_log lama). Dipertahankan sampai semua caller pindah ke catat() [M0b].
     program='harga'. pemicu = grab | rubah_harga | provisioning | fakta_harian | ..."""
