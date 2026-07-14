@@ -84,9 +84,9 @@ Format tiap modul: 👀 LIHAT (Fase 1) · 🔧 CABUT (poin 1–4, tiap jam) · �
 - 🔧 *jam:* cabut kalau < target×98,5% **atau** stok < 30 **atau** stok < pjh
 - ➕ *mingguan:* daftar kalau potongan ≤ target×98,5% **&** stok > 50 **&** stok > 10×pjh
 
-### 7. FLASH  🟡 *(cabut: endpoint rusak)*
+### 7. FLASH  🟡 *(cabut = AKHIRI SESI, endpoint kelar; belum live)*
 - 👀 *harian:* sesi flash (berjalan+akan datang) + item *(grab harian, pasang mingguan)*
-- 🔧 *jam:* cabut kalau < target−10 **atau** stok 0  ⚠️ endpoint rusak
+- 🔧 *jam:* cabut kalau < target−10 **atau** stok 0 → **AKHIRI SESI** (stop_sesi, bukan per-item)
 - ➕ *mingguan:* sesi s/d 7 hari; maks 50/sesi, per-kategori penjualan tertinggi; harga kini−10; stok > 50 **atau** > 10×pjh; stok promo maks 350
 
 *(pjh = penjualan/hari rata2 30 hari, dari Shopee BUKAN ERP. "target" jadi Harga Komisi kalau produk aktif komisi.)*
@@ -110,5 +110,5 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_t
 - 🟡 Garansi / Promo Toko / Campaign / Flash — logika beres, belum tes live
 - ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (logika beres, belum PERNAH diverifikasi live — hati2 pas nyalain MODE_LIVE)
 
-**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom · voucher fe_status · stok-habis→0 = akar voucher poison KELAR · auto-isi harga diskon) · M2 ✅ (Loop A→B · Fase 3 grab-ulang · alasan per-produk ke DB) · M3 ✅ logika (rem 30/40% gate · komisi peg +trigger Shopee `komisi_hold` · garansi takedown jam 2-kolom margin@Program · poin 4 re-attach→provisioning harian) — ⚠️ **BELUM LIVE, tes scope 1 toko + DRY dulu** · **M4 🔧 berikutnya** (verif provisioning LIVE per modul + sniff flash akhiri-sesi + fix baca_item_deal over-count).
-⚠️ Open lain: takedown flash endpoint RUSAK (fix: akhiri-sesi, M4) · 3 toko flaky deal-numpuk (M5).
+**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom · voucher fe_status · stok-habis→0 = akar voucher poison KELAR · auto-isi harga diskon) · M2 ✅ (Loop A→B · Fase 3 grab-ulang · alasan per-produk ke DB) · M3 ✅ logika (rem 30/40% gate · komisi peg +trigger Shopee `komisi_hold` · garansi takedown jam 2-kolom margin@Program · poin 4 re-attach→provisioning harian) — ⚠️ **BELUM LIVE, tes scope 1 toko + DRY dulu** · M4 🔧 **code-fix KELAR** (baca_item_deal dedup anti over-count · flash takedown = AKHIRI SESI `stop_sesi` — endpoint ternyata udah ada, ga perlu sniff · config di-set DRY+scope kimmioshop+full modul) — **sisa M4 = verif LIVE per modul** (jalanin `tes_harga.bat` DRY dulu, cek log, baru MODE_LIVE).
+⚠️ Open lain: 3 toko flaky deal-numpuk (M5) · voucher bisect-on-fail (M5).

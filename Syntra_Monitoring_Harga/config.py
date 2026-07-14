@@ -36,8 +36,9 @@ TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balik
 
 # 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
 #    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
-# MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
-MODUL_AKTIF = ["promo_toko", "paket", "voucher", "kategori"]
+# M4: full modul buat verif DRY semua provisioning. Kecilin lagi kalau mau fokus 1 modul.
+MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+# MODUL_AKTIF = ["promo_toko", "paket", "voucher", "kategori"]
 
 # 5) Setelan lain:
 STOK_MINIMAL        = 1            # grab hanya variasi stok >= ini (0 dilewati)
