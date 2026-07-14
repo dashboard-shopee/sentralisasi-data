@@ -444,14 +444,14 @@ def simpan_fakta_flash_item(toko, baris):
 
 def simpan_fakta_voucher(toko, baris):
     """baris = list {voucher_id, code, name, discount, min_price, tipe,
-    start_time, end_time, status, item_scope(list/None)}. item_scope -> jsonb."""
+    start_time, end_time, status, fe_status, item_scope(list/None)}. item_scope -> jsonb."""
     for b in baris:
         sc = b.get("item_scope")
         b["item_scope"] = json.dumps(sc) if sc else None
     return _snapshot_toko(
         "harga_fakta_voucher", toko,
         ["toko", "voucher_id", "code", "name", "discount", "min_price", "tipe",
-         "start_time", "end_time", "status", "item_scope"],
+         "start_time", "end_time", "status", "fe_status", "item_scope"],
         [{"toko": toko, **b} for b in baris],
         pk=("toko", "voucher_id"), jsonb_cols=("item_scope",))
 

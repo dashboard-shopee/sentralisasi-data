@@ -222,6 +222,9 @@ def _norm_voucher(v):
         "start_time": _iso(v.get("start_time")),
         "end_time": _iso(v.get("end_time")),
         "status": v.get("status"),
+        # fe_status = status FRONTEND, KEBENARAN status voucher (1=akan datang·2=berlangsung·3=berakhir).
+        # verifikasi sukses HIDUP wajib cek ini =2, bukan cuma API code=0 (aturan owner).
+        "fe_status": v.get("fe_status"),
         "item_scope": item_scope,
     }
 

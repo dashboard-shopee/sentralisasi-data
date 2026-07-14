@@ -231,10 +231,12 @@ create table if not exists harga_fakta_voucher (
     start_time       timestamptz,
     end_time         timestamptz,
     status           integer,
+    fe_status        integer,             -- status FRONTEND (kebenaran): 1=akan datang, 2=berlangsung, 3=berakhir
     item_scope       jsonb,
     diperbarui_pada  timestamptz default now(),
     primary key (toko, voucher_id)
 );
+alter table harga_fakta_voucher add column if not exists fe_status integer;
 create index if not exists idx_fakta_voucher_toko on harga_fakta_voucher(toko);
 
 -- 14. FAKTA PAKET DISKON (mingguan). Grain: bundle. Sumber: paket_diskon.list_deals.
