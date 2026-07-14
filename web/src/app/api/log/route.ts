@@ -29,9 +29,7 @@ const KATALOG = [
       { key: "fakta_mingguan", label: "Log Fakta Mingguan (Flash + Voucher + Paket)" },
       { key: "fakta_bulanan", label: "Log Housekeeping Bulanan" },
       { key: "rubah_harga", label: "Log Rubah Harga" },
-      { key: "verifikasi", label: "Log Verifikasi" },
-      { key: "duplikat_promo", label: "Log Duplikat Promo" },
-      { key: "kampanye", label: "Log Kampanye Bulanan" },
+      { key: "provisioning", label: "Log Provisioning (Pasang Promo)" },
     ],
   },
   {
@@ -42,6 +40,16 @@ const KATALOG = [
 ];
 
 type Row = { program: string; pemicu: string; status: string; keterangan: string | null; detail: unknown; waktu: string };
+// Event kaya bot harga (catat()): detail = {fase,toko,modul,aksi,...}. Baris ini
+// TIDAK ditampilkan sbg heartbeat, tapi ke tabel event terpisah (hargaEvents).
+type Detail = { fase?: string; toko?: string; modul?: string; aksi?: string } | null;
+type HargaEvent = { waktu: string; status: string; keterangan: string | null;
+                    fase: string | null; toko: string | null; modul: string | null; aksi: string | null;
+                    detail: Record<string, unknown> | null };
+
+function isEvent(d: unknown): d is Record<string, unknown> {
+  return !!d && typeof d === "object" && !Array.isArray(d) && "modul" in (d as object);
+}
 
 export async function GET() {
   let rows: Row[] = [];
@@ -55,8 +63,25 @@ export async function GET() {
     rows = [];
   }
 
+  // Pisahkan EVENT bot harga (punya detail.modul) dari heartbeat trigger.
+  const hargaEvents: HargaEvent[] = [];
+  const heartbeat: Row[] = [];
+  for (const r of rows) {
+    if (r.program === "harga" && isEvent(r.detail)) {
+      const d = r.detail as Record<string, unknown> & Detail;
+      hargaEvents.push({
+        waktu: r.waktu, status: r.status, keterangan: r.keterangan,
+        fase: (d.fase as string) ?? null, toko: (d.toko as string) ?? null,
+        modul: (d.modul as string) ?? null, aksi: (d.aksi as string) ?? r.keterangan,
+        detail: d,
+      });
+    } else {
+      heartbeat.push(r);
+    }
+  }
+
   const byKey: Record<string, Row[]> = {};
-  for (const r of rows) (byKey[`${r.program}|${r.pemicu}`] ??= []).push(r);
+  for (const r of heartbeat) (byKey[`${r.program}|${r.pemicu}`] ??= []).push(r);
 
   const seen = new Set<string>();
   const buatTrigger = (programKey: string, key: string, label: string) => {
@@ -73,7 +98,7 @@ export async function GET() {
 
   // Program/pemicu di DB yg belum terdaftar di katalog -> tampilkan juga.
   const extra: Record<string, { key: string; label: string; triggers: Record<string, unknown> }> = {};
-  for (const r of rows) {
+  for (const r of heartbeat) {
     const k = `${r.program}|${r.pemicu}`;
     if (seen.has(k)) continue;
     seen.add(k);
@@ -86,5 +111,5 @@ export async function GET() {
     triggers: Object.values(p.triggers),
   }));
 
-  return NextResponse.json({ programs: [...programs, ...extraPrograms] });
+  return NextResponse.json({ programs: [...programs, ...extraPrograms], hargaEvents });
 }
