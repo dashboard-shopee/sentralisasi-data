@@ -13,7 +13,7 @@
 FASE 1 (FAKTA)   → grab data terbaru semua toko (READ-ONLY)
 FASE 2 (AKSI)    → benerin harga (poin 1-4, per-jam) + pasang/cabut promo (poin 5, per-cadence)
                    Mode ikut MODE_LIVE (1 saklar): live/DRY SEMUA modul bareng
-FASE 3 (LAPORAN) → rangkum hasil aksi                                          ⏳ belum dibikin
+FASE 3 (LAPORAN) → Loop B: grab-ulang status TERKINI + tulis alasan             🟡 dibikin (belum live)
 ```
 **1 KESATUAN:** double-klik `RUN.bat` → scheduler jalanin fase yg ada di `FASE_AKTIF` (skrg `[1]`).
 Orkestrasi = **`siklus_terpadu`** (13 Jul): SATU loop toko, SATU ambil sesi per toko buat semua fase. Fase 2 selalu pakai data FRESH (grab fase 1 barusan).
@@ -93,8 +93,12 @@ Format tiap modul: 👀 LIHAT (Fase 1) · 🔧 CABUT (poin 1–4, tiap jam) · �
 
 ---
 
-## 📊 FASE 3 — LAPORAN  ⏳
-Rangkum aksi robot tiap hari (harga dibenerin, promo dipasang/dicabut) → dashboard.
+## 📊 FASE 3 — LAPORAN  🟡 *(logika beres, belum live)*
+**Loop B** (abis Loop A fase1+2 semua toko): grab-ulang SEMUA modul (kaya Fase 1, per tier) →
+status TERKINI + tulis **alasan** per produk ke `harga_olah_data.alasan`. Jeda propagasi GRATIS
+dari lamanya Loop A (aksi fase 2 udah settle pas balik grab). Alasan = narasi aksi (Loop A) +
+verifikasi terkini (`✓ harga sesuai target` / `⚠ belum sesuai (real X)`). Nyala kalau `FASE_AKTIF`
+memuat `3`. Heartbeat `laporan` → dashboard /log.
 
 ---
 
@@ -106,5 +110,5 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_t
 - 🟡 Garansi / Promo Toko / Campaign / Flash — logika beres, belum tes live
 - ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (logika beres, belum PERNAH diverifikasi live — hati2 pas nyalain MODE_LIVE)
 
-**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom Terbaik+Program dari bidding_info · voucher fe_status · _buang_berakhir audit OK semua modul · **stok-habis→0 = akar voucher poison KELAR** · auto-isi harga diskon Fase1) · **M2 🔧 berikutnya** (Loop A→B + Fase 3 grab-ulang + tulis `alasan` ke DB).
+**⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom · voucher fe_status · stok-habis→0 = akar voucher poison KELAR · auto-isi harga diskon) · M2 ✅ (Loop A→B · **Fase 3 grab-ulang status terkini** · **alasan per-produk ke DB**: narasi aksi + verif `✓`/`⚠`) · **M3 🔧 berikutnya 🔴 PALING RISIKO** (poin 1-4 harga live: rem 30/40% · komisi peg +trigger Shopee · garansi takedown jam · poin 4 re-attach).
 ⚠️ Open lain: takedown flash endpoint RUSAK (fix: akhiri-sesi, M4) · 3 toko flaky deal-numpuk (M5).
