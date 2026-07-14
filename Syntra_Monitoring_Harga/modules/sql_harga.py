@@ -394,10 +394,12 @@ def _snapshot_toko(tabel, toko, kolom, baris, pk, jsonb_cols=()):
 
 
 def simpan_fakta_garansi(toko, baris):
-    """baris = list {item_id, model_id, bid_id, cspu_id, current_price, bid_price, best_price, stok}."""
+    """baris = list {item_id, model_id, bid_id, cspu_id, current_price, bid_price, best_price,
+    floor_price(Terbaik), ceiling_price(Program), stok}."""
     return _snapshot_toko(
         "harga_fakta_garansi", toko,
-        ["toko", "item_id", "model_id", "bid_id", "cspu_id", "current_price", "bid_price", "best_price", "stok"],
+        ["toko", "item_id", "model_id", "bid_id", "cspu_id", "current_price", "bid_price",
+         "best_price", "floor_price", "ceiling_price", "stok"],
         [{"toko": toko, **b} for b in baris],
         pk=("toko", "item_id", "model_id"))
 
@@ -638,12 +640,17 @@ def baca_biaya_sku(skus):
 
 
 def baca_garansi_best(toko):
-    """{(item_id, model_id): {best, bid_id}} harga terbaik garansi + bid_id (dari fakta garansi)."""
+    """{(item_id, model_id): {best(=Terbaik), terbaik, program, bid_id}} dari fakta garansi.
+    best = alias terbaik (kompat konsumer lama). terbaik=floor_price · program=ceiling_price."""
     with get_engine().connect() as c:
-        rows = c.execute(text("""select item_id, model_id, best_price, bid_id
+        rows = c.execute(text("""select item_id, model_id, best_price, floor_price, ceiling_price, bid_id
                                  from harga_fakta_garansi where toko = :t"""), {"t": toko}).fetchall()
-    return {(int(r.item_id), int(r.model_id)): {"best": int(r.best_price or 0), "bid_id": r.bid_id}
-            for r in rows}
+    out = {}
+    for r in rows:
+        terbaik = int(r.floor_price or r.best_price or 0)
+        out[(int(r.item_id), int(r.model_id))] = {
+            "best": terbaik, "terbaik": terbaik, "program": int(r.ceiling_price or 0), "bid_id": r.bid_id}
+    return out
 
 
 def baca_komisi_patokan(username_toko):

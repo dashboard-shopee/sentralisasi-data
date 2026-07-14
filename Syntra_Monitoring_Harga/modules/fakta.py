@@ -57,19 +57,36 @@ def fakta_produk(username, nama_toko, session):
 
 # ── TIER HARIAN: Garansi Harga Terbaik ──
 def fakta_garansi(nama_toko, session):
-    """garansi.list_ongoing -> harga_fakta_garansi. Return jumlah variasi."""
+    """garansi.list_ongoing -> harga_fakta_garansi (Kini/Terbaik/Program). Terbaik(floor)+
+    Program(ceiling) diambil dari bidding_info; kalau get_ongoing_list ga bawa field itu, di-MERGE
+    dari list_ongoing_status (authoritative, verified 12 Jul) by bid_id. Return jumlah variasi."""
     from modules import garansi
-    ongoing = garansi.list_ongoing(session)      # {(item,model): {bid_id,cspu_id,current_price,bid_price,stok}}
-    baris = [{
-        "item_id": item, "model_id": model,
-        "bid_id": v.get("bid_id") or None, "cspu_id": v.get("cspu_id") or None,
-        "current_price": v.get("current_price", 0) or 0,
-        "bid_price": v.get("bid_price", 0) or 0,
-        "best_price": v.get("best_price", 0) or 0,
-        "stok": v.get("stok", 0) or 0,
-    } for (item, model), v in ongoing.items()]
+    ongoing = garansi.list_ongoing(session)      # {(item,model): {bid_id,cspu_id,harga...,floor,ceiling,stok}}
+
+    # MERGE floor(Terbaik)+ceiling(Program) verified per bid_id dari list_ongoing_status
+    # (get_item_ongoing_list) — sumber pasti; get_ongoing_list bisa ga bawa 2 field ini.
+    try:
+        by_bid = {o["bid_id"]: o for o in garansi.list_ongoing_status(session) if o.get("bid_id")}
+    except Exception as e:
+        _log(nama_toko, f"list_ongoing_status gagal (pakai floor/ceiling apa adanya): {type(e).__name__}", colorama.Fore.YELLOW)
+        by_bid = {}
+
+    baris = []
+    for (item, model), v in ongoing.items():
+        st = by_bid.get(v.get("bid_id"))
+        floor = (st or {}).get("floor") or v.get("floor_price", 0) or 0        # Terbaik
+        ceiling = (st or {}).get("ceiling") or v.get("ceiling_price", 0) or 0  # Program
+        baris.append({
+            "item_id": item, "model_id": model,
+            "bid_id": v.get("bid_id") or None, "cspu_id": v.get("cspu_id") or None,
+            "current_price": v.get("current_price", 0) or 0,
+            "bid_price": v.get("bid_price", 0) or 0,
+            "floor_price": floor, "ceiling_price": ceiling,
+            "best_price": floor or (v.get("best_price", 0) or 0),   # Terbaik (reliable → fallback tebakan)
+            "stok": v.get("stok", 0) or 0,
+        })
     n = SQL.simpan_fakta_garansi(nama_toko, baris)
-    _log(nama_toko, f"Garansi: {n} variasi", colorama.Fore.LIGHTGREEN_EX)
+    _log(nama_toko, f"Garansi: {n} variasi (Kini/Terbaik/Program)", colorama.Fore.LIGHTGREEN_EX)
     return n
 
 

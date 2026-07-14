@@ -41,7 +41,10 @@ def _chunks(lst, n):
 
 # ── LIST: produk yang lagi ikut Garansi (ongoing) + bid_id ──
 def list_ongoing(session, page_size=100, maks_halaman=50):
-    """Return {(item_id, model_id): {bid_id, cspu_id, current_price, bid_price, stok}}."""
+    """Return {(item_id, model_id): {bid_id, cspu_id, current_price, bid_price, best_price,
+    floor_price(Terbaik), ceiling_price(Program), stok}}. floor/ceiling dari bidding_info
+    (verified field, sama kaya list_ongoing_status). Kalau endpoint ini ga bawa field itu → 0,
+    di-isi ulang via merge list_ongoing_status di fakta_garansi (authoritative)."""
     H = config.grab_headers(session); P = session["params"]
     hasil = {}; page = 1
     while page <= maks_halaman:
@@ -59,17 +62,21 @@ def list_ongoing(session, page_size=100, maks_halaman=50):
                 key = (int(pi.get("item_id")), int(pi.get("model_id")))
             except (TypeError, ValueError):
                 continue
+            floor = int(bi.get("floor_price") or 0) // FAKTOR       # Harga Terbaik Saya (verified)
+            ceil = int(bi.get("ceiling_price") or 0) // FAKTOR      # Harga Program Saya (verified)
+            # fallback Terbaik kalau endpoint ini ga bawa floor_price (di-override merge di fakta_garansi):
+            terbaik = floor or (int(ci.get("suggest_final_price")
+                                    or bi.get("default_bid_price")
+                                    or bi.get("prefill_floor_price") or 0) // FAKTOR)
             hasil[key] = {
                 "bid_id": str(bi.get("bid_id", "")),
                 "cspu_id": str(ci.get("cspu_id", "")),
-                # 3 harga (semua rupiah × FAKTOR):
+                # harga (semua rupiah × FAKTOR):
                 "current_price": int(pi.get("current_price") or 0) // FAKTOR,   # Harga Kini (tampil Shopee)
-                "bid_price": int(bi.get("bid_price") or 0) // FAKTOR,            # Harga Program (garansi yg diset)
-                # Harga Terbaik (rekomendasi terendah). Field pasti belum dikonfirmasi ke UI ->
-                # pakai suggest_final_price (cspu) dulu, fallback default_bid_price/prefill_floor_price.
-                "best_price": int(ci.get("suggest_final_price")
-                                  or bi.get("default_bid_price")
-                                  or bi.get("prefill_floor_price") or 0) // FAKTOR,
+                "bid_price": int(bi.get("bid_price") or 0) // FAKTOR,            # Harga Program yg diset (bid)
+                "floor_price": floor,                                           # Harga Terbaik (bidding_info)
+                "ceiling_price": ceil,                                          # Harga Program (bidding_info)
+                "best_price": terbaik,                                          # alias Terbaik (legacy consumer)
                 "stok": int(pi.get("normal_stock") or 0),
             }
         if len(lst) < page_size:
