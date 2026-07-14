@@ -108,14 +108,14 @@ export default function CustomSelect({
             type="button"
             onClick={() => handleSelect("")}
             className={
-              "w-full text-left px-3.5 py-2 text-[12.5px] font-medium transition-colors cursor-pointer flex items-center gap-2.5 truncate " +
+              "w-full text-left px-3.5 py-2 text-[12.5px] font-medium transition-colors cursor-pointer flex items-center gap-2.5 min-w-0 " +
               (selectedValues.length === 0
                 ? "text-[#ee4d2d] bg-[#fff1ed]"
                 : "text-[#4b5563] hover:bg-[#f6f7fb] hover:text-[#ee4d2d]")
             }
           >
             {multiple && (
-              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
+              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all shrink-0 ${
                 selectedValues.length === 0 
                   ? "bg-[#ee4d2d] border-[#ee4d2d] text-white" 
                   : "border-[#d8dce6] bg-white"
@@ -127,7 +127,7 @@ export default function CustomSelect({
                 )}
               </div>
             )}
-            <span>{placeholder}</span>
+            <span className="truncate min-w-0">{placeholder}</span>
           </button>
 
           {/* Opsi Toko */}
@@ -141,12 +141,12 @@ export default function CustomSelect({
                 type="button"
                 onClick={() => handleSelect(opt.value)}
                 className={
-                  "w-full text-left px-3.5 py-2 text-[12.5px] font-medium transition-colors cursor-pointer flex items-center gap-2.5 truncate " +
+                  "w-full text-left px-3.5 py-2 text-[12.5px] font-medium transition-colors cursor-pointer flex items-center gap-2.5 min-w-0 " +
                   (active ? "text-[#ee4d2d] bg-[#fff1ed]" : "text-[#4b5563] hover:bg-[#f6f7fb] hover:text-[#ee4d2d]")
                 }
               >
                 {multiple && (
-                  <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
+                  <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all shrink-0 ${
                     isSelected 
                       ? "bg-[#ee4d2d] border-[#ee4d2d] text-white" 
                       : "border-[#d8dce6] bg-white"
@@ -158,7 +158,7 @@ export default function CustomSelect({
                     )}
                   </div>
                 )}
-                <span>{opt.label}</span>
+                <span className="truncate min-w-0">{opt.label}</span>
               </button>
             );
           })}
