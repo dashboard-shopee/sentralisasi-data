@@ -12,11 +12,11 @@ Rubah harga berdasarkan kolom K (harga akhir):
 Harga promo = micro-unit (×FAKTOR_HARGA). Harga dasar (quick edit) = STRING rupiah.
 Kolom O diisi alasan kalau harga tidak/belum bisa dirubah ("" = berhasil/sesuai).
 """
-import colorama; colorama.init()
 import requests
 import config
 from modules.api_util import api_post
 from modules.discount_util import grab_semua_promo, grab_item_promo
+from modules.log_siklus import log, catat
 
 
 def _chunks(lst, n):
@@ -71,7 +71,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             from modules.flash_sale import takedown_items as fs_takedown
             fs_takedown(session, shop, fs_kunci)
         except Exception as e:
-            print(colorama.Fore.RED + f"[harga dasar] [{shop}] - takedown flash sale gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"takedown flash sale gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
     # TAKEDOWN CAMPAIGN (browser-context) — item base-edit yang ikut campaign bulanan.
     camp_kunci = {k for k in kunci if any("Campaign" in j for j in promo_item.get(k, set()))}
@@ -81,7 +81,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
             takedown_dari_campaign(session, shop, idx, camp_kunci)
         except Exception as e:
-            print(colorama.Fore.RED + f"[harga dasar] [{shop}] - takedown campaign gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"takedown campaign gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
     if config.DRY_RUN:
         for b, _ in daftar:
@@ -113,7 +113,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             data = r.json()
             if data.get("code") == 0:
                 sukses += 1; hasil[row] = ""
-                print(colorama.Fore.CYAN + f"[harga dasar diubah] [{shop}] - {item_id}/{model_id} -> {config.fmt_angka(K)}" + colorama.Style.RESET_ALL)
+                log(f"harga dasar {item_id}/{model_id} → {config.fmt_angka(K)}", level="live", fase="F2", toko=shop, modul="harga")
             else:
                 gagal += 1
                 pesan = data.get("user_message") or data.get("msg") or "ditolak Shopee"
@@ -121,12 +121,14 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
                     hasil[row] = f"Harga dasar keblok {', '.join(sorted(blocker))} - perlu takedown (belum otomatis)"
                 else:
                     hasil[row] = "Tidak bisa ubah harga dasar - produk masih ikut promosi lain"
-                print(colorama.Fore.YELLOW + f"[harga dasar - dilewati] [{shop}] - {item_id}/{model_id}: {str(pesan)[:110]}" + colorama.Style.RESET_ALL)
+                log(f"harga dasar {item_id}/{model_id} dilewati: {str(pesan)[:90]}", level="warning", fase="F2", toko=shop, modul="harga")
         except Exception as e:
             gagal += 1
             hasil[row] = f"Gagal ubah harga dasar: {type(e).__name__}"
-            print(colorama.Fore.YELLOW + f"[harga dasar - dilewati] [{shop}] - {item_id}/{model_id}: {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.CYAN + f"[harga dasar] [{shop}] - {sukses} berhasil, {gagal} dilewati (ikut promosi lain)." + colorama.Style.RESET_ALL)
+            log(f"harga dasar {item_id}/{model_id} dilewati: {type(e).__name__}", level="warning", fase="F2", toko=shop, modul="harga")
+    if sukses or gagal:
+        catat(f"{sukses} harga dasar diubah, {gagal} dilewati", status="live" if sukses else "skip",
+              fase="F2", toko=shop, modul="harga", detail={"sukses": sukses, "gagal": gagal, "jenis": "harga_dasar"})
     return hasil
 
 
@@ -137,14 +139,14 @@ def update_harga(shop, session, baris, nama_toko=None):
     nama_toko = nama_toko or shop     # kunci toko utk state (samakan dgn konteks/olah_data)
 
     if not getattr(config, "UPDATE_HARGA_TERVERIFIKASI", False):
-        print(colorama.Fore.RED + f"[update harga] [{shop}] - DIKUNCI: set config.UPDATE_HARGA_TERVERIFIKASI=True dulu." + colorama.Style.RESET_ALL)
+        log("DIKUNCI: set config.UPDATE_HARGA_TERVERIFIKASI=True dulu.", level="error", fase="F2", toko=shop, modul="harga")
         return {}
 
     # 1) Ambil SEMUA promo toko (toko bisa punya lebih dari satu).
     promos = grab_semua_promo(shop, session)
     if not promos:
         # Tidak ada promo toko sama sekali -> bikin dari 0 + harga dasar (K>=H).
-        print(colorama.Fore.CYAN + f"[update harga] [{shop}] - belum ada Promo Toko -> bikin dari 0 dulu." + colorama.Style.RESET_ALL)
+        log("belum ada Promo Toko → bikin dari 0 dulu.", level="detail", fase="F2", toko=shop, modul="harga")
         if not config.DRY_RUN:
             from modules.duplikat_promo import buat_promo_dari_nol
             buat_promo_dari_nol(shop, session, baris)
@@ -168,9 +170,7 @@ def update_harga(shop, session, baris, nama_toko=None):
             if it.get("status") == config.STATUS_AKTIF and it.get("item_id"):
                 key = (int(it["item_id"]), int(it["model_id"]))
                 peta_promo.setdefault(key, {})[pid] = int(it["promotion_price"]) // config.FAKTOR_HARGA
-    print(colorama.Fore.WHITE
-          + f"[update harga] [{shop}] - {len(peta_promo)} variasi terdaftar di {len(pids)} promo toko."
-          + colorama.Style.RESET_ALL)
+    log(f"{len(peta_promo)} variasi terdaftar di {len(pids)} promo toko.", level="detail", fase="F2", toko=shop, modul="harga")
 
     # CATATAN: variasi STOK 0 di PROMO TOKO SENGAJA TIDAK dikeluarkan (biar tetap ikut
     # promo saat restock). Takedown stok-0 hanya untuk Campaign/Flash Sale (yang menahan
@@ -199,9 +199,7 @@ def update_harga(shop, session, baris, nama_toko=None):
         real = b.get("harga_real", 0)
         if real and real == K:
             alasan[row] = ""      # sudah sesuai
-            print(colorama.Style.DIM + colorama.Fore.WHITE
-                  + f"[harga sesuai] [{shop}] [{n}] - {item_id}/{model_id} real=diskon {config.fmt_angka(K)}"
-                  + colorama.Style.RESET_ALL)
+            log(f"[{n}] {item_id}/{model_id} real=diskon {config.fmt_angka(K)} (sesuai)", level="detail", fase="F2", toko=shop, modul="harga")
             continue
 
         # Harga real != target -> PERLU KOREKSI. Tangani sesuai SUMBER harga tampil:
@@ -222,7 +220,7 @@ def update_harga(shop, session, baris, nama_toko=None):
         # K >= harga awal -> keluarkan dari semua promo + ubah harga dasar
         if H and K >= H:
             perlu_harga_dasar.append((b, in_promos))
-            print(colorama.Fore.CYAN + f"[perlu harga dasar] [{shop}] [{n}] - {item_id}/{model_id} (K {config.fmt_angka(K)} >= harga awal {config.fmt_angka(H)})" + colorama.Style.RESET_ALL)
+            log(f"[{n}] {item_id}/{model_id} perlu harga dasar (K {config.fmt_angka(K)} ≥ awal {config.fmt_angka(H)})", level="detail", fase="F2", toko=shop, modul="harga")
             continue
 
         # K < harga awal -> set harga promo = K di SEMUA promo toko yg memuat produk;
@@ -237,24 +235,24 @@ def update_harga(shop, session, baris, nama_toko=None):
             butuh = True
         alasan[row] = ""
         if butuh:
-            print(colorama.Fore.GREEN + f"[rubah promo] [{shop}] [{n}] - {item_id}/{model_id} -> {config.fmt_angka(K)} (di {len(target_pids)} promo)" + colorama.Style.RESET_ALL)
+            log(f"[{n}] {item_id}/{model_id} → {config.fmt_angka(K)} (di {len(target_pids)} promo)", level="ok", fase="F2", toko=shop, modul="harga")
         else:
-            print(colorama.Style.DIM + colorama.Fore.WHITE + f"[sudah sesuai] [{shop}] [{n}] - {item_id}/{model_id} [{config.fmt_angka(K)}]" + colorama.Style.RESET_ALL)
+            log(f"[{n}] {item_id}/{model_id} {config.fmt_angka(K)} (sudah sesuai)", level="detail", fase="F2", toko=shop, modul="harga")
 
     # 3b) TAKEDOWN promo PENINDIH (Campaign) sebelum harga toko/dasar berlaku -> harga ikut Harga Diskon.
     if takedown_sumber.get("Campaign"):
         camp = takedown_sumber["Campaign"]
-        print(colorama.Fore.MAGENTA + f"[update harga] [{shop}] - {len(camp)} item harganya dikunci Campaign -> takedown dulu." + colorama.Style.RESET_ALL)
+        log(f"{len(camp)} item dikunci Campaign → takedown dulu.", level="live", fase="F2", toko=shop, modul="harga")
         try:
             from modules.takedown_campaign import takedown_dari_campaign
             idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
             takedown_dari_campaign(session, shop, idx, camp)
         except Exception as e:
-            print(colorama.Fore.RED + f"[update harga] [{shop}] - takedown campaign gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"takedown campaign gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
     # 4) Harga dasar (K>=H)
     if perlu_harga_dasar:
-        print(colorama.Fore.CYAN + f"[update harga] [{shop}] - {len(perlu_harga_dasar)} item -> UBAH HARGA DASAR (keluar promo dulu)." + colorama.Style.RESET_ALL)
+        log(f"{len(perlu_harga_dasar)} item → UBAH HARGA DASAR (keluar promo dulu).", level="detail", fase="F2", toko=shop, modul="harga")
         alasan.update(edit_harga_dasar(shop, session, perlu_harga_dasar, nama_toko=nama_toko))
 
     # 5) Kirim update harga promo per promo toko.
@@ -277,7 +275,7 @@ def update_harga(shop, session, baris, nama_toko=None):
                     r = row_of.get((pid, int(entri.get("item_id", 0)), int(entri.get("model_id", 0))))
                     if r:
                         alasan[r] = "Gagal kirim ke promo toko (error koneksi/API) - coba lagi"
-                print(colorama.Fore.RED + f"[update harga] [{shop}] - chunk promo {pid} gagal ({len(chunk)} item): {type(e).__name__} - lanjut." + colorama.Style.RESET_ALL)
+                log(f"chunk promo {pid} gagal ({len(chunk)} item): {type(e).__name__} — lanjut.", level="error", fase="F2", toko=shop, modul="harga")
                 continue
             total_sukses += int(data.get("success_count", 0))
             # ⚠️ failed_item_list & failed_model_list = array ANGKA id polos (bukan dict,
@@ -309,11 +307,16 @@ def update_harga(shop, session, baris, nama_toko=None):
                         alasan[r] = alasan_gagal
                     # simpan alasan ASLI Shopee per item (buat ringkasan diagnosa)
                     tolak_detail.setdefault(pesan_err or "(tanpa pesan)", []).append(f"{iid}/{mid}")
-    print(colorama.Fore.GREEN + f"[update harga] [{shop}] - promo: {total_sukses} sukses, {total_gagal} ditolak, {total_error} error-kirim." + colorama.Style.RESET_ALL)
+    if total_sukses or total_gagal or total_error:
+        catat(f"promo toko: {total_sukses} harga dirubah, {total_gagal} ditolak, {total_error} error-kirim",
+              status="live" if total_sukses else ("gagal" if (total_gagal or total_error) else "ok"),
+              fase="F2", toko=shop, modul="harga",
+              detail={"sukses": total_sukses, "ditolak": total_gagal, "error": total_error, "jenis": "promo_toko",
+                      "tolak": {m: len(c) for m, c in tolak_detail.items()} or None})
     # RINCIAN PENOLAKAN ASLI SHOPEE -> biar tahu blocker SEBENARNYA (bukan tebakan Fase 3).
     if tolak_detail:
-        print(colorama.Fore.YELLOW + f"[update harga] [{shop}] - ALASAN ASLI penolakan Shopee:" + colorama.Style.RESET_ALL)
+        log("alasan asli penolakan Shopee:", level="warning", fase="F2", toko=shop, modul="harga")
         for msg, contoh in sorted(tolak_detail.items(), key=lambda kv: -len(kv[1])):
-            print(colorama.Fore.YELLOW + f"    - \"{msg[:120]}\"  x{len(contoh)}  (contoh: {', '.join(contoh[:5])})" + colorama.Style.RESET_ALL)
+            log(f"  \"{msg[:120]}\"  ×{len(contoh)}  (contoh: {', '.join(contoh[:5])})", level="warning", fase="F2", toko=shop, modul="harga")
 
     return alasan
