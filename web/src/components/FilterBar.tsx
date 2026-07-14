@@ -30,19 +30,7 @@ export default function FilterBar({ options, filter }: { options: Options; filte
     router.replace(`?${p.toString()}`, { scroll: false });
   }
 
-  function toggleToko(name: string) {
-    let cur: string[];
-    if (semua) {
-      // dari "Semua" -> langsung fokus ke 1 toko ini saja
-      cur = [name];
-    } else if (filter.toko.includes(name)) {
-      cur = filter.toko.filter((x) => x !== name); // sudah aktif -> lepas
-    } else {
-      cur = [...filter.toko, name]; // tambah toko
-    }
-    // kosong atau semua terpilih -> kembali ke "Semua"
-    go({ t: cur.length === 0 || cur.length === allToko.length ? null : cur.join(",") });
-  }
+
 
   const sel = "px-3 py-1.5 rounded-lg text-[13px] font-semibold transition";
   return (
@@ -66,26 +54,18 @@ export default function FilterBar({ options, filter }: { options: Options; filte
       </div>
 
       {/* Toko */}
-      <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[#f0f2f7]">
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#f0f2f7]">
         <span className="text-[12px] text-[#8a90a2] mr-1">Toko:</span>
-        <button
-          onClick={() => go({ t: null })}
-          className={"px-2.5 py-1 rounded-full text-[12px] font-semibold " + (semua ? "bg-[#ee4d2d] text-white" : "bg-[#f4f6fb] text-[#6b7180]")}
+        <select
+          value={semua ? "" : filter.toko[0] || ""}
+          onChange={(e) => go({ t: e.target.value ? e.target.value : null })}
+          className="px-3 py-1.5 rounded-lg border border-[#eef0f6] text-[13px] bg-white text-[#3a3f4d] outline-none focus:border-[#ee4d2d]"
         >
-          Semua
-        </button>
-        {allToko.map((t) => {
-          const on = !semua && filter.toko.includes(t);
-          return (
-            <button
-              key={t}
-              onClick={() => toggleToko(t)}
-              className={"px-2.5 py-1 rounded-full text-[12px] font-medium transition " + (on ? "bg-[#fff1ed] text-[#ee4d2d] ring-1 ring-[#ee4d2d]" : "bg-[#f4f6fb] text-[#6b7180] hover:bg-[#eef0f6]")}
-            >
-              {t}
-            </button>
-          );
-        })}
+          <option value="">Semua Toko</option>
+          {allToko.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
     </div>
   );
