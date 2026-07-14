@@ -51,17 +51,19 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
     elif pt["harga_promo"] != target:
         aksi.append({"promo": "Promo Toko", "aksi": "set_harga", "dari": pt["harga_promo"], "ke": target})
 
-    # 3b — GARANSI HARGA TERBAIK. Sumber = FAKTA (get_ongoing_list) krn di situ ada bid_id
-    #      (buat takedown) + best_price. Konteks campaign_type=11 TIDAK dipakai (0 overlap dgn
-    #      fakta — beda set; nyangkut ke PR "detail garansi").
+    # 3b — GARANSI HARGA TERBAIK (per-jam, tabel 'terbaik'/ongoing). Sumber 2-KOLOM (M1):
+    #      Terbaik = floor_price · Program = ceiling_price (bidding_info, verified). bid_id buat takedown.
+    #      Takedown kalau: Harga TERBAIK < target−500 (undercut) ATAU margin@PROGRAM < 7%.
+    #      margin @ PROGRAM (ceiling) = keputusan owner (grilling: tabel 'terbaik' dicek @ Harga Program).
     if gar:
-        best = gar.get("best", 0)
+        terbaik = gar.get("terbaik") or gar.get("best") or 0     # Harga Terbaik (floor, reliable M1)
+        program = gar.get("program") or 0                        # Harga Program (ceiling)
         sebab = []
-        if best and best < target - GARANSI_SELISIH:
-            sebab.append(f"best {best} < target-{GARANSI_SELISIH}")
-        m = _margin(best, cost)                       # margin@best (rumus sama dashboard)
+        if terbaik and terbaik < target - GARANSI_SELISIH:
+            sebab.append(f"Terbaik {terbaik} < target-{GARANSI_SELISIH}")
+        m = _margin(program or terbaik, cost)         # margin @ Program (fallback Terbaik kalau Program kosong)
         if m is not None and m < GARANSI_MARGIN_MIN:
-            sebab.append(f"margin@best {m*100:.1f}% < {GARANSI_MARGIN_MIN*100:.0f}%")
+            sebab.append(f"margin@program {m*100:.1f}% < {GARANSI_MARGIN_MIN*100:.0f}%")
         if sebab:
             aksi.append({"promo": "Garansi", "aksi": "takedown", "sebab": " & ".join(sebab),
                          "bid_id": (gar or {}).get("bid_id")})
