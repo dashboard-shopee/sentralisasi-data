@@ -11,6 +11,7 @@ import time
 from modules.log_siklus import log
 import config
 from modules.api_util import api_get, api_post
+from modules import flash_sale_daftar as FSD   # stop_sesi (akhiri sesi = takedown flash)
 
 
 # STATUS flash sale yang masih relevan (item bisa di-takedown/daftar).
@@ -87,17 +88,20 @@ def _entry(it, status):
 
 def peta_item(session):
     """{(item_id, model_id): [flash_sale_id,...]} utk SEMUA flash sale aktif +
-    cache item per flash sale -> dipakai takedown by (item,model)."""
+    cache item per flash sale + meta {fsid: {timeslot_id}} -> dipakai takedown
+    LEVEL-SESI (butuh timeslot_id buat stop_sesi)."""
     peta = {}
     cache = {}
+    meta = {}
     for f in list_flash_sale(session, hanya_aktif=True):
         fsid = f["flash_sale_id"]
+        meta[fsid] = {"timeslot_id": f.get("timeslot_id")}
         items = items_flash_sale(session, fsid)
         cache[fsid] = items
         for it in items:
             key = (int(it.get("item_id") or 0), int(it.get("model_id") or 0))
             peta.setdefault(key, []).append(fsid)
-    return peta, cache
+    return peta, cache, meta
 
 
 def set_items(session, flash_sale_id, entries, chunk=50):
@@ -122,26 +126,33 @@ def set_items(session, flash_sale_id, entries, chunk=50):
 
 
 def takedown_items(session, shop, kunci_set):
-    """Keluarkan variasi (set status 0) dari SEMUA flash sale aktif yang memuatnya.
-    kunci_set = set (item_id, model_id). Return jumlah variasi ter-takedown."""
+    """Cabut flash buat variasi bermasalah = AKHIRI SELURUH SESI yang memuatnya.
+    Endpoint per-item (set_shop_flash_sale_items) DITOLAK Shopee (1001) — keputusan
+    owner (grilling 14 Jul): flash takedown = end-session, bukan per-item. 1 produk
+    perlu dicabut -> sesi diakhirin (produk lain di sesi itu ikut kena — diterima).
+    kunci_set = set (item_id, model_id). Return jumlah SESI diakhirin."""
     if not kunci_set:
         return 0
     if getattr(config, "SKIP_FLASH_TAKEDOWN", False):
-        # Endpoint set_shop_flash_sale_items ditolak Shopee (code 1001) -> skip total
-        # (hindari peta_item yg enumerasi ratusan sesi + retry gagal). PR flash sale besok.
-        log("takedown DILEWATI (SKIP_FLASH_TAKEDOWN, PR besok)", level="warning", toko=shop, modul="flash")
+        log("takedown DILEWATI (SKIP_FLASH_TAKEDOWN)", level="warning", toko=shop, modul="flash")
         return 0
-    peta, cache = peta_item(session)
+    peta, cache, meta = peta_item(session)
     n = 0
     for fsid, items in cache.items():
-        entries = [_entry(it, config.STATUS_FLASH_KELUAR)
-                   for it in items
-                   if (int(it.get("item_id") or 0), int(it.get("model_id") or 0)) in kunci_set
-                   and it.get("status") != config.STATUS_FLASH_KELUAR]
-        if not entries:
+        # sesi ini punya minimal 1 variasi bermasalah?
+        kena = [it for it in items
+                if (int(it.get("item_id") or 0), int(it.get("model_id") or 0)) in kunci_set]
+        if not kena:
             continue
-        ok, failed = set_items(session, fsid, entries)
-        n += len(entries) - len(failed)
-        log(f"{len(entries)} variasi → keluar dari FS {fsid}" + (" (DRY)" if config.DRY_RUN else f", {len(failed)} gagal"),
+        tslot = (meta.get(fsid) or {}).get("timeslot_id")
+        if not tslot:
+            log(f"FS {fsid} ga ada timeslot_id → ga bisa diakhirin, SKIP", level="error", toko=shop, modul="flash")
+            continue
+        log(f"akhiri sesi FS {fsid}: {len(kena)} variasi bermasalah, {len(items)} total item di sesi ikut kena",
             level="warning" if config.DRY_RUN else "live", toko=shop, modul="flash")
+        try:
+            FSD.stop_sesi(session, fsid, tslot)   # DRY-guarded di dalam
+            n += 1
+        except Exception as e:
+            log(f"gagal akhiri FS {fsid}: {type(e).__name__} — lanjut", level="error", toko=shop, modul="flash")
     return n

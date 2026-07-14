@@ -21,7 +21,7 @@ load_dotenv()
 # 1) 🔴 SAKLAR LIVE — SATU-SATUNYA switch simulasi vs beneran. SEMUA modul & fase ikut ini.
 #    False = DRY-RUN (SIMULASI, AMAN): ngitung + catat rencana, TIDAK ngubah Shopee.
 #    True  = LIVE: SEMUA modul (harga poin 1-4 + provisioning poin 5) BENERAN ubah Shopee.
-MODE_LIVE = True
+MODE_LIVE = False   # ⚠️ M4: DRY dulu (scope 1 toko di TOKO_AKTIF). Naikin True cuma kalau log DRY udah bener.
 
 # 2) FASE yang dijalankan (arsitektur 3 FASE, orkestrasi `siklus_terpadu` 1-sesi/toko):
 #      1 = FAKTA          (grab data, READ-ONLY)
@@ -31,8 +31,8 @@ MODE_LIVE = True
 FASE_AKTIF = [1,2]
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
-# TOKO_AKTIF = ["kimmioshop"]
-TOKO_AKTIF = []
+TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balikin [] cuma pas udah full-verified.
+# TOKO_AKTIF = []
 
 # 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
 #    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
@@ -226,12 +226,12 @@ STATUS_AKTIF = 1                 # item campaign: 1=ikut promo, 2=keluar
 STATUS_NONAKTIF = 2
 STATUS_FLASH_KELUAR = 0          # item flash sale: 0=keluar, 1=ikut
 STATUS_FLASH_IKUT = 1
-# ⚠️ SKIP takedown FLASH SALE sementara (PR flash sale besok). Endpoint per-item
-# `set_shop_flash_sale_items` DITOLAK Shopee (code 1001 "spex common error") 100% -> tak ada
-# yg ke-takedown, cuma buang waktu (Yarra ratusan sesi × retry 2s). True = lewati Fase 2A/2B flash.
-# Perbaikan: re-sniff endpoint remove item flash sale yg benar (yg verified baru `set_shop_flash_sale`
-# level-SESI: body {flash_sale_id, time_slot_id, status}). Balikin False setelah endpoint benar.
-SKIP_FLASH_TAKEDOWN = True
+# ✅ M4 (14 Jul): takedown FLASH = AKHIRI SESI (bukan per-item). Endpoint per-item
+# `set_shop_flash_sale_items` ditolak Shopee (1001), jadi flash_sale.takedown_items sekarang
+# panggil flash_sale_daftar.stop_sesi (POST set_shop_flash_sale {flash_sale_id,time_slot_id,status:2}).
+# Konsekuensi keputusan owner: 1 produk perlu dicabut -> SELURUH sesi diakhirin (produk lain ikut).
+# True = emergency off-switch. False = jalan (DRY-safe via guard di stop_sesi). ⚠️ tes DRY+scope dulu.
+SKIP_FLASH_TAKEDOWN = False
 MAKS_PRODUK_PER_PROMO = 999      # > ini -> dipecah jadi beberapa promo
 PROMO_IMAGES = []                # thumbnail promo (boleh kosong; Shopee isi otomatis)
 DUPLIKAT_PROMO_SIMULASI = False  # (dilewati kalau DRY_RUN sudah True)

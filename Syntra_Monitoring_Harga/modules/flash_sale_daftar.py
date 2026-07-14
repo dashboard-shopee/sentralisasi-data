@@ -77,6 +77,9 @@ def bikin_sesi(session, time_slot_id):
 
 
 def stop_sesi(session, flash_sale_id, time_slot_id):
+    if getattr(config, "DRY_RUN", False):
+        log(f"(DRY) stop sesi {flash_sale_id} (slot {time_slot_id})", level="warning", modul="flash")
+        return
     _req("POST", session, URL_SET, {"flash_sale_id": flash_sale_id, "time_slot_id": time_slot_id, "status": 2})
     log(f"sesi {flash_sale_id} distop", level="live", modul="flash")
 
