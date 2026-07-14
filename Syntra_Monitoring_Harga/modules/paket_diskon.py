@@ -118,16 +118,20 @@ def list_deals(session, time_status=None):
 def baca_item_deal(session, bundle_deal_id, limit=100):
     """Item_id yang ADA di dalam 1 paket (keanggotaan produk). Paginate.
     Endpoint verified 11 Jul: GET bundle_deal/item/ {bundle_deal_id,offset,limit}
-    -> data.items[{itemid,status}] + total_count. Return list int item_id (status masuk)."""
+    -> data.items[{itemid,status}] + total_count. Return list int item_id UNIK (status masuk).
+    DEDUP: 1 item bisa muncul >1x (varian/model beda / overlap paginate) — dulu bikin
+    len() over-count → kapasitas paket ngira lebih penuh → produk ke-skip. Sekarang unik."""
     ids, offset = [], 0
+    seen = set()
     while True:
         data = _call("GET", URL_ITEM, session,
                      extra_params={"bundle_deal_id": bundle_deal_id, "offset": offset, "limit": limit}).get("data") or {}
         items = (data.get("items") if isinstance(data, dict) else None) or []
         for it in items:
             iid = it.get("itemid") or it.get("item_id")
-            # status 2 = keluar/hapus -> skip; sisanya dianggap masuk
-            if iid and it.get("status") != STATUS_KELUAR:
+            # status 2 = keluar/hapus -> skip; sisanya dianggap masuk. Dedup by item_id.
+            if iid and it.get("status") != STATUS_KELUAR and int(iid) not in seen:
+                seen.add(int(iid))
                 ids.append(int(iid))
         total = data.get("total_count") if isinstance(data, dict) else None
         offset += limit

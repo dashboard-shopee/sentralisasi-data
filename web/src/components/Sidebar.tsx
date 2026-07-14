@@ -124,7 +124,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="flex flex-col gap-1.5">
+      <nav className={`flex-1 flex flex-col gap-1.5 min-h-0 py-2 -mx-1 px-1 ${minimized ? "overflow-visible" : "overflow-y-auto"}`}>
         {filteredNav.map((n) => {
           if (n.sub) {
             const isExpanded = expanded[n.label];
@@ -134,21 +134,41 @@ export default function Sidebar({
               <div key={n.label} className="flex flex-col gap-1">
                 {minimized ? (
                   // Minimized representation of nested menu
-                  <Link
-                    href={n.sub[0].href}
+                  <div
                     className={
-                      "flex items-center rounded-xl transition-all duration-200 relative group justify-center p-3 text-[18px] " +
+                      "flex items-center rounded-xl transition-all duration-200 relative group justify-center p-3 text-[18px] cursor-pointer " +
                       (isSubActive ? "bg-[#fff1ed] text-[#ee4d2d]" : "text-[#6b7180] hover:bg-[#f6f7fb]")
                     }
                   >
                     <span className="text-[16px] shrink-0">{n.ikon}</span>
-                    <div className="absolute left-14 z-50 bg-[#161a27] text-white text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap flex flex-col gap-1">
-                      <div className="font-bold text-[#ee4d2d] border-b border-white/20 pb-0.5 mb-0.5">{n.label}</div>
-                      {n.sub.map((s) => (
-                        <div key={s.href} className={path === s.href ? "text-[#ff7043]" : "text-white/80"}>{s.label}</div>
-                      ))}
+                    
+                    {/* Floating sub-menu */}
+                    <div 
+                      className="absolute left-[52px] top-1/2 -translate-y-1/2 z-50 bg-white/95 backdrop-blur-md border border-[#eef0f6] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] p-2 min-w-[180px] flex flex-col gap-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 origin-left scale-95 group-hover:scale-100"
+                    >
+                      {/* Sub-menu title */}
+                      <div className="px-3 py-1.5 text-[11px] font-bold text-[#ee4d2d] uppercase tracking-wider border-b border-[#eef0f6] mb-1">
+                        {n.label}
+                      </div>
+                      
+                      {/* Sub-menu items */}
+                      {n.sub.map((s) => {
+                        const active = path === s.href;
+                        return (
+                          <Link
+                            key={s.href}
+                            href={s.href}
+                            className={
+                              "px-3 py-2 text-[12.5px] rounded-xl font-medium transition-all duration-150 text-left block w-full " +
+                              (active ? "text-[#ee4d2d] bg-[#fff1ed]" : "text-[#6b7180] hover:bg-[#f6f7fb] hover:text-[#ee4d2d]")
+                            }
+                          >
+                            {s.label}
+                          </Link>
+                        );
+                      })}
                     </div>
-                  </Link>
+                  </div>
                 ) : (
                   // Expanded / Normal nested menu representation
                   <>
@@ -215,7 +235,7 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-4">
+      <div className="mt-auto flex flex-col gap-4 shrink-0">
         {/* Real-time Info Card */}
         {!minimized && (
           <div className="px-3 transition-opacity duration-300">

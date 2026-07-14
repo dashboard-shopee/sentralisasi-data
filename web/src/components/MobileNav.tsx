@@ -84,12 +84,12 @@ export default function MobileNav() {
     (n) => role === "owner" || allowedMenus.includes(n.href)
   );
 
-  // Gabungkan dengan tombol Setting
+  // Gabungkan dengan tombol Lainnya
   const finalBottomNav = [
     ...filteredBottomNav,
     {
-      ikon: "⚙️",
-      label: "Setting",
+      ikon: "☰",
+      label: "Lainnya",
       href: "#setting"
     }
   ];
