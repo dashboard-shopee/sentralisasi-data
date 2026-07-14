@@ -173,7 +173,8 @@ _SQL_BARIS_RUBAH = text("""
            coalesce(
                nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0),   -- pancing (kalau ada)
                nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0)      -- else Harga Diskon (stored)
-           ) as target
+           ) as target,
+           nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0) as harga_diskon  -- HARGA DISKON mentah (acuan rem 40%)
     from harga_olah_data ho
     left join harga_all_produk ap on upper(ap.sku) = upper(ho.sku)
     where ho.toko = :t
@@ -194,6 +195,7 @@ def baca_baris_rubah(toko):
             "sku": (r.sku or "").strip(),
             "harga_awal": int(r.harga_awal or 0),
             "harga_akhir": int(r.target or 0),          # TARGET = pancing/Harga Diskon
+            "harga_diskon": int(r.harga_diskon or 0),   # Harga Diskon MENTAH (acuan rem 40%)
             "harga_real": int(r.harga_tampil or 0),     # Harga Real (pembanding)
             "sumber": r.sumber_harga or "",
             "stok": int(r.stok or 0),

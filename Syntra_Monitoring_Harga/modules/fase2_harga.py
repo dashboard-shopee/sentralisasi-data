@@ -21,6 +21,8 @@ GARANSI_SELISIH   = config.KPI_GARANSI_SELISIH       # best < target-ini -> take
 FLASH_SELISIH     = config.KPI_FLASH_SELISIH         # flash < target-ini -> takedown
 CAMPAIGN_FAKTOR   = config.KPI_CAMPAIGN_FAKTOR       # campaign < target*ini -> takedown
 CAMPAIGN_STOK_MIN = config.KPI_CAMPAIGN_STOK_MIN     # stok < ini -> takedown campaign
+REM_MAKS_TURUN    = config.KPI_HARGA_MAKS_TURUN_PCT  # target < HargaDiskon×(1-ini) -> REM produk (0.40)
+REM_MAKS_UBAH     = config.KPI_HARGA_MAKS_UBAH_PCT   # fraksi produk keubah > ini -> REM TOKO (0.30)
 
 
 # Jenis promo yg PUNYA handler di modul harga (sisanya = "tak dikenal" -> di-flag).
@@ -131,11 +133,17 @@ def diagnosa_toko(nama_toko):
         kom = komisi.get((b["sku"] or "").strip().upper())
         komisi_patokan = kom["harga_jual"] if (kom and kom["harga_jual"] > 0) else None
         target = komisi_patokan if komisi_patokan else b["harga_akhir"]
+        hd = b.get("harga_diskon", 0)          # Harga Diskon MENTAH (acuan rem 40%)
 
         if not target or target <= 0:
             kasus, aksi = "tanpa_target", []
         elif real == target:
             kasus, aksi = "sesuai", []
+        elif hd > 0 and target < hd * (1 - REM_MAKS_TURUN):
+            # REM 40% (per-produk): target di bawah 60% Harga Diskon = curiga pancing/komisi salah
+            # input → JANGAN diubah (jaring pengaman, keputusan owner). Komisi ≥ Diskon jd ga bakal
+            # salah-trigger; yg keneb rem = pancing kompetitor yg kelewat rendah.
+            kasus, aksi = "rem_turun", []
         elif H and target < H:
             kasus = "koreksi_turun"
             cost = biaya.get((b["sku"] or "").strip().upper())
@@ -146,10 +154,24 @@ def diagnosa_toko(nama_toko):
                      "keluarkan": "SEMUA promo", "pasang_lagi": ["Paket Diskon", "Voucher"]}]
 
         out.append({"item_id": b["item_id"], "model_id": b["model_id"], "sku": b["sku"],
-                    "target": target, "real": real, "harga_awal": H, "stok": stok,
+                    "target": target, "real": real, "harga_awal": H, "harga_diskon": hd, "stok": stok,
                     "pjh": round(pjh, 1), "kasus": kasus, "aksi": aksi,
                     "komisi_patokan": komisi_patokan})
     return out
+
+
+# Kasus yg BENERAN ngubah harga (buat hitung rem toko + dashboard).
+_KASUS_UBAH = ("koreksi_turun", "harga_dasar")
+
+
+def kena_rem_toko(diagnosa):
+    """REM 30% (per-TOKO): kalau fraksi produk yg BAKAL keubah harga > KPI_HARGA_MAKS_UBAH_PCT,
+    curiga data ngaco (grab meleset dll) → SKIP eksekusi SELURUH toko biar ga kebakaran massal.
+    Return (kena:bool, frac:float, n_ubah:int, total:int)."""
+    total = len(diagnosa) or 1
+    n_ubah = sum(1 for d in diagnosa if d.get("kasus") in _KASUS_UBAH)
+    frac = n_ubah / total
+    return (frac > REM_MAKS_UBAH), frac, n_ubah, total
 
 
 def bangun_alasan(d):
@@ -162,6 +184,11 @@ def bangun_alasan(d):
         return "Tanpa target (Harga Diskon kosong) — harga tidak diubah"
     src = "komisi aktif" if d.get("komisi_patokan") else "Harga Diskon"
     bits = [f"Target {F(d.get('target'))} ({src})"]
+    if kasus == "rem_turun":
+        pct = int(REM_MAKS_TURUN * 100)
+        bits.append(f"⛔ DIREM — di bawah {100-pct}% Harga Diskon {F(d.get('harga_diskon'))} "
+                    "(curiga pancing/komisi salah), harga TIDAK diubah")
+        return ". ".join(bits) + "."
     if kasus == "sesuai":
         bits.append("sudah sesuai — tak ada perubahan")
         return ". ".join(bits) + "."

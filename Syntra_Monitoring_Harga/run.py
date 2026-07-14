@@ -133,12 +133,18 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                 kasus, aksi = F2.ringkas(d)
                 log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
                 _aman(nama, "tulis alasan", lambda: tulis_alasan(nama, F2.alasan_dari_diagnosa(d)))
-                _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
-                _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
-                _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
-                _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
-                for m in mprov:                                    # poin 5 per cadence (harian/mingguan)
-                    _aman(nama, f"prov {m}", lambda f=PROV[m]: f(username, nama, session))
+                # REM TOKO 30% — kalau kebanyakan produk mau keubah, curiga data ngaco → SKIP eksekusi.
+                kena, frac, n_ubah, tot = F2.kena_rem_toko(d)
+                if kena:
+                    log(f"⛔ REM TOKO — {n_ubah}/{tot} ({frac:.0%}) produk mau keubah > {config.KPI_HARGA_MAKS_UBAH_PCT:.0%} → SKIP eksekusi (curiga data ngaco)",
+                        level="warning", fase="F2", toko=nama)
+                else:
+                    _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
+                    _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
+                    _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
+                    _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
+                    for m in mprov:                                # poin 5 per cadence (harian/mingguan)
+                        _aman(nama, f"prov {m}", lambda f=PROV[m]: f(username, nama, session))
 
             log("--- SELESAI ---", level="detail", toko=nama)
         except Exception as e:
@@ -225,10 +231,16 @@ def jalankan_fase2():
             d = F2.diagnosa_toko(nama)
             kasus, aksi = F2.ringkas(d)
             log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
-            _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
-            _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
-            _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
-            _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
+            _aman(nama, "tulis alasan", lambda: tulis_alasan(nama, F2.alasan_dari_diagnosa(d)))
+            kena, frac, n_ubah, tot = F2.kena_rem_toko(d)
+            if kena:
+                log(f"⛔ REM TOKO — {n_ubah}/{tot} ({frac:.0%}) produk mau keubah > {config.KPI_HARGA_MAKS_UBAH_PCT:.0%} → SKIP eksekusi",
+                    level="warning", fase="F2", toko=nama)
+            else:
+                _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
+                _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
+                _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
+                _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
         except Exception as e:
             log(f"GAGAL: {e}", level="error", toko=nama)
         close_session()
