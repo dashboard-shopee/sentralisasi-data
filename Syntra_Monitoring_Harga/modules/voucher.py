@@ -26,9 +26,9 @@ TIPE (dibedakan param):
   - produk      : rule.items terisi; dibagi 3+ BAND harga (per 20rb) via bands_harga()
 """
 import time
-import colorama; colorama.init()
 import requests
 import config
+from modules.log_siklus import log
 
 _BASE = "https://seller.shopee.co.id/api/marketing/v3/voucher/"
 URL_VOUCHER = _BASE
@@ -139,7 +139,7 @@ def list_vouchers(session, promotion_type=0, page_size=50):
                          extra_params={"offset": offset, "limit": page_size,
                                        "promotion_type": promotion_type}).get("data") or {}
         except Exception as e:
-            print(colorama.Fore.YELLOW + f"[voucher] list gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"list gagal: {type(e).__name__}", level="warning", modul="voucher")
             break
         lst = (data.get("voucher_list") or data.get("list") or []) if isinstance(data, dict) else (data or [])
         hasil.extend(x for x in lst if isinstance(x, dict))
@@ -185,10 +185,10 @@ def buat_voucher(session, name, code, start_time, end_time, **kw):
     limit_per_user, item_ids(=voucher produk), choose_users, landing_page."""
     payload = _payload_voucher(name, code, start_time, end_time, **kw)
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[voucher] (DRY) buat '{name}' ({code}) diskon {payload['discount']}%" + colorama.Style.RESET_ALL)
+        log(f"(DRY) buat '{name}' ({code}) diskon {payload['discount']}%", level="warning", modul="voucher")
         return None
     vid = _call("POST", URL_VOUCHER, session, payload).get("data", {}).get("voucher_id")
-    print(colorama.Fore.CYAN + f"[voucher] '{name}' ({code}) dibuat -> id {vid}" + colorama.Style.RESET_ALL)
+    log(f"'{name}' ({code}) dibuat → id {vid}", level="live", modul="voucher")
     return vid
 
 
@@ -233,15 +233,15 @@ def akhiri_voucher(session, voucher_id, detail=None):
     GA BISA diakhiri via API (ERROR_PARAM) — cuma yg BELUM mulai yg mungkin bisa.
     Gagal-anggun -> return False + warning (akhiri MANUAL di Seller Center)."""
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[voucher] (DRY) akhiri {voucher_id}" + colorama.Style.RESET_ALL)
+        log(f"(DRY) akhiri {voucher_id}", level="warning", modul="voucher")
         return True
     try:
         detail = detail or get_voucher(session, voucher_id)
         _call("PUT", URL_VOUCHER, session, _body_edit(detail, end_time=int(time.time()) + 60), attempts=1)
     except Exception:
-        print(colorama.Fore.YELLOW + f"[voucher] ⚠️ '{detail.get('name')}' (kode {detail.get('voucher_code')}) ga bisa diakhiri via API -> AKHIRI MANUAL di Seller Center" + colorama.Style.RESET_ALL)
+        log(f"⚠️ '{detail.get('name')}' (kode {detail.get('voucher_code')}) ga bisa diakhiri via API → AKHIRI MANUAL di Seller Center", level="warning", modul="voucher")
         return False
-    print(colorama.Fore.MAGENTA + f"[voucher] {voucher_id} diakhiri (end_time=sekarang)" + colorama.Style.RESET_ALL)
+    log(f"{voucher_id} diakhiri (end_time=sekarang)", level="live", modul="voucher")
     return True
 
 
@@ -260,13 +260,13 @@ def _set_item_voucher(session, voucher_id, item_ids, tambah, detail=None):
     aksi = "tambah" if tambah else "keluarkan"
     if not baru:
         # items kosong bisa ngerubah makna voucher (kosong = semua produk) -> jangan!
-        print(colorama.Fore.YELLOW + f"[voucher] ⚠️ {aksi} batal: voucher {voucher_id} bakal 0 item (kosong = semua produk). Akhiri manual kalau emang mau dimatiin." + colorama.Style.RESET_ALL)
+        log(f"⚠️ {aksi} batal: voucher {voucher_id} bakal 0 item (kosong = semua produk). Akhiri manual kalau emang mau dimatiin.", level="warning", modul="voucher")
         return False
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[voucher] (DRY) {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
+        log(f"(DRY) {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}→{len(baru)})", level="warning", modul="voucher")
         return True
     _call("PUT", URL_VOUCHER, session, _body_edit(detail, items_override=sorted(baru)))
-    print(colorama.Fore.MAGENTA + f"[voucher] {aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}->{len(baru)})" + colorama.Style.RESET_ALL)
+    log(f"{aksi} {len(ids)} item @ voucher {voucher_id} ({len(sekarang)}→{len(baru)})", level="live", modul="voucher")
     return True
 
 
@@ -292,7 +292,7 @@ def validate_items(session, item_ids, chunk=50, **extra):
                 if iid:
                     valid.append(int(iid))
         except Exception as e:
-            print(colorama.Fore.RED + f"[voucher] validate chunk gagal ({len(c)}): {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"validate chunk gagal ({len(c)}): {type(e).__name__}", level="error", modul="voucher")
     return valid
 
 

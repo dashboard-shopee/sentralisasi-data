@@ -20,9 +20,9 @@ CATATAN PENTING:
   - DRY_RUN (config): kalau True, semua aksi ubah HANYA disimulasi (tidak dikirim).
 """
 import time
-import colorama; colorama.init()
 import requests
 import config
+from modules.log_siklus import log
 
 _BASE = "https://seller.shopee.co.id/api/marketing/v3/bundle_deal/"
 URL_LIST = _BASE + "list/"    # LIST pakai /list/ (base '/' = detail, minta bundle_deal_id) — verified live
@@ -176,10 +176,10 @@ def buat_deal(session, name, start_time, end_time, tiers=TIER_DEFAULT, usage_lim
         ],
     }
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[paket diskon] (DRY) buat '{name}' tier={tiers}" + colorama.Style.RESET_ALL)
+        log(f"(DRY) buat '{name}' tier={tiers}", level="warning", modul="paket")
         return None
     bid = _call("POST", URL_CREATE, session, payload).get("data", {}).get("bundle_deal_id")
-    print(colorama.Fore.CYAN + f"[paket diskon] paket '{name}' dibuat -> id {bid}" + colorama.Style.RESET_ALL)
+    log(f"paket '{name}' dibuat → id {bid}", level="live", modul="paket")
     return bid
 
 
@@ -205,11 +205,11 @@ def validate_items(session, item_ids, start_time, end_time, bundle_deal_id=None,
                     key = (it.get("err_code"), str(it.get("err_msg") or it.get("msg") or "")[:80])
                     tolak[key] = tolak.get(key, 0) + 1
         except Exception as e:
-            print(colorama.Fore.RED + f"[paket diskon] validate chunk gagal ({len(c)}): {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"validate chunk gagal ({len(c)}): {type(e).__name__}", level="error", modul="paket")
     if tolak:
-        print(colorama.Fore.YELLOW + f"[paket diskon] {sum(tolak.values())} item DITOLAK validasi — alasan:" + colorama.Style.RESET_ALL)
+        log(f"{sum(tolak.values())} item DITOLAK validasi — alasan:", level="warning", modul="paket")
         for (code, msg), n in sorted(tolak.items(), key=lambda x: -x[1]):
-            print(colorama.Fore.YELLOW + f"    • {n:>4}x  err_code={code}  {msg}" + colorama.Style.RESET_ALL)
+            log(f"  • {n:>4}× err_code={code}  {msg}", level="warning", modul="paket")
     return valid
 
 
@@ -228,19 +228,19 @@ def attach_items(session, bundle_deal_id, item_ids, status=STATUS_MASUK, chunk=5
         try:
             _call("PUT", URL_ITEM, session, payload)
             ok += len(c)
-            print(colorama.Fore.MAGENTA + f"[paket diskon] {len(c)} item -> {label} paket {bundle_deal_id}" + colorama.Style.RESET_ALL)
+            log(f"{len(c)} item → {label} paket {bundle_deal_id}", level="live", modul="paket")
         except Exception as e:
             fail += len(c)
-            print(colorama.Fore.RED + f"[paket diskon] attach chunk gagal ({len(c)}): {type(e).__name__} - lanjut" + colorama.Style.RESET_ALL)
+            log(f"attach chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", modul="paket")
     return ok, fail
 
 
 # ── STOP ──
 def stop_deal(session, bundle_deal_id):
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[paket diskon] (DRY) stop {bundle_deal_id}" + colorama.Style.RESET_ALL); return
+        log(f"(DRY) stop {bundle_deal_id}", level="warning", modul="paket"); return
     _call("POST", URL_OP, session, {"bundle_deal_id": bundle_deal_id, "action": "stop"})
-    print(colorama.Fore.CYAN + f"[paket diskon] paket {bundle_deal_id} DIHENTIKAN" + colorama.Style.RESET_ALL)
+    log(f"paket {bundle_deal_id} DIHENTIKAN", level="live", modul="paket")
 
 
 # ── FASE 2 kasus 4: takedown item dari paket (harga dasar mau diubah) + re-add ──
@@ -271,11 +271,11 @@ def masukkan_item(session, bundle_deal_id, item_ids, start_time, end_time):
 def enroll_semua(session, item_ids, bundle_deal_id, start_time, end_time):
     """Validasi lalu attach SEMUA item_ids ke paket bundle_deal_id.
     Return ringkasan dict."""
-    print(colorama.Fore.WHITE + f"[paket diskon] enroll {len(item_ids)} produk -> paket {bundle_deal_id}..." + colorama.Style.RESET_ALL)
+    log(f"enroll {len(item_ids)} produk → paket {bundle_deal_id}…", level="detail", modul="paket")
     valid = validate_items(session, item_ids, start_time, end_time, bundle_deal_id)
     ok, fail = attach_items(session, bundle_deal_id, valid)
     hasil = {"total": len(set(item_ids)), "lolos_validasi": len(valid), "masuk": ok, "gagal": fail}
-    print(colorama.Fore.GREEN + f"[paket diskon] SELESAI: {hasil}" + colorama.Style.RESET_ALL)
+    log(f"enroll selesai: {hasil}", level="ok", modul="paket")
     return hasil
 
 
@@ -299,8 +299,7 @@ def enroll_dengan_overflow(session, item_ids, bid, nama_toko, start, end, prefix
     while sisa:
         nbid = buat_deal(session, f"{prefix} {nama_toko} #{n}", start, end)
         if not nbid:      # DRY atau gagal buat
-            print(colorama.Fore.YELLOW + f"[paket diskon] overflow {len(sisa)} produk butuh paket tambahan "
-                  f"(DRY/gagal buat, di-skip)" + colorama.Style.RESET_ALL)
+            log(f"overflow {len(sisa)} produk butuh paket tambahan (DRY/gagal buat, di-skip)", level="warning", modul="paket")
             break
         ringkas["paket"].append(nbid); ringkas["paket_tambahan"] += 1
         chunk = sisa[:maks]

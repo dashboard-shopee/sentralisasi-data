@@ -14,9 +14,9 @@ Dipakai HARGA bot: opt-out Garansi (yg auto-nurunin harga) sebelum kontrol harga
 Hormatin config.DRY_RUN.
 """
 import time
-import colorama; colorama.init()
 import config
 from modules.api_util import api_post
+from modules.log_siklus import log
 
 _B = "https://seller.shopee.co.id/api/mkt/bidding/"
 URL_ONGOING = _B + "get_ongoing_list"
@@ -50,7 +50,7 @@ def list_ongoing(session, page_size=100, maks_halaman=50):
                 {"pagination": {"page_num": page, "page_size": page_size},
                  "filter": {"req_source": 1}, "sorting": {"field": 3, "is_asc": True}}, kunci="data")
         except Exception as e:
-            print(colorama.Fore.RED + f"[garansi] get_ongoing_list hal {page} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"get_ongoing_list hal {page} gagal: {type(e).__name__}", level="error", modul="garansi")
             break
         lst = (r.get("data") or {}).get("list") or []
         for it in lst:
@@ -75,7 +75,7 @@ def list_ongoing(session, page_size=100, maks_halaman=50):
         if len(lst) < page_size:
             break
         page += 1
-    print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} variasi lagi ikut Garansi (ongoing)" + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} variasi lagi ikut Garansi (ongoing)", level="detail", modul="garansi")
     return hasil
 
 
@@ -92,7 +92,7 @@ def list_rekomendasi(session, page_size=100, maks_halaman=50):
                 {"filter": {}, "page_info": {"page_num": page, "page_size": page_size},
                  "option": {"with_performance": True}}, kunci="data")
         except Exception as e:
-            print(colorama.Fore.RED + f"[garansi] get_item_match_list hal {page} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"get_item_match_list hal {page} gagal: {type(e).__name__}", level="error", modul="garansi")
             break
         lst = (r.get("data") or {}).get("list") or []
         before = len(hasil)
@@ -113,7 +113,7 @@ def list_rekomendasi(session, page_size=100, maks_halaman=50):
         if not lst or len(hasil) == before:   # halaman kosong ATAU ga ada yg baru -> stop
             break
         page += 1
-    print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} produk rekomendasi (belum-didaftar)" + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} produk rekomendasi (belum-didaftar)", level="detail", modul="garansi")
     return list(hasil.values())
 
 
@@ -155,7 +155,7 @@ def list_ongoing_status(session, page_size=100, maks_halaman=50):
             if not lst or len(hasil) == before:   # halaman kosong ATAU ga ada yg baru -> stop tab ini
                 break
             page += 1
-    print(colorama.Fore.WHITE + f"[garansi] {len(hasil)} model dinominasi (ongoing)" + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} model dinominasi (ongoing)", level="detail", modul="garansi")
     return list(hasil.values())
 
 
@@ -180,7 +180,7 @@ def withdraw(session, bid_ids):
     H = config.grab_headers(session); P = session["params"]
     ids = [str(b) for b in bid_ids if b]
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[garansi] (DRY) withdraw {len(ids)} bid" + colorama.Style.RESET_ALL)
+        log(f"(DRY) withdraw {len(ids)} bid", level="warning", modul="garansi")
         return len(ids), 0
     ok = gagal = 0
     for b in ids:
@@ -189,8 +189,8 @@ def withdraw(session, bid_ids):
             ok += 1
         except Exception as e:
             gagal += 1
-            print(colorama.Fore.RED + f"[garansi] withdraw {b} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"[garansi] opt-out: {ok} berhasil, {gagal} gagal" + colorama.Style.RESET_ALL)
+            log(f"withdraw {b} gagal: {type(e).__name__}", level="error", modul="garansi")
+    log(f"opt-out: {ok} berhasil, {gagal} gagal", level="live", modul="garansi")
     return ok, gagal
 
 
@@ -202,7 +202,7 @@ def withdraw_produk(session, kunci_set, ongoing=None):
     ong = ongoing if ongoing is not None else list_ongoing(session)
     bids = [ong[k]["bid_id"] for k in kunci_set if k in ong and ong[k].get("bid_id")]
     if not bids:
-        print(colorama.Fore.WHITE + "[garansi] tidak ada variasi target yang lagi ikut Garansi" + colorama.Style.RESET_ALL)
+        log("tidak ada variasi target yang lagi ikut Garansi", level="detail", modul="garansi")
         return 0
     ok, _ = withdraw(session, bids)
     return ok
@@ -216,7 +216,7 @@ def enroll(session, cspu_product, tracker_source=8, chunk=50):
         return 0, 0
     H = config.grab_headers(session); P = session["params"]
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[garansi] (DRY) enroll {len(cspu_product)} produk" + colorama.Style.RESET_ALL)
+        log(f"(DRY) enroll {len(cspu_product)} produk", level="warning", modul="garansi")
         return len(cspu_product), 0
     ok = gagal = 0
     for c in _chunks(cspu_product, chunk):
@@ -225,6 +225,6 @@ def enroll(session, cspu_product, tracker_source=8, chunk=50):
             ok += len(c)
         except Exception as e:
             gagal += len(c)
-            print(colorama.Fore.RED + f"[garansi] enroll chunk gagal ({len(c)}): {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"[garansi] daftar: {ok} berhasil, {gagal} gagal" + colorama.Style.RESET_ALL)
+            log(f"enroll chunk gagal ({len(c)}): {type(e).__name__}", level="error", modul="garansi")
+    log(f"daftar: {ok} berhasil, {gagal} gagal", level="live", modul="garansi")
     return ok, gagal
