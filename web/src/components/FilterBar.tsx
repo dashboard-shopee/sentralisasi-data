@@ -58,10 +58,11 @@ export default function FilterBar({ options, filter }: { options: Options; filte
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#f0f2f7]">
         <span className="text-[12px] text-[#8a90a2] mr-1">Toko:</span>
         <CustomSelect
-          value={semua ? "" : filter.toko[0] || ""}
+          value={filter.toko.join(",")}
           onChange={(val) => go({ t: val ? val : null })}
           options={allToko.map((t) => ({ value: t, label: t }))}
           placeholder="Semua Toko"
+          multiple={true}
         />
       </div>
     </div>
