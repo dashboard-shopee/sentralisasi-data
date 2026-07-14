@@ -14,7 +14,7 @@ Mode aman: config.DUPLIKAT_PROMO_SIMULASI = True -> cuma log rencana, tidak ekse
 ✅ Endpoint terverifikasi: create_discount + update_seller_discount_items.
 """
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from modules.api_util import api_post
 from modules.discount_util import (
@@ -83,23 +83,17 @@ def _item_dari_sheet(baris_sheet):
 # BUAT PROMO DARI 0 — saat toko belum punya promo toko aktif (dipakai Langkah 2 & 4).
 def buat_promo_dari_nol(shop, session, baris_sheet):
     if not getattr(config, "BUAT_PROMO_DARI_NOL", False):
-        print(colorama.Fore.YELLOW
-              + f"[buat promo] [{shop}] - Promo Toko belum ada (BUAT_PROMO_DARI_NOL=False, lewati)."
-              + colorama.Style.RESET_ALL)
+        log("Promo Toko belum ada (BUAT_PROMO_DARI_NOL=False, lewati).", level="warning", toko=shop, modul="promo_toko")
         return
 
     # Guard anti-dobel: kalau sudah ada promo pengganti yang belum mulai, jangan bikin lagi.
     if ada_promo_belum_mulai(session, config.NAMA_PROMO):
-        print(colorama.Fore.YELLOW
-              + f"[buat promo] [{shop}] - sudah ada promo (belum mulai), lewati buat baru."
-              + colorama.Style.RESET_ALL)
+        log("sudah ada promo (belum mulai), lewati buat baru.", level="warning", toko=shop, modul="promo_toko")
         return
 
     daftar = _item_dari_sheet(baris_sheet)
     if not daftar:
-        print(colorama.Fore.YELLOW
-              + f"[buat promo] [{shop}] - tidak ada produk siap-promo di Sheet (K<harga awal). Lewati."
-              + colorama.Style.RESET_ALL)
+        log("tidak ada produk siap-promo (K<harga awal). Lewati.", level="warning", toko=shop, modul="promo_toko")
         return
 
     # images = thumbnail preview (gambar cover produk), BUKAN banner upload -> boleh kosong.
@@ -118,24 +112,20 @@ def buat_promo_dari_nol(shop, session, baris_sheet):
     judul = config.NAMA_PROMO
     kelompok = list(_chunks(daftar, config.MAKS_PRODUK_PER_PROMO))
 
-    print(colorama.Fore.LIGHTCYAN_EX
-          + f"[buat promo] [{shop}] - RENCANA (dari 0): {len(daftar)} produk -> {len(kelompok)} promo | "
-          + f"mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}' | gambar: {len(images)}"
-          + colorama.Style.RESET_ALL)
+    log(f"RENCANA (dari 0): {len(daftar)} produk → {len(kelompok)} promo | mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}' | gambar: {len(images)}",
+        level="detail", toko=shop, modul="promo_toko")
 
     if config.DRY_RUN or config.DUPLIKAT_PROMO_SIMULASI:
-        print(colorama.Fore.MAGENTA + f"[buat promo] [{shop}] - [SIMULASI] tidak membuat promo (DRY_RUN/simulasi)." + colorama.Style.RESET_ALL)
+        log("[SIMULASI] tidak membuat promo (DRY_RUN/simulasi).", level="warning", toko=shop, modul="promo_toko")
         return
 
     for idx, grup in enumerate(kelompok, start=1):
         judul_grup = judul if idx == 1 else f"{judul} ({idx})"
         try:
             new_pid = _buat_promo(session, judul_grup, images, start_baru, end_baru, grup)
-            print(colorama.Fore.GREEN
-                  + f"[buat promo] [{shop}] - promo '{judul_grup}' dibuat (id={new_pid}), {len(grup)} produk."
-                  + colorama.Style.RESET_ALL)
+            log(f"promo '{judul_grup}' dibuat (id={new_pid}), {len(grup)} produk.", level="live", toko=shop, modul="promo_toko")
         except Exception as e:
-            print(colorama.Fore.RED + f"[buat promo] [{shop}] - GAGAL bikin '{judul_grup}': {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL bikin '{judul_grup}': {e}", level="error", toko=shop, modul="promo_toko")
 
 
 # PROSES DUPLIKAT PROMO — dipanggil per toko oleh orkestrator.
@@ -147,7 +137,7 @@ def proses_duplikat_promo(shop, session, baris_sheet):
 
     detail = grab_promo_detail(session, pid)
     if not detail:
-        print(colorama.Fore.RED + f"[duplikat promo] [{shop}] - gagal baca detail promo." + colorama.Style.RESET_ALL)
+        log("gagal baca detail promo.", level="error", toko=shop, modul="promo_toko")
         return
 
     end_time = int(detail.get("end_time", 0))
@@ -156,16 +146,12 @@ def proses_duplikat_promo(shop, session, baris_sheet):
 
     # Belum waktunya?
     if sisa_hari > config.JELANG_EXPIRE_HARI:
-        print(colorama.Fore.WHITE
-              + f"[duplikat promo] [{shop}] - belum waktunya (berakhir {_tgl(end_time)}, sisa {sisa_hari:.1f} hari)."
-              + colorama.Style.RESET_ALL)
+        log(f"belum waktunya duplikat (berakhir {_tgl(end_time)}, sisa {sisa_hari:.1f} hari).", level="detail", toko=shop, modul="promo_toko")
         return
 
     # Sudah ada promo pengganti (belum mulai)? -> jangan dobel.
     if ada_promo_belum_mulai(session, config.NAMA_PROMO):
-        print(colorama.Fore.YELLOW
-              + f"[duplikat promo] [{shop}] - sudah ada promo pengganti (belum mulai), lewati."
-              + colorama.Style.RESET_ALL)
+        log("sudah ada promo pengganti (belum mulai), lewati.", level="warning", toko=shop, modul="promo_toko")
         return
 
     # Kumpulkan produk (gabungan promo lama + K sheet).
@@ -174,7 +160,7 @@ def proses_duplikat_promo(shop, session, baris_sheet):
               for b in baris_sheet if b.get("harga_akhir")}
     daftar = _gabung_item(item_promo, peta_k)
     if not daftar:
-        print(colorama.Fore.YELLOW + f"[duplikat promo] [{shop}] - promo lama kosong, lewati." + colorama.Style.RESET_ALL)
+        log("promo lama kosong, lewati.", level="warning", toko=shop, modul="promo_toko")
         return
 
     start_baru = end_time
@@ -183,22 +169,16 @@ def proses_duplikat_promo(shop, session, baris_sheet):
     images = detail.get("images", []) or []
     kelompok = list(_chunks(daftar, config.MAKS_PRODUK_PER_PROMO))
 
-    print(colorama.Fore.LIGHTCYAN_EX
-          + f"[duplikat promo] [{shop}] - RENCANA: {len(daftar)} produk -> {len(kelompok)} promo | "
-          + f"mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}'"
-          + colorama.Style.RESET_ALL)
+    log(f"RENCANA duplikat: {len(daftar)} produk → {len(kelompok)} promo | mulai {_tgl(start_baru)} s/d {_tgl(end_baru)} | judul '{judul}'",
+        level="detail", toko=shop, modul="promo_toko")
 
     if config.DRY_RUN or config.DUPLIKAT_PROMO_SIMULASI:
-        print(colorama.Fore.MAGENTA
-              + f"[duplikat promo] [{shop}] - [SIMULASI] tidak membuat promo (DRY_RUN/simulasi). "
-              + "Set MODE_LIVE=True di config untuk eksekusi nyata."
-              + colorama.Style.RESET_ALL)
+        log("[SIMULASI] tidak membuat promo (DRY_RUN/simulasi). Set MODE_LIVE=True di config untuk eksekusi nyata.",
+            level="warning", toko=shop, modul="promo_toko")
         return
 
     # EKSEKUSI
     for idx, grup in enumerate(kelompok, start=1):
         judul_grup = judul if idx == 1 else f"{judul} ({idx})"
         new_pid = _buat_promo(session, judul_grup, images, start_baru, end_baru, grup)
-        print(colorama.Fore.GREEN
-              + f"[duplikat promo] [{shop}] - promo '{judul_grup}' dibuat (id={new_pid}), {len(grup)} produk."
-              + colorama.Style.RESET_ALL)
+        log(f"promo '{judul_grup}' dibuat (id={new_pid}), {len(grup)} produk.", level="live", toko=shop, modul="promo_toko")

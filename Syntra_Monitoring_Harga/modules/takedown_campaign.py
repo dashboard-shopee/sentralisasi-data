@@ -15,7 +15,7 @@ Alur:
    sudah berjalan penuh mungkin tak terjangkau. Perlu verifikasi saat akun asli.
    DRY_RUN -> tidak benar-benar opt-out (hanya deteksi + log).
 """
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 
 
@@ -47,15 +47,14 @@ def takedown_dari_campaign(session, shop, i, kunci_set):
             if not nom_ids:
                 continue
             if config.DRY_RUN:
-                print(colorama.Fore.YELLOW
-                      + f"[campaign] [{shop}] - [DRY] {len(nom_ids)} nominasi akan di-takedown dari sesi '{s.get('session_name','')}'"
-                      + colorama.Style.RESET_ALL)
+                log(f"(DRY) {len(nom_ids)} nominasi akan di-takedown dari sesi '{s.get('session_name','')}'",
+                    level="warning", toko=shop, modul="campaign")
                 total += len(nom_ids)
             else:
                 if C.takedown_products(session, shop, sid, nom_ids):
                     total += len(nom_ids)
     except Exception as e:
-        print(colorama.Fore.RED + f"[campaign] [{shop}] - takedown campaign gagal: {type(e).__name__}: {str(e)[:120]}" + colorama.Style.RESET_ALL)
+        log(f"takedown campaign gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
     finally:
         try:
             tutup_page()

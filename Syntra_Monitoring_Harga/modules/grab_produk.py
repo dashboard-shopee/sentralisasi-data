@@ -17,7 +17,7 @@ Tiap baris = satu MODEL (variasi):
        .price_detail.promotion_price   "5800.00" / "0.00"  (0 = promo mati)
 ──────────────────────────────────────────────────────────────────────────────
 """
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from modules.api_util import api_get
 
@@ -204,17 +204,13 @@ def grab_produk(shop, nama_toko, session):
         cursor = page_info.get("cursor", "")
         if (not produk_list) or (total and collected >= total) or (not cursor) or (halaman > 500):
             break
-    print(colorama.Fore.LIGHTGREEN_EX
-          + f"[grab produk] [{shop}] - SELESAI: {len(baris)} variasi berstok, {dilewati} dilewati (stok 0), "
-          + f"{len(konteks)} keikutsertaan promo terekam"
-          + colorama.Style.RESET_ALL)
+    log(f"grab selesai: {len(baris)} variasi berstok, {dilewati} dilewati (stok 0), {len(konteks)} keikutsertaan promo terekam",
+        level="detail", fase="F1", toko=shop, modul="grab")
     return baris, konteks
 
 
 def _log(shop, n, kode, harga, sumber=""):
-    print(colorama.Fore.WHITE
-          + f"[grab produk] [{shop}] [{n}] - {kode} [{config.fmt_angka(harga)}] ({sumber})"
-          + colorama.Style.RESET_ALL)
+    log(f"[{n}] {kode} [{config.fmt_angka(harga)}] ({sumber})", level="detail", fase="F1", toko=shop, modul="grab")
 
 # (tulis_produk ke Google Sheet DIHAPUS — penyimpanan sekarang lewat
 #  modules/sql_harga.simpan_olah_data ke tabel harga_olah_data.)

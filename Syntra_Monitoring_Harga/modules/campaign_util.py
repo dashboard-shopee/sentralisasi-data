@@ -3,7 +3,7 @@ campaign_util.py — Helper untuk Campaign Shopee (Layer 2, penunjang Langkah 4)
 Menggunakan browser context (fetch via run_js) untuk menghindari pemblokiran WAF 403.
 """
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from urllib.parse import urlencode
 
@@ -70,7 +70,7 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
         except Exception as e:
             cuplikan = str(e)
             if attempt < attempts - 1:
-                print(colorama.Fore.RED + f"[api_browser] Gagal -> {cuplikan} | coba lagi dalam {delay}s ({attempt+1}/{attempts-1})" + colorama.Style.RESET_ALL)
+                log(f"api_browser gagal → {cuplikan} | coba lagi dalam {delay}s ({attempt+1}/{attempts-1})", level="warning", modul="campaign")
                 time.sleep(delay)
                 delay = min(delay * 2, 20)
             else:
@@ -86,7 +86,7 @@ def get_open_sessions(session, shop):
     page = get_page()
     if page:
         # Arahkan browser ke marketing cmt portal agar memiliki referer asal yang sah
-        print(colorama.Fore.YELLOW + f"[campaign] [{shop}] - Mengarahkan browser ke Portal Campaign..." + colorama.Style.RESET_ALL)
+        log("mengarahkan browser ke Portal Campaign…", level="detail", toko=shop, modul="campaign")
         page.get("https://seller.shopee.co.id/portal/marketing/cmt/campaign?source=2")
         page.wait(2)
 
@@ -107,7 +107,7 @@ def get_open_sessions(session, shop):
             kunci="data"
         )
     except Exception as e:
-        print(colorama.Fore.RED + f"[campaign] [{shop}] - Gagal fetch campaign list: {e}" + colorama.Style.RESET_ALL)
+        log(f"gagal fetch campaign list: {e}", level="error", toko=shop, modul="campaign")
         return []
 
     campaigns = res.get("data", {}).get("list") or []
@@ -140,7 +140,7 @@ def get_open_sessions(session, shop):
                 kunci="data"
             )
         except Exception as e:
-            print(colorama.Fore.RED + f"[campaign] [{shop}] - Gagal fetch session untuk campaign {name}: {e}" + colorama.Style.RESET_ALL)
+            log(f"gagal fetch session untuk campaign {name}: {e}", level="error", toko=shop, modul="campaign")
             continue
 
         product_sessions = session_res.get("data", {}).get("general", {}).get("product_session") or []
@@ -164,13 +164,11 @@ def get_open_sessions(session, shop):
                 })
 
     if open_sessions:
-        print(colorama.Fore.WHITE
-              + f"[campaign] [{shop}] - Ditemukan {len(open_sessions)} sesi kampanye aktif untuk nominasi"
-              + colorama.Style.RESET_ALL)
+        log(f"{len(open_sessions)} sesi kampanye aktif untuk nominasi", level="detail", toko=shop, modul="campaign")
         for s in open_sessions:
-            print(colorama.Fore.CYAN + f"  - Sesi: {s['session_name']} (ID={s['session_id']}) di bawah '{s['campaign_name']}'" + colorama.Style.RESET_ALL)
+            log(f"  sesi {s['session_name']} (ID={s['session_id']}) di bawah '{s['campaign_name']}'", level="detail", toko=shop, modul="campaign")
     else:
-        print(colorama.Fore.YELLOW + f"[campaign] [{shop}] - Tidak ada sesi kampanye aktif yang cocok saat ini" + colorama.Style.RESET_ALL)
+        log("tidak ada sesi kampanye aktif yang cocok saat ini", level="warning", toko=shop, modul="campaign")
 
     return open_sessions
 
@@ -198,7 +196,7 @@ def get_nominated_products(session, shop, session_id):
                 kunci="page_info"  # Validasi dengan page_info
             )
         except Exception as e:
-            print(colorama.Fore.RED + f"[campaign] [{shop}] - Gagal fetch nominated list hal {page_num}: {e}" + colorama.Style.RESET_ALL)
+            log(f"gagal fetch nominated list hal {page_num}: {e}", level="error", toko=shop, modul="campaign")
             break
 
         data_obj = res.get("data") if isinstance(res, dict) else None
@@ -251,11 +249,9 @@ def takedown_products(session, shop, session_id, nomination_ids):
                 },
                 kunci="data"
             )
-            print(colorama.Fore.GREEN
-                  + f"[campaign] [{shop}] - Berhasil takedown {len(chunk)} model dari sesi {session_id}"
-                  + colorama.Style.RESET_ALL)
+            log(f"takedown {len(chunk)} model dari sesi {session_id}", level="live", toko=shop, modul="campaign")
         except Exception as e:
-            print(colorama.Fore.RED + f"[campaign] [{shop}] - Gagal opt-out chunk {i//chunk_size + 1}: {e}" + colorama.Style.RESET_ALL)
+            log(f"gagal opt-out chunk {i//chunk_size + 1}: {e}", level="error", toko=shop, modul="campaign")
             success = False
             
     return success

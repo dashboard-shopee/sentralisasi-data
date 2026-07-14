@@ -8,7 +8,7 @@ Endpoint terverifikasi (sniff __sniff_promo.json), berbasis `requests` (pakai se
 status flash sale (data.status): umumnya 1=berjalan/mendatang, 2=berakhir/stop.
 """
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from modules.api_util import api_get, api_post
 
@@ -117,7 +117,7 @@ def set_items(session, flash_sale_id, entries, chunk=50):
             failed += data.get("failed_items") or []
         except Exception as e:
             failed += batch   # chunk ini gagal (mis. timeout) -> tandai, LANJUT chunk berikut
-            print(colorama.Fore.RED + f"[flash sale] set_items chunk gagal ({len(batch)} item): {type(e).__name__} - lanjut" + colorama.Style.RESET_ALL)
+            log(f"set_items chunk gagal ({len(batch)} item): {type(e).__name__} — lanjut", level="error", modul="flash")
     return (len(failed) == 0), failed
 
 
@@ -129,7 +129,7 @@ def takedown_items(session, shop, kunci_set):
     if getattr(config, "SKIP_FLASH_TAKEDOWN", False):
         # Endpoint set_shop_flash_sale_items ditolak Shopee (code 1001) -> skip total
         # (hindari peta_item yg enumerasi ratusan sesi + retry gagal). PR flash sale besok.
-        print(colorama.Fore.YELLOW + f"[flash sale] [{shop}] - takedown DILEWATI (SKIP_FLASH_TAKEDOWN, PR besok)" + colorama.Style.RESET_ALL)
+        log("takedown DILEWATI (SKIP_FLASH_TAKEDOWN, PR besok)", level="warning", toko=shop, modul="flash")
         return 0
     peta, cache = peta_item(session)
     n = 0
@@ -142,8 +142,6 @@ def takedown_items(session, shop, kunci_set):
             continue
         ok, failed = set_items(session, fsid, entries)
         n += len(entries) - len(failed)
-        warna = colorama.Fore.YELLOW if config.DRY_RUN else colorama.Fore.MAGENTA
-        print(warna + f"[flash sale] [{shop}] - {len(entries)} variasi -> keluar dari FS {fsid}"
-              + (" (DRY)" if config.DRY_RUN else f", {len(failed)} gagal")
-              + colorama.Style.RESET_ALL)
+        log(f"{len(entries)} variasi → keluar dari FS {fsid}" + (" (DRY)" if config.DRY_RUN else f", {len(failed)} gagal"),
+            level="warning" if config.DRY_RUN else "live", toko=shop, modul="flash")
     return n

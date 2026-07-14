@@ -6,7 +6,7 @@ browser nganggur) -> tidak bentrok & tidak berat. Login sekali: python run.py lo
 """
 import random
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import DrissionPage
 import config
 
@@ -69,7 +69,7 @@ def shop_switcher(page, shop, i, maks_percobaan=20):
     """Pindah ke sub-toko `shop` (index i). BOUNDED: kalau setelah `maks_percobaan`
     tetap tidak ketemu (mis. sedang di SUB-AKUN LAIN / toko bukan milik kita) ->
     RAISE supaya toko itu di-SKIP mulus (bukan loop selamanya)."""
-    print(colorama.Fore.YELLOW + f"[shop switcher] [{shop}] - ganti sub-toko" + colorama.Style.RESET_ALL)
+    log("ganti sub-toko", level="detail", toko=shop, modul="session")
     attempt = 0
     while attempt < maks_percobaan:
         attempt += 1
@@ -81,16 +81,15 @@ def shop_switcher(page, shop, i, maks_percobaan=20):
             username = page.ele('xpath=//div[@class="subaccount-info"]//span[@class="subaccount-name"]', timeout=10).text
             page.wait(random.randint(2, 3))
             if username == shop:
-                print(colorama.Fore.GREEN + f"[shop switcher] [{shop}] - sukses" + colorama.Style.RESET_ALL)
+                log("shop switcher sukses", level="ok", toko=shop, modul="session")
                 return
             if username and username != shop:
-                print(colorama.Style.DIM + colorama.Fore.WHITE
-                      + f"[shop switcher] [{shop}] - posisi {i} berisi '{username}' (bukan target); coba lagi ({attempt}/{maks_percobaan})"
-                      + colorama.Style.RESET_ALL)
+                log(f"posisi {i} berisi '{username}' (bukan target); coba lagi ({attempt}/{maks_percobaan})",
+                    level="detail", toko=shop, modul="session")
         except Exception:
             if attempt % 5 == 0:
-                print(colorama.Fore.RED + f"[shop switcher] [{shop}] - belum berhasil ({attempt}x). "
-                      f"Pastikan sudah LOGIN (python run.py login)" + colorama.Style.RESET_ALL)
+                log(f"belum berhasil ({attempt}x). Pastikan sudah LOGIN (python run.py login)",
+                    level="error", toko=shop, modul="session")
         time.sleep(1)
     # Gagal setelah maks_percobaan -> SKIP toko ini (sub-akun lain / toko tak ditemukan).
     raise RuntimeError(f"toko '{shop}' tidak ditemukan di shop switcher "
@@ -129,7 +128,7 @@ def _harvest(shop, i):
         if not paket:
             raise RuntimeError(f"[session] [{shop}] - gagal tangkap /api/v2/login 30s (cek LOGIN / akses sub-toko)")
         hasil = {"headers": paket.request.headers, "params": paket.request.params}
-        print(colorama.Fore.WHITE + f"[session] [{shop}] - sesi terpanen, tutup browser & lanjut via API" + colorama.Style.RESET_ALL)
+        log("sesi terpanen, tutup browser & lanjut via API", level="detail", toko=shop, modul="session")
         return hasil
     finally:
         try:
@@ -150,19 +149,17 @@ def grab_session(shop, i, percobaan=3):
             break
         except Exception as e:
             last = e
-            print(colorama.Fore.YELLOW
-                  + f"[session] [{shop}] - panen gagal ({n}/{percobaan}): {str(e)[:80]} -> retry"
-                  + colorama.Style.RESET_ALL)
+            log(f"panen gagal ({n}/{percobaan}): {str(e)[:80]} → retry", level="warning", toko=shop, modul="session")
             time.sleep(5)
     else:
         raise last
 
     def refresh():
-        print(colorama.Fore.YELLOW + f"[session] [{shop}] - ambil ulang cookie..." + colorama.Style.RESET_ALL)
+        log("ambil ulang cookie…", level="detail", toko=shop, modul="session")
         baru = _harvest(shop=shop, i=i)
         sess["headers"] = baru["headers"]
         sess["params"] = baru["params"]
-        print(colorama.Fore.GREEN + f"[session] [{shop}] - sesi diperbarui" + colorama.Style.RESET_ALL)
+        log("sesi diperbarui", level="ok", toko=shop, modul="session")
         return sess
 
     sess["refresh"] = refresh
@@ -186,7 +183,7 @@ def buka_login():
     page = DrissionPage.ChromiumPage(_buat_options())
     page.set.window.max()
     page.get("https://seller.shopee.co.id/portal/shop")
-    print(colorama.Fore.LIGHTCYAN_EX + "\nSilakan LOGIN Shopee Seller di jendela Chrome yang terbuka." + colorama.Style.RESET_ALL)
+    log("Silakan LOGIN Shopee Seller di jendela Chrome yang terbuka.", level="header", modul="session")
     input("Setelah berhasil login & melihat dashboard, tekan ENTER untuk menyimpan & menutup... ")
     close_session()
-    print(colorama.Fore.GREEN + "Login tersimpan di profil bot. Lanjut: python run.py" + colorama.Style.RESET_ALL)
+    log("Login tersimpan di profil bot. Lanjut: python run.py", level="ok", modul="session")

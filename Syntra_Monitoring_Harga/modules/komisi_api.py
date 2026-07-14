@@ -36,7 +36,7 @@ CATATAN:
   `harga_komisi_toko` (di-edit di dashboard SYNTRA). Jadi tanpa modul ini pun Yarra aman.
   (Saat ini cuma YARRA yg pakai komisi; toko lain nihil, lolly cuma uji coba.)
 """
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from modules.api_util import api_post, api_get
 
@@ -169,7 +169,7 @@ def takedown_komisi(session, commission_ids, operator="", ukuran_chunk=50):
                 ok_semua = False
         except Exception as e:
             ok_semua = False
-            print(colorama.Fore.RED + f"[takedown komisi] chunk gagal: {e}" + colorama.Style.RESET_ALL)
+            log(f"chunk gagal: {e}", level="error", modul="komisi")
     return ok_semua, semua
 
 
@@ -196,5 +196,5 @@ def set_komisi(session, items, persen, operator="", ukuran_chunk=50):
                 sukses_semua = False
         except Exception as e:
             sukses_semua = False
-            print(colorama.Fore.RED + f"[set komisi] chunk gagal: {e}" + colorama.Style.RESET_ALL)
+            log(f"set komisi chunk gagal: {e}", level="error", modul="komisi")
     return sukses_semua, semua_hasil

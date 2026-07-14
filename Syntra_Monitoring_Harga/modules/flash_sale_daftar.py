@@ -15,7 +15,7 @@ sesi (chunk[i%n]); urut KATEGORI lalu PENJUALAN tertinggi; 1 minggu sekali; mode
 Aturan Shopee: stok promo maks 350, diskon 1-99%. Hormatin config.DRY_RUN.
 """
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import requests
 import config
 
@@ -70,15 +70,15 @@ def list_sesi(session):
 def bikin_sesi(session, time_slot_id):
     """Bikin sesi flash di 1 slot -> flash_sale_id."""
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[flash] (DRY) bikin sesi slot {time_slot_id}" + colorama.Style.RESET_ALL); return None
+        log(f"(DRY) bikin sesi slot {time_slot_id}", level="warning", modul="flash"); return None
     fsid = (_req("POST", session, URL_SET, {"time_slot_id": time_slot_id}) or {}).get("flash_sale_id")
-    print(colorama.Fore.CYAN + f"[flash] sesi dibikin: {fsid} (slot {time_slot_id})" + colorama.Style.RESET_ALL)
+    log(f"sesi dibikin: {fsid} (slot {time_slot_id})", level="live", modul="flash")
     return fsid
 
 
 def stop_sesi(session, flash_sale_id, time_slot_id):
     _req("POST", session, URL_SET, {"flash_sale_id": flash_sale_id, "time_slot_id": time_slot_id, "status": 2})
-    print(colorama.Fore.CYAN + f"[flash] sesi {flash_sale_id} distop" + colorama.Style.RESET_ALL)
+    log(f"sesi {flash_sale_id} distop", level="live", modul="flash")
 
 
 # ── DATA PRODUK (image+kategori dari selector, model+harga+stok+sales dari SQL) ──
@@ -136,7 +136,7 @@ def siapkan_produk(session, nama_toko):
         })
     # URUT: kategori (grup) lalu penjualan tertinggi
     hasil.sort(key=lambda p: (p["kategori"], -p["sales"]))
-    print(colorama.Fore.WHITE + f"[flash] {len(hasil)} produk siap ({nama_toko}), urut kategori+penjualan" + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} produk siap, urut kategori+penjualan", level="detail", toko=nama_toko, modul="flash")
     return hasil
 
 
@@ -166,7 +166,7 @@ def daftar_ke_sesi(session, flash_sale_id, produk_sesi):
     if not entri:
         return {"masuk": 0, "gagal": 0}
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[flash] (DRY) daftar {len(produk_sesi)} produk ({len(entri)} model) -> sesi {flash_sale_id}" + colorama.Style.RESET_ALL)
+        log(f"(DRY) daftar {len(produk_sesi)} produk ({len(entri)} model) → sesi {flash_sale_id}", level="warning", modul="flash")
         return {"masuk": len(entri), "gagal": 0}
     masuk = gagal = 0
     for c in _chunks(entri, 50):
@@ -177,14 +177,14 @@ def daftar_ke_sesi(session, flash_sale_id, produk_sesi):
             masuk += len(c) - len(fail); gagal += len(fail)
         except Exception as e:
             gagal += len(c)
-            print(colorama.Fore.RED + f"[flash] set_items chunk gagal ({len(c)}): {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"set_items chunk gagal ({len(c)}): {type(e).__name__}", level="error", modul="flash")
     # urutan tampil = urutan produk_sesi (udah ke-sort kategori+penjualan)
     try:
         seq = [{"item_id": p["item_id"], "display_sequence": i + 1} for i, p in enumerate(produk_sesi)]
         _req("POST", session, URL_SEQ, {"flash_sale_id": flash_sale_id, "display_sequence_list": seq})
     except Exception as e:
-        print(colorama.Fore.YELLOW + f"[flash] set_item_sequence gagal (non-fatal): {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"[flash] sesi {flash_sale_id}: {masuk} model masuk, {gagal} gagal" + colorama.Style.RESET_ALL)
+        log(f"set_item_sequence gagal (non-fatal): {type(e).__name__}", level="warning", modul="flash")
+    log(f"sesi {flash_sale_id}: {masuk} model masuk, {gagal} gagal", level="live", modul="flash")
     return {"masuk": masuk, "gagal": gagal}
 
 
@@ -197,7 +197,7 @@ def daftar_mingguan(session, nama_toko, maks_sesi=None):
     if maks_sesi:
         slots = slots[:maks_sesi]
     if not produk or not slots:
-        print(colorama.Fore.RED + f"[flash] {nama_toko}: produk={len(produk)} slot={len(slots)} - skip" + colorama.Style.RESET_ALL)
+        log(f"produk={len(produk)} slot={len(slots)} — skip", level="warning", toko=nama_toko, modul="flash")
         return {"sesi": 0, "masuk": 0}
     rotasi = bagi_rotasi(produk, len(slots))
     total_masuk = sesi_ok = 0
@@ -209,6 +209,6 @@ def daftar_mingguan(session, nama_toko, maks_sesi=None):
             r = daftar_ke_sesi(session, fsid, produk_sesi)
             total_masuk += r["masuk"]; sesi_ok += 1
         except Exception as e:
-            print(colorama.Fore.RED + f"[flash] sesi slot {slot['timeslot_id']} gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.GREEN + f"[flash] {nama_toko} SELESAI: {sesi_ok} sesi, {total_masuk} model masuk" + colorama.Style.RESET_ALL)
+            log(f"sesi slot {slot['timeslot_id']} gagal: {type(e).__name__}", level="error", toko=nama_toko, modul="flash")
+    log(f"selesai: {sesi_ok} sesi, {total_masuk} model masuk", level="ok", toko=nama_toko, modul="flash")
     return {"sesi": sesi_ok, "masuk": total_masuk, "produk": len(produk), "slot": len(slots)}

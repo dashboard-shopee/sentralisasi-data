@@ -20,6 +20,7 @@ import colorama; colorama.init()
 import config
 from modules.grab_produk import grab_produk
 from modules import sql_harga as SQL
+from modules.log_siklus import log
 
 
 def _iso(epoch):
@@ -33,8 +34,16 @@ def _iso(epoch):
     return datetime.fromtimestamp(n, tz=timezone.utc).isoformat()
 
 
+# warna colorama (dipakai caller lama) → level log() (biar caller ga usah diubah)
+_WARNA2LEVEL = {
+    colorama.Fore.GREEN: "ok", colorama.Fore.LIGHTGREEN_EX: "ok",
+    colorama.Fore.RED: "error", colorama.Fore.YELLOW: "warning",
+    colorama.Fore.MAGENTA: "live", colorama.Fore.CYAN: "detail", colorama.Fore.WHITE: "detail",
+}
+
+
 def _log(nama, teks, warna=colorama.Fore.WHITE):
-    print(warna + f"[fakta] [{nama}] {teks}" + colorama.Style.RESET_ALL)
+    log(teks, level=_WARNA2LEVEL.get(warna, "detail"), fase="F1", toko=nama, modul="fakta")
 
 
 # ── TIER JAM: produk (harga + stok) + konteks promo ──
@@ -310,5 +319,5 @@ def fakta_kategori(nama_toko, session, limit=None):
 def housekeeping():
     """Prune baris fakta yatim (tak ke-refresh > FAKTA_MAKS_UMUR_HARI). Return jumlah terhapus."""
     n = SQL.prune_fakta_yatim(int(getattr(config, "FAKTA_MAKS_UMUR_HARI", 35)))
-    print(colorama.Fore.CYAN + f"[fakta] housekeeping: {n} baris fakta yatim di-prune" + colorama.Style.RESET_ALL)
+    log(f"housekeeping: {n} baris fakta yatim di-prune", level="detail", fase="F1", modul="fakta")
     return n

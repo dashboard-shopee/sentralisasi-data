@@ -5,9 +5,9 @@ grab_promotion_id: ambil promo toko yang SUDAH ADA — BERJALAN (time_status 2)
 diutamakan; bila termasuk_mendatang=True dan tidak ada yang berjalan, pakai yang
 MENDATANG (time_status 1). Dipilih berdasarkan nama (config.NAMA_PROMO).
 """
-import colorama; colorama.init()
 import config
 from modules.api_util import api_post
+from modules.log_siklus import log
 
 
 # GRAB PAYLOAD (daftar diskon toko). limit API maksimal 10.
@@ -51,11 +51,9 @@ def grab_semua_promo(shop, session):
             if p["time_status"] in (1, 2):
                 gabung.setdefault(p["promotion_id"], p)
     hasil = sorted(gabung.values(), key=lambda x: 0 if x["time_status"] == 2 else 1)
-    warna = colorama.Fore.WHITE if hasil else colorama.Fore.RED
-    print(warna
-          + f"[diskon] [{shop}] - {len(hasil)} promo toko ditemukan: "
-          + (", ".join(f"{p['name']}({'jalan' if p['time_status']==2 else 'datang'})" for p in hasil) or "TIDAK ADA")
-          + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} promo toko ditemukan: "
+        + (", ".join(f"{p['name']}({'jalan' if p['time_status']==2 else 'datang'})" for p in hasil) or "TIDAK ADA"),
+        level="detail" if hasil else "warning", toko=shop, modul="promo_toko")
     return hasil
 
 
@@ -101,14 +99,10 @@ def grab_promotion_id(shop, session, nama_promo, termasuk_mendatang=False):
     if pilih is None and termasuk_mendatang:
         pilih = up_cocok or up_first
     if not pilih:
-        print(colorama.Fore.RED
-              + f"[diskon] [{shop}] - tidak ada promo toko (berjalan/mendatang)."
-              + colorama.Style.RESET_ALL)
+        log("tidak ada promo toko (berjalan/mendatang).", level="warning", toko=shop, modul="promo_toko")
         return None
     pid, nama, stat = pilih
-    print(colorama.Fore.WHITE
-          + f"[diskon] [{shop}] - campaign '{nama}' (id={pid}) [{stat}]"
-          + colorama.Style.RESET_ALL)
+    log(f"promo toko '{nama}' (id={pid}) [{stat}]", level="detail", toko=shop, modul="promo_toko")
     return pid
 
 
@@ -197,7 +191,5 @@ def grab_item_promo(shop, session, promotion_id, page_size=100):
         offset += n_item
         if (not items) or n_item == 0 or (total and offset >= total) or offset > 100000:
             break
-    print(colorama.Fore.WHITE
-          + f"[diskon] [{shop}] - {len(hasil)} variasi (dari {total} item) terdaftar di promo {promotion_id}"
-          + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} variasi (dari {total} item) terdaftar di promo {promotion_id}", level="detail", toko=shop, modul="promo_toko")
     return hasil

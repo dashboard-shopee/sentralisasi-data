@@ -20,7 +20,7 @@ CATATAN:
   - Hormatin config.DRY_RUN.
 """
 import time
-import colorama; colorama.init()
+from modules.log_siklus import log
 import config
 from modules.api_util import api_post
 
@@ -46,7 +46,7 @@ def open_sessions(session, keywords=None, window="nominasi"):
             {"campaign_scene": [], "view_flag": 1,
              "pagination": {"offset": 0, "limit": 50, "sort_type": 9}, "sc_page": 0}, kunci="data")
     except Exception as e:
-        print(colorama.Fore.RED + f"[campaign] gagal ambil daftar campaign: {type(e).__name__}" + colorama.Style.RESET_ALL)
+        log(f"gagal ambil daftar campaign: {type(e).__name__}", level="error", modul="campaign")
         return []
     campaigns = (res.get("data") or {}).get("list") or []
     hasil = []
@@ -71,7 +71,7 @@ def open_sessions(session, keywords=None, window="nominasi"):
                     "session_start": ss, "session_end": se, "nomination_end": ne,
                 })
     label = "buka nominasi" if window == "nominasi" else "sesi berjalan"
-    print(colorama.Fore.WHITE + f"[campaign] {len(hasil)} {label}" + colorama.Style.RESET_ALL)
+    log(f"{len(hasil)} {label}", level="detail", modul="campaign")
     return hasil
 
 
@@ -112,7 +112,7 @@ def nominate(session, session_id, produk_list, chunk=50):
     H = config.grab_headers(session); P = session["params"]
     if getattr(config, "DRY_RUN", False):
         n = sum(len(p["models"]) for p in produk_list)
-        print(colorama.Fore.YELLOW + f"[campaign] (DRY) nominasi {len(produk_list)} produk ({n} model) -> sesi {session_id}" + colorama.Style.RESET_ALL)
+        log(f"(DRY) nominasi {len(produk_list)} produk ({n} model) → sesi {session_id}", level="warning", modul="campaign")
         return {"staged": len(produk_list), "committed_model": 0, "failed_model": 0}
 
     staged = 0
@@ -127,7 +127,7 @@ def nominate(session, session_id, produk_list, chunk=50):
                  "entity_list_data": {"recruiting_entities": entities}}, kunci="data")
             staged += int((r.get("data") or {}).get("product_success_num") or 0)
         except Exception as e:
-            print(colorama.Fore.RED + f"[campaign] preview/add chunk gagal ({len(c)}): {type(e).__name__} - lanjut" + colorama.Style.RESET_ALL)
+            log(f"preview/add chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", modul="campaign")
     # COMMIT sekali
     committed = failed = 0
     try:
@@ -136,8 +136,8 @@ def nominate(session, session_id, produk_list, chunk=50):
         pr = (r.get("data") or {}).get("product_result") or {}
         committed = int(pr.get("success_model_num") or 0); failed = int(pr.get("failed_model_num") or 0)
     except Exception as e:
-        print(colorama.Fore.RED + f"[campaign] submit gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"[campaign] sesi {session_id}: stage {staged} produk -> commit {committed} model ({failed} gagal)" + colorama.Style.RESET_ALL)
+        log(f"submit gagal: {type(e).__name__}", level="error", modul="campaign")
+    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal)", level="live", modul="campaign")
     return {"staged": staged, "committed_model": committed, "failed_model": failed}
 
 
@@ -147,7 +147,7 @@ def takedown(session, session_id, nomination_ids, reason="Ingin mengubah produk"
         return 0
     H = config.grab_headers(session); P = session["params"]
     if getattr(config, "DRY_RUN", False):
-        print(colorama.Fore.YELLOW + f"[campaign] (DRY) takedown {len(nomination_ids)} dari sesi {session_id}" + colorama.Style.RESET_ALL)
+        log(f"(DRY) takedown {len(nomination_ids)} dari sesi {session_id}", level="warning", modul="campaign")
         return 0
     n = 0
     for c in _chunks([str(x) for x in nomination_ids], chunk):
@@ -155,9 +155,9 @@ def takedown(session, session_id, nomination_ids, reason="Ingin mengubah produk"
             api_post(config.URL_OPT_OUT_NOMINATION, H, P,
                 {"session_id": str(session_id), "nomination_ids": c, "reason": reason}, kunci="data")
             n += len(c)
-            print(colorama.Fore.MAGENTA + f"[campaign] takedown {len(c)} dari sesi {session_id}" + colorama.Style.RESET_ALL)
+            log(f"takedown {len(c)} dari sesi {session_id}", level="live", modul="campaign")
         except Exception as e:
-            print(colorama.Fore.RED + f"[campaign] takedown chunk gagal ({len(c)}): {type(e).__name__}" + colorama.Style.RESET_ALL)
+            log(f"takedown chunk gagal ({len(c)}): {type(e).__name__}", level="error", modul="campaign")
     return n
 
 
@@ -178,5 +178,5 @@ def produk_toko(nama_toko, hanya_berstok=True):
 # ── ORKESTRATOR: nominasiin SEMUA produk toko ke 1 sesi ──
 def nominate_semua(session, session_id, nama_toko):
     prod = produk_toko(nama_toko)
-    print(colorama.Fore.WHITE + f"[campaign] nominasi {len(prod)} produk {nama_toko} -> sesi {session_id}..." + colorama.Style.RESET_ALL)
+    log(f"nominasi {len(prod)} produk → sesi {session_id}…", level="detail", toko=nama_toko, modul="campaign")
     return nominate(session, session_id, prod)
