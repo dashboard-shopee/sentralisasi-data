@@ -12,6 +12,7 @@ Penjualan/hari = rata2 30 hari unit terjual (fact_penjualan Shopee).
 """
 import config
 from modules import sql_harga as SQL
+from modules.log_siklus import log, catat
 
 # Ambang KPI takedown — SATU sumber di config (jangan hardcode di sini). Alias biar
 # ringkas + kalau config di-tuning, cukup ubah di config.py.
@@ -190,7 +191,7 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
     try:
         proses_duplikat_promo(shop, session, baris)
     except Exception as e:
-        print(f"[promo toko] [{nama_toko}] lifecycle gagal: {type(e).__name__}: {e}")
+        log(f"lifecycle gagal: {type(e).__name__}: {e}", level="error", fase="F2", toko=nama_toko, modul="promo_toko")
 
     if not aksi_pt:
         return {"set": 0, "daftar": 0, "terkirim": 0, "promo_toko": 0}
@@ -198,7 +199,7 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
     # 2) Peta promo toko sekarang: {(item,model): {pid: harga}} + tentukan promo UTAMA.
     promos = grab_semua_promo(shop, session)
     if not promos:
-        print(f"[promo toko] [{nama_toko}] belum ada promo toko (mungkin baru dibuat/DRY) — set/daftar ditunda.")
+        log("belum ada promo toko (mungkin baru dibuat/DRY) — set/daftar ditunda.", level="warning", fase="F2", toko=nama_toko, modul="promo_toko")
         return {"set": 0, "daftar": 0, "terkirim": 0, "promo_toko": 0, "catatan": "promo toko belum ada"}
     pids = [p["promotion_id"] for p in promos]
     primary = next((p["promotion_id"] for p in promos
@@ -236,9 +237,12 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
                 terkirim += len(ch)
             except Exception as e:
                 gagal += len(ch)
-                print(f"[promo toko] [{nama_toko}] chunk {pid} gagal ({len(ch)}): {type(e).__name__}")
+                log(f"chunk {pid} gagal ({len(ch)}): {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="promo_toko")
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    print(f"[promo toko] [{nama_toko}] ({mode}) set={n_set} daftar={n_daftar} -> {terkirim} entri terkirim, {gagal} gagal")
+    catat(f"({mode}) set={n_set} daftar={n_daftar} → {terkirim} entri terkirim, {gagal} gagal",
+          status="gagal" if gagal else (("live" if terkirim else "ok") if not config.DRY_RUN else "ok"),
+          fase="F2", toko=nama_toko, modul="promo_toko",
+          detail={"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "dry": config.DRY_RUN})
     return {"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "promo_toko": len(pids)}
 
 
@@ -270,7 +274,7 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
         try:
             G.withdraw(session, bids)
         except Exception as e:
-            print(f"[harga dasar] [{nama_toko}] withdraw garansi gagal: {type(e).__name__}")
+            log(f"withdraw garansi gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="garansi")
 
     # 2a) TAKEDOWN PAKET DISKON — item yg ikut paket (konteks) keluar dari SEMUA deal aktif.
     paket_aktif = SQL.baca_paket_aktif(nama_toko)
@@ -280,7 +284,7 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
         try:
             PD.keluarkan_item(session, deal_ids, tgt_paket)
         except Exception as e:
-            print(f"[harga dasar] [{nama_toko}] takedown paket gagal: {type(e).__name__}")
+            log(f"takedown paket gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="paket")
 
     # 2b) TAKEDOWN VOUCHER PRODUK — item yg ada di item_scope voucher, keluar per voucher.
     vouch_item = SQL.baca_voucher_item(nama_toko)                 # {item_id: [voucher_id]}
@@ -292,7 +296,7 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
         try:
             V.keluarkan_item(session, vid, items)
         except Exception as e:
-            print(f"[harga dasar] [{nama_toko}] takedown voucher {vid} gagal: {type(e).__name__}")
+            log(f"takedown voucher {vid} gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="voucher")
 
     # 3) Bangun daftar (baris + in_promos) + EDIT HARGA DASAR (takedown promo toko/flash/campaign + ubah base).
     baris_map = {(b["item_id"], b["model_id"]): b for b in SQL.baca_baris_rubah(nama_toko)}
@@ -317,19 +321,24 @@ def eksekusi_harga_dasar(shop, nama_toko, session, diagnosa):
                 ok, _ = PD.masukkan_item(session, utama["bundle_deal_id"], tgt_paket, utama["start"], utama["end"])
                 readd_paket = ok
             except Exception as e:
-                print(f"[harga dasar] [{nama_toko}] re-add paket gagal: {type(e).__name__}")
+                log(f"re-add paket gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="paket")
         else:
-            print(f"[harga dasar] [{nama_toko}] ⚠️ {len(tgt_paket)} item perlu re-add paket TAPI toko belum punya deal aktif (provisioning ⏳)")
+            log(f"⚠️ {len(tgt_paket)} item perlu re-add paket TAPI toko belum punya deal aktif (provisioning ⏳)",
+                level="warning", fase="F2", toko=nama_toko, modul="paket")
     for vid, items in vouch_grup.items():
         try:
             if V.masukkan_item(session, vid, items):
                 readd_voucher += len(items)
         except Exception as e:
-            print(f"[harga dasar] [{nama_toko}] re-add voucher {vid} gagal: {type(e).__name__}")
+            log(f"re-add voucher {vid} gagal: {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="voucher")
 
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    print(f"[harga dasar] [{nama_toko}] ({mode}) {len(daftar)} variasi | garansi withdraw {len(bids)} | "
-          f"paket takedown {len(tgt_paket)}->re-add {readd_paket} | voucher {len(vouch_grup)} voucher->re-add {readd_voucher} item")
+    catat(f"({mode}) {len(daftar)} variasi | garansi withdraw {len(bids)} | "
+          f"paket takedown {len(tgt_paket)}→re-add {readd_paket} | voucher {len(vouch_grup)} voucher→re-add {readd_voucher} item",
+          status=("live" if (not config.DRY_RUN and len(daftar)) else "ok"),
+          fase="F2", toko=nama_toko, modul="harga",
+          detail={"variasi": len(daftar), "garansi_withdraw": len(bids), "paket_takedown": len(tgt_paket),
+                  "paket_readd": readd_paket, "voucher_readd": readd_voucher, "dry": config.DRY_RUN})
     return {"harga_dasar": len(daftar), "garansi_takedown": len(bids), "alasan": len(alasan),
             "paket_takedown": len(tgt_paket), "paket_readd": readd_paket,
             "voucher_takedown": sum(len(v) for v in vouch_grup.values()), "voucher_readd": readd_voucher}
@@ -354,7 +363,9 @@ def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
         return {"flash_takedown": 0, "flash_target": 0}
     n = FS.takedown_items(session, shop, kunci)
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    print(f"[flash takedown] [{nama_toko}] ({mode}) {len(kunci)} variasi target -> {n} ter-takedown")
+    catat(f"({mode}) {len(kunci)} variasi target → {n} ter-takedown",
+          status=("live" if (not config.DRY_RUN and n) else "ok"),
+          fase="F2", toko=nama_toko, modul="flash", detail={"target": len(kunci), "takedown": n, "dry": config.DRY_RUN})
     return {"flash_takedown": n, "flash_target": len(kunci)}
 
 
@@ -382,6 +393,8 @@ def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
         if nom_ids:
             total += C.takedown(session, sid, nom_ids)
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    print(f"[campaign takedown] [{nama_toko}] ({mode}) {len(kunci)} variasi target, "
-          f"{len(sesi)} sesi berjalan -> {total} ter-takedown")
+    catat(f"({mode}) {len(kunci)} variasi target, {len(sesi)} sesi berjalan → {total} ter-takedown",
+          status=("live" if (not config.DRY_RUN and total) else "ok"),
+          fase="F2", toko=nama_toko, modul="campaign",
+          detail={"target": len(kunci), "sesi": len(sesi), "takedown": total, "dry": config.DRY_RUN})
     return {"campaign_takedown": total, "campaign_target": len(kunci), "sesi": len(sesi)}
