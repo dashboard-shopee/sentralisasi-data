@@ -365,7 +365,7 @@ def _legacy_jalankan(fases):
             if 3 in fases:
                 if JEDA_VERIF > 0:
                     time.sleep(JEDA_VERIF)
-                rows, konteks = grab_produk(shop=username, nama_toko=nama, session=session)
+                rows, konteks, _ = grab_produk(shop=username, nama_toko=nama, session=session)
                 simpan_olah_data(rows); simpan_konteks(nama, konteks)
                 se, be, ta = verifikasi_toko(nama)
                 log(f"Verifikasi: {se} sesuai, {be} belum, {ta} tanpa-target", level="ok", toko=nama)

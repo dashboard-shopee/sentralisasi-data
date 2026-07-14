@@ -48,10 +48,19 @@ def _log(nama, teks, warna=colorama.Fore.WHITE):
 
 # ── TIER JAM: produk (harga + stok) + konteks promo ──
 def fakta_produk(username, nama_toko, session):
-    """grab_produk -> harga_olah_data + harga_promo_konteks. Return (n_variasi, n_konteks)."""
-    rows, konteks = grab_produk(shop=username, nama_toko=nama_toko, session=session)
+    """grab_produk -> harga_olah_data + harga_promo_konteks. Return (n_variasi, n_konteks).
+    Abis grab LENGKAP: produk yg jatuh STOK-0 (ga muncul di grab berstok) → set stok=0 di
+    harga_olah_data (akar voucher/paket poison — baris stok-0 basi bikin Shopee tolak voucher)."""
+    ref = SQL.db_now()   # penanda 'sebelum grab' (DB now) buat deteksi baris tak-kegrab
+    rows, konteks, lengkap = grab_produk(shop=username, nama_toko=nama_toko, session=session)
     n = SQL.simpan_olah_data(rows)
     nk = SQL.simpan_konteks(nama_toko, konteks)
+    if lengkap:
+        nz = SQL.nolkan_stok_habis(nama_toko, ref)
+        if nz:
+            _log(nama_toko, f"{nz} produk jatuh stok-habis → stok=0 (cegah voucher poison)", colorama.Fore.YELLOW)
+    else:
+        _log(nama_toko, "grab TAK lengkap (cap halaman) → skip nol-in stok (jaga2 salah nol)", colorama.Fore.YELLOW)
     return n, nk
 
 
