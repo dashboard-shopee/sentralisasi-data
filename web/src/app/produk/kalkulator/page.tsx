@@ -26,6 +26,7 @@ interface CostSettings {
 
 export default function KalkulatorPage() {
   const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
+  const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -141,6 +142,7 @@ export default function KalkulatorPage() {
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/produk/kalkulator?tab=settings");
+      if (res.status === 403) { setForbidden(true); return; }
       if (res.ok) {
         const data = await res.json();
         if (data.single && data.batch) {
@@ -276,6 +278,20 @@ export default function KalkulatorPage() {
   const detailSalaryFeeRp = selectedProductDetail ? (settings.salary_pct * selectedProductDetail.harga_jual_net) : 0;
   const detailCommFeeRp = selectedProductDetail ? (settings.commission_pct * selectedProductDetail.harga_jual_net) : 0;
   const detailMarginRp = selectedProductDetail ? (selectedProductDetail.harga_jual_net - detailAdminFeeRp - detailAdsFeeRp - detailSalaryFeeRp - detailCommFeeRp - detailBiayaTetap - selectedProductDetail.hpp) : 0;
+
+  if (forbidden) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8 flex items-center justify-center">
+        <div className="max-w-[420px] text-center bg-white border border-[#eef0f6] rounded-2xl p-8 shadow-sm">
+          <div className="text-4xl mb-3">🔒</div>
+          <h1 className="text-lg font-extrabold text-[#161a27] mb-2">Akses Ditolak</h1>
+          <p className="text-[13px] text-[#8a90a2]">
+            Akun Anda tidak memiliki izin melihat data sensitif (Margin/HPP). Hubungi Owner kalau Anda merasa harus punya akses ke halaman ini.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8">

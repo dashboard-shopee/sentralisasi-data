@@ -1,7 +1,23 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
+import { getCanViewMargin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
+
+// Kolom sensitif (Margin) yang di-mask jadi null di server kalau user tidak
+// punya izin can_view_margin. Harga (Kini/Terbaik/Program/Real) tetap tampil.
+const MASK_FIELDS: Record<string, string[]> = {
+  garansi: ["marginCurrent", "marginBest", "marginProgram"],
+  garansi_nom: ["marginReal", "marginBest", "marginProgram"],
+};
+function maskRows(rows: any[], fields: string[]) {
+  if (!fields.length) return rows;
+  return rows.map((r) => {
+    const copy = { ...r };
+    for (const f of fields) copy[f] = null;
+    return copy;
+  });
+}
 
 // Pusat Promosi — fakta per-program (diisi bot Syntra Monitoring Harga Fase 1).
 // Tab: promo_toko | paket | voucher | campaign | garansi | flash | komisi
@@ -11,6 +27,7 @@ export async function GET(req: Request) {
   const search = (p.get("q") || "").trim();
   const filterToko = (p.get("toko") || "").trim();      // NAMA toko (mis. 'Kimmioshop')
   const page = parseInt(p.get("page") || "1") || 1;
+  const canViewMargin = await getCanViewMargin();
   const size = Math.min(parseInt(p.get("size") || "50") || 50, 200);
   const offset = (page - 1) * size;
 
@@ -286,7 +303,11 @@ export async function GET(req: Request) {
     const totalRes = await q<{ count: string }>(`select count(*) ${base} ${W}`, params);
     const total = parseInt(totalRes[0]?.count || "0");
 
-    return NextResponse.json({ rows, total, tokos, tab });
+    const maskFields = MASK_FIELDS[tab] || [];
+    return NextResponse.json({
+      rows: !canViewMargin && maskFields.length ? maskRows(rows, maskFields) : rows,
+      total, tokos, tab, canViewMargin,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("GET /api/produk/pusat-promosi error:", msg);

@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
     // Ambil data Owner dari database untuk mendapatkan konfigurasi terupdate
     const ownerRes = await q<any>(
-      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days from dashboard_user where username = 'Owner' limit 1"
+      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days from dashboard_user where username = 'Owner' limit 1"
     );
 
     let ownerInfo = {
@@ -57,6 +57,7 @@ export async function POST(req: Request) {
         can_edit_harga: !!dbOwner.can_edit_harga,
         can_edit_komisi: !!dbOwner.can_edit_komisi,
         can_edit_kalkulator: !!dbOwner.can_edit_kalkulator,
+        can_view_margin: true,
         avatar_emoji: dbOwner.avatar_emoji || null,
         session_duration_days: dbOwner.session_duration_days || 30
       } as any;
@@ -76,6 +77,7 @@ export async function POST(req: Request) {
       can_edit_harga: (ownerInfo as any).can_edit_harga ?? true,
       can_edit_komisi: (ownerInfo as any).can_edit_komisi ?? true,
       can_edit_kalkulator: (ownerInfo as any).can_edit_kalkulator ?? true,
+      can_view_margin: true,
       avatar_emoji: (ownerInfo as any).avatar_emoji || null
     };
 

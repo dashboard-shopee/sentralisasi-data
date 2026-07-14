@@ -28,6 +28,13 @@ export async function middleware(req: NextRequest) {
 
     const role = user.role as string;
     const allowedMenus = (user.allowed_menus || []) as string[];
+    const canViewMargin = role === "owner" || user.can_view_margin !== false;
+
+    // Kalkulator = full-page HPP/margin -> tutup total kalau data sensitif dikunci,
+    // walau menu ini masih tercentang di allowed_menus (izin lama sebelum toggle ada).
+    if (pathname.startsWith("/produk/kalkulator") && !canViewMargin) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
 
     // Proteksi halaman manajemen akses admin (hanya Owner yang boleh)
     if (pathname.startsWith("/pengaturan-akses") || pathname.startsWith("/api/users")) {

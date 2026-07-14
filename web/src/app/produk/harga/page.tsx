@@ -123,6 +123,7 @@ export default function HargaPage() {
   const [total, setTotal] = useState(0);
   const [tokos, setTokos] = useState<TokoInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canViewMargin, setCanViewMargin] = useState(true);
 
   // Inline edit state for Custom Harga Diskon
   const [editingDiskonSku, setEditingDiskonSku] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export default function HargaPage() {
         setRows(d.rows || []);
         setTotal(d.total || 0);
         if (d.tokos) setTokos(d.tokos);
+        setCanViewMargin(d.canViewMargin !== false);
       }
     } catch (e) {
       console.error("Gagal mengambil data monitoring harga:", e);
@@ -302,6 +304,7 @@ export default function HargaPage() {
   };
 
   const handleMassJual = async (toko: string) => {
+    if (!canViewMargin) return alert("Akses ditolak: fitur ini butuh data Net Price yang sedang dikunci untuk akun Anda.");
     const skipHigher = confirm(`Lewati (jangan turunkan harga) jika Harga Real Saat Ini sudah lebih mahal dari Harga Rekomendasi?`);
     const updates: any[] = [];
     rows.forEach((r: any) => {
@@ -501,12 +504,14 @@ export default function HargaPage() {
                   {r.nama_produk || "-"}
                 </td>
                 <td className="px-2 py-2 text-[#6b7180] align-middle">{r.category || "-"}</td>
-                <td className="px-2 py-2 text-right text-[#4b5563] align-middle">{r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
-                <td className="px-2 py-2 text-right font-medium text-[#0369a1] bg-[#e0f2fe]/10 align-middle">{r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
+                <td className="px-2 py-2 text-right text-[#4b5563] align-middle">{!canViewMargin ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_awal !== null && r.net_price_awal !== undefined ? formatRp(r.net_price_awal) : "-"}</td>
+                <td className="px-2 py-2 text-right font-medium text-[#0369a1] bg-[#e0f2fe]/10 align-middle">{!canViewMargin ? <span className="text-[#c3c6d1]">🔒</span> : r.net_price_detail !== null && r.net_price_detail !== undefined ? formatRp(r.net_price_detail) : "-"}</td>
                 
                 {/* Margin Persen */}
                 <td className="px-2 py-2 text-right font-bold align-middle">
-                  {r.margin_persen !== null && r.margin_persen !== undefined ? (
+                  {!canViewMargin ? (
+                    <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
+                  ) : r.margin_persen !== null && r.margin_persen !== undefined ? (
                     <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
                       {(r.margin_persen * 100).toFixed(1)}%
                     </span>
@@ -760,7 +765,9 @@ export default function HargaPage() {
                   <td className="p-3.5 text-right font-bold text-[#ee4d2d] bg-[#fff1ed]/20">{formatRp(r.hargaAkhirTarget)}</td>
                   <td className="p-3.5 text-right font-bold text-[#16b8a6] bg-[#e7f7f4]/20">{formatRp(r.hargaTampil)}</td>
                   <td className="p-3.5 text-right font-bold" title="Margin dari Harga Real">
-                    {r.marginPersen !== null && r.marginPersen !== undefined ? (
+                    {!canViewMargin ? (
+                      <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
+                    ) : r.marginPersen !== null && r.marginPersen !== undefined ? (
                       <span className={r.marginPersen >= 0.12 ? "text-[#047857]" : r.marginPersen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
                         {(r.marginPersen * 100).toFixed(1)}%
                       </span>
@@ -850,7 +857,7 @@ export default function HargaPage() {
                 <td style={{ left: 50 }} className="p-3.5 font-bold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.sku}</td>
                 <td style={{ left: 220 }} className="p-3.5 sticky z-10 bg-white group-hover:bg-[#fcfdfe]"><span className="px-2 py-0.5 bg-[#f0f2f5] text-[#4b5563] text-[11px] font-medium rounded">{r.parentSku || "-"}</span></td>
                 <td style={{ left: 330 }} className="p-3.5 text-[#6b7180] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{r.category || "-"}</td>
-                <td style={{ left: 420 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{formatRp(r.netPrice)}</td>
+                <td style={{ left: 420 }} className="p-3.5 text-right font-semibold text-[#161a27] sticky z-10 bg-white group-hover:bg-[#fcfdfe]">{canViewMargin ? formatRp(r.netPrice) : <span className="text-[#c3c6d1]">🔒</span>}</td>
                 <td style={{ left: 520 }} className="p-3.5 text-right font-semibold text-[#ee4d2d] sticky z-10 bg-white group-hover:bg-[#fcfdfe] shadow-[inset_-2px_0_0_#eef0f6]">{formatRp(r.hargaDiskon)}</td>
                 
                 {tokos.map((tk) => {
@@ -877,7 +884,7 @@ export default function HargaPage() {
                               className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] hover:bg-[#e9d5ff] cursor-pointer transition-colors text-[10px] font-bold rounded whitespace-nowrap"
                               title={`Edit persentase komisi (Saat ini: ${tkData.komisiPersen}%)`}
                             >
-                              {formatRp(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100)))} ({tkData.komisiPersen}%)
+                              {canViewMargin ? formatRp(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "🔒"} ({tkData.komisiPersen}%)
                             </span>
                           )}
 
@@ -893,7 +900,7 @@ export default function HargaPage() {
                             </div>
                           ) : (
                             <span 
-                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100)))); }}
+                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : (canViewMargin ? String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "")); }}
                               className={`font-bold cursor-pointer whitespace-nowrap ${tkData.manualHargaJual > 0 ? 'text-[#0ea5e9] hover:underline' : 'text-[#c3c6d1] hover:text-[#0ea5e9]'}`}
                               title={tkData.manualHargaJual > 0 ? "Harga manual. Klik untuk edit" : "Belum diset manual. Klik untuk set"}
                             >

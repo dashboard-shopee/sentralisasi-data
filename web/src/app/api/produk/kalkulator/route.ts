@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
+import { getCanViewMargin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const tab = p.get("tab") || "batch";
+
+  if (!(await getCanViewMargin())) {
+    return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin melihat data sensitif (Margin/HPP)." }, { status: 403 });
+  }
 
   try {
     // 1. Ambil settings kalkulator dari database
@@ -208,6 +213,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    if (!(await getCanViewMargin())) {
+      return NextResponse.json({ ok: false, error: "Akses ditolak: Anda tidak memiliki izin melihat data sensitif (Margin/HPP)." }, { status: 403 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { action } = body;
 

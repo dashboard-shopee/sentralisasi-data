@@ -26,7 +26,7 @@ export async function GET() {
 
   try {
     const users = await q(
-      "select id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days from dashboard_user order by id asc"
+      "select id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days from dashboard_user order by id asc"
     );
     
     // Parse allowed_menus dari string jika disimpan sebagai string JSON di DB
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days } = body;
+    const { username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days } = body;
 
     if (!username || !password) {
       return NextResponse.json({ ok: false, error: "Username dan password wajib diisi" }, { status: 400 });
@@ -65,8 +65,8 @@ export async function POST(req: Request) {
 
     // Insert user
     await q(
-      `insert into dashboard_user (username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `insert into dashboard_user (username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         username.trim(),
         password.trim(),
@@ -76,6 +76,7 @@ export async function POST(req: Request) {
         !!can_edit_harga,
         !!can_edit_komisi,
         !!can_edit_kalkulator,
+        can_view_margin !== false,
         avatar_emoji ? avatar_emoji.trim() : null,
         Number(session_duration_days || 7)
       ]
@@ -97,7 +98,7 @@ export async function PUT(req: Request) {
 
   try {
     const body = await req.json();
-    const { id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days } = body;
+    const { id, username, password, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days } = body;
 
     if (!id || !username || !password) {
       return NextResponse.json({ ok: false, error: "ID, username, dan password wajib diisi" }, { status: 400 });
@@ -119,8 +120,8 @@ export async function PUT(req: Request) {
     // Update data
     await q(
       `update dashboard_user
-       set username = $1, password = $2, allowed_menus = $3, can_edit_ads = $4, can_edit_competitor = $5, can_edit_harga = $6, can_edit_komisi = $7, can_edit_kalkulator = $8, avatar_emoji = $9, session_duration_days = $10
-       where id = $11`,
+       set username = $1, password = $2, allowed_menus = $3, can_edit_ads = $4, can_edit_competitor = $5, can_edit_harga = $6, can_edit_komisi = $7, can_edit_kalkulator = $8, can_view_margin = $9, avatar_emoji = $10, session_duration_days = $11
+       where id = $12`,
       [
         username.trim(),
         password.trim(),
@@ -130,6 +131,7 @@ export async function PUT(req: Request) {
         currentUsername === "Owner" ? true : !!can_edit_harga,
         currentUsername === "Owner" ? true : !!can_edit_komisi,
         currentUsername === "Owner" ? true : !!can_edit_kalkulator,
+        currentUsername === "Owner" ? true : can_view_margin !== false,
         avatar_emoji ? avatar_emoji.trim() : null,
         Number(session_duration_days || 30),
         id

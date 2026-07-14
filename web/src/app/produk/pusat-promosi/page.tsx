@@ -105,6 +105,7 @@ export default function PusatPromosiPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [canViewMargin, setCanViewMargin] = useState(true);
   const size = 50;
 
   const load = useCallback(async () => {
@@ -124,6 +125,7 @@ export default function PusatPromosiPage() {
       setRows(d.rows || []);
       setTotal(d.total || 0);
       if (d.tokos) setTokos(d.tokos);
+      setCanViewMargin(d.canViewMargin !== false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setRows([]);
@@ -323,7 +325,9 @@ export default function PusatPromosiPage() {
                               : "❌ Harusnya dicabut"}
                           </span>
                         ) : c.f === "margin" ? (
-                          row[c.k] === null || row[c.k] === undefined || row[c.k] === "" ? (
+                          !canViewMargin ? (
+                            <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
+                          ) : row[c.k] === null || row[c.k] === undefined || row[c.k] === "" ? (
                             <span className="text-[#c3c6d1]">-</span>
                           ) : (
                             <span className={

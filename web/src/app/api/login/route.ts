@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   // 2. Cek Skenario Staf biasa (password dicocokkan ke database_user)
   try {
     const userRes = await q<any>(
-      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji, session_duration_days from dashboard_user where password = $1",
+      "select id, username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji, session_duration_days from dashboard_user where password = $1",
       [inputPassword]
     );
 
@@ -62,6 +62,7 @@ export async function POST(req: Request) {
         can_edit_harga: !!user.can_edit_harga,
         can_edit_komisi: !!user.can_edit_komisi,
         can_edit_kalkulator: !!user.can_edit_kalkulator,
+        can_view_margin: user.can_view_margin !== false,
         avatar_emoji: user.avatar_emoji || null
       };
 

@@ -2,8 +2,26 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { q } from "@/lib/db";
 import { verifySession } from "@/lib/auth";
+import { getCanViewMargin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
+
+// Kolom sensitif (Margin/HPP/Net Price) yang di-mask jadi null di server kalau
+// user tidak punya izin can_view_margin. Bukan harga jual (Harga Diskon/Pancing/Real
+// tetap tampil krn itu harga display Shopee, bukan angka cost/untung-rugi).
+const MASK_FIELDS: Record<string, string[]> = {
+  all: ["net_price_awal", "net_price_detail", "margin_persen"],
+  olah: ["marginPersen"],
+  komisi: ["netPrice"],
+};
+function maskRows(rows: any[], fields: string[]) {
+  if (!fields.length) return rows;
+  return rows.map((r) => {
+    const copy = { ...r };
+    for (const f of fields) copy[f] = null;
+    return copy;
+  });
+}
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -14,6 +32,7 @@ export async function GET(req: Request) {
   const offset = (page - 1) * size;
   const sortCol = p.get("sort") || "";
   const sortDir = p.get("dir") || "desc";
+  const canViewMargin = await getCanViewMargin();
 
   try {
     const activeTokos = await q<any>(`select username, nama from dim_toko order by shop_index`);
@@ -113,7 +132,12 @@ export async function GET(req: Request) {
       const rows = await q<any>(rowsSql, [...params, size, offset]);
       const total = await q<{ count: string }>(`select count(*) from harga_all_produk h where ${W}`, params);
 
-      return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
+      return NextResponse.json({
+        rows: canViewMargin ? rows : maskRows(rows, MASK_FIELDS.all),
+        total: parseInt(total[0]?.count || "0"),
+        tokos: activeTokos,
+        canViewMargin,
+      });
 
     } else if (tab === "olah") {
       let W = "1=1";
@@ -183,7 +207,12 @@ export async function GET(req: Request) {
       `, params);
       const countParams = [...params]; countParams.splice(countParams.length - 2, 2);
       const total = await q<{ count: string }>(`select count(*) from harga_olah_data ho where ${W}`, countParams);
-      return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
+      return NextResponse.json({
+        rows: canViewMargin ? rows : maskRows(rows, MASK_FIELDS.olah),
+        total: parseInt(total[0]?.count || "0"),
+        tokos: activeTokos,
+        canViewMargin,
+      });
 
     } else if (tab === "komisi") {
       let W = "1=1";
@@ -248,7 +277,7 @@ export async function GET(req: Request) {
       const prods = await q<any>(prodsSql, params);
       const countParams = search ? [`%${search}%`] : [];
       const total = await q<{ count: string }>(`select count(*) from harga_komisi_produk p where ${W}`, countParams);
-      if (prods.length === 0) return NextResponse.json({ rows: [], total: 0, tokos: activeTokos });
+      if (prods.length === 0) return NextResponse.json({ rows: [], total: 0, tokos: activeTokos, canViewMargin });
       const skus = prods.map((pr: any) => pr.sku);
       
       const tokoDetails = await q<any>(`select sku, username_toko "toko", komisi_persen "komisiPersen", harga_jual "hargaJual" from harga_komisi_toko where sku = any($1)`, [skus]);
@@ -285,7 +314,12 @@ export async function GET(req: Request) {
         });
         return { ...pr, tokos };
       });
-      return NextResponse.json({ rows, total: parseInt(total[0]?.count || "0"), tokos: activeTokos });
+      return NextResponse.json({
+        rows: canViewMargin ? rows : maskRows(rows, MASK_FIELDS.komisi),
+        total: parseInt(total[0]?.count || "0"),
+        tokos: activeTokos,
+        canViewMargin,
+      });
     } else if (tab === "riwayat") {
       let W = "1=1";
       const params: unknown[] = [];

@@ -20,7 +20,7 @@ export async function GET() {
 
   try {
     const userRes = await q<any>(
-      "select username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, avatar_emoji from dashboard_user where id = $1",
+      "select username, allowed_menus, can_edit_ads, can_edit_competitor, can_edit_harga, can_edit_komisi, can_edit_kalkulator, can_view_margin, avatar_emoji from dashboard_user where id = $1",
       [payload.id]
     );
     if (userRes && userRes.length > 0) {
@@ -36,6 +36,7 @@ export async function GET() {
           canEditHarga: !!dbUser.can_edit_harga,
           canEditKomisi: !!dbUser.can_edit_komisi,
           canEditKalkulator: !!dbUser.can_edit_kalkulator,
+          canViewMargin: payload.role === "owner" ? true : dbUser.can_view_margin !== false,
           avatarEmoji: dbUser.avatar_emoji || null
         }
       });
@@ -56,6 +57,7 @@ export async function GET() {
       canEditHarga: !!payload.can_edit_harga,
       canEditKomisi: !!payload.can_edit_komisi,
       canEditKalkulator: !!payload.can_edit_kalkulator,
+      canViewMargin: payload.role === "owner" ? true : payload.can_view_margin !== false,
       avatarEmoji: payload.avatar_emoji || null
     }
   });

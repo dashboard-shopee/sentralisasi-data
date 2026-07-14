@@ -12,6 +12,7 @@ interface UserAccount {
   can_edit_harga: boolean;
   can_edit_komisi: boolean;
   can_edit_kalkulator: boolean;
+  can_view_margin: boolean;
   avatar_emoji: string | null;
   session_duration_days: number;
 }
@@ -47,6 +48,7 @@ export default function PengaturanAkses() {
   const [canEditHargaInput, setCanEditHargaInput] = useState(false);
   const [canEditKomisiInput, setCanEditKomisiInput] = useState(false);
   const [canEditKalkulatorInput, setCanEditKalkulatorInput] = useState(false);
+  const [canViewMarginInput, setCanViewMarginInput] = useState(true);
   const [avatarEmojiInput, setAvatarEmojiInput] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +87,7 @@ export default function PengaturanAkses() {
     setCanEditHargaInput(false);
     setCanEditKomisiInput(false);
     setCanEditKalkulatorInput(false);
+    setCanViewMarginInput(true);
     setAvatarEmojiInput("");
     setShowModal(true);
   }
@@ -101,6 +104,7 @@ export default function PengaturanAkses() {
     setCanEditHargaInput(u.can_edit_harga || false);
     setCanEditKomisiInput(u.can_edit_komisi || false);
     setCanEditKalkulatorInput(u.can_edit_kalkulator || false);
+    setCanViewMarginInput(u.can_view_margin !== false);
     setAvatarEmojiInput(u.avatar_emoji || "");
     setShowModal(true);
   }
@@ -121,6 +125,7 @@ export default function PengaturanAkses() {
       can_edit_harga: canEditHargaInput,
       can_edit_komisi: canEditKomisiInput,
       can_edit_kalkulator: canEditKalkulatorInput,
+      can_view_margin: canViewMarginInput,
       avatar_emoji: avatarEmojiInput,
       session_duration_days: Number(durationInput)
     };
@@ -177,6 +182,14 @@ export default function PengaturanAkses() {
         return [...prev, path];
       }
     });
+  }
+
+  // Matiin akses Data Sensitif -> otomatis cabut menu Kalkulator (isinya HPP/margin doang)
+  function handleToggleViewMargin(checked: boolean) {
+    setCanViewMarginInput(checked);
+    if (!checked) {
+      setSelectedMenus(prev => prev.filter(p => p !== "/produk/kalkulator"));
+    }
   }
 
   return (
@@ -285,6 +298,9 @@ export default function PengaturanAkses() {
                             </span>
                             <span className={u.can_edit_kalkulator ? "text-emerald-700" : "text-gray-400"}>
                               {u.can_edit_kalkulator ? "✅ Edit Kalkulator" : "❌ Edit Kalkulator"}
+                            </span>
+                            <span className={u.can_view_margin !== false ? "text-emerald-700" : "text-rose-500"}>
+                              {u.can_view_margin !== false ? "✅ Lihat Margin/HPP" : "🔒 Margin/HPP disembunyikan"}
                             </span>
                           </>
                         )}
@@ -421,18 +437,45 @@ export default function PengaturanAkses() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd]">
                     {MENU_LIST.map((menu) => {
                       const checked = selectedMenus.includes(menu.path);
+                      const lockedByMargin = menu.path === "/produk/kalkulator" && !canViewMarginInput;
                       return (
-                        <label key={menu.path} className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] transition-all py-0.5">
+                        <label key={menu.path} className={`flex items-center gap-2 text-[12px] transition-all py-0.5 ${lockedByMargin ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:text-[#ee4d2d]"}`}>
                           <input
                             type="checkbox"
-                            checked={checked}
+                            checked={checked && !lockedByMargin}
+                            disabled={lockedByMargin}
                             onChange={() => handleMenuToggle(menu.path)}
                             className="rounded accent-[#ee4d2d]"
                           />
-                          <span>{menu.label}</span>
+                          <span>{menu.label}{lockedByMargin && <span className="ml-1 text-[10px] text-[#c4c8d4]">(butuh akses Data Sensitif)</span>}</span>
                         </label>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+
+              {/* Data Sensitif (view-level, terpisah dari izin edit) */}
+              <div>
+                <label className="text-[12.5px] font-bold text-[#6b7180] block mb-1.5">Data Sensitif</label>
+                {editingUser?.username === "Owner" ? (
+                  <div className="text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 font-medium">
+                    Owner selalu bisa lihat semua data sensitif.
+                  </div>
+                ) : (
+                  <div className="border border-[#eef0f6] rounded-xl p-3 bg-[#fafbfd]">
+                    <label className="flex items-center gap-2 text-[12px] cursor-pointer hover:text-[#ee4d2d] py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={canViewMarginInput}
+                        onChange={(e) => handleToggleViewMargin(e.target.checked)}
+                        className="rounded accent-[#ee4d2d]"
+                      />
+                      <span>🔒 Bisa Lihat Margin / HPP / Net Price (data untung-rugi)</span>
+                    </label>
+                    <p className="text-[10.5px] text-[#9aa0b2] mt-1 ml-6">
+                      Kalau dimatikan: kolom Margin/HPP/Net Price di Harga & Pusat Promosi jadi 🔒, dan menu Kalkulator ikut tertutup.
+                    </p>
                   </div>
                 )}
               </div>
