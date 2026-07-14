@@ -37,7 +37,7 @@ from modules.session import grab_session, close_session, buka_login
 from modules import jam_siklus
 from modules import fakta
 from modules.sql_harga import isi_harga_diskon_kosong
-from modules.log_siklus import catat_fase
+from modules.log_siklus import catat_fase, log
 
 
 def _t():
@@ -49,8 +49,7 @@ def _aman(nama, label, fn):
     try:
         return fn()
     except Exception as e:
-        print(colorama.Fore.RED + f"[{_t()}] [{nama}] fakta {label} GAGAL: {type(e).__name__}: {e}"
-              + colorama.Style.RESET_ALL)
+        log(f"fakta {label} GAGAL: {type(e).__name__}: {e}", level="error", toko=nama)
         return None
 
 
@@ -83,11 +82,10 @@ def siklus_terpadu(paksa_semua=False, fase=None):
             "campaign": P.campaign, "flash": P.flash}
     mprov = ((tuple(m for m in ("paket", "voucher", "garansi") if aktif(m)) if due_harian else ())
              + (tuple(m for m in ("campaign", "flash") if aktif(m)) if due_mingguan else ())) if 2 in fase else ()
-    print(colorama.Fore.LIGHTCYAN_EX
-          + f"\n[{_t()}] === SIKLUS — fase {fase} — {len(toko)} toko — tier: {tier} — modul: {config.MODUL_AKTIF} ==="
-          + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== SIKLUS — fase {fase} — {len(toko)} toko — tier: {tier} — modul: {config.MODUL_AKTIF} ===", level="header")
     if 2 in fase and not config.DRY_RUN:
-        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE — Fase 2 (harga poin 1-4{' + prov ' + str(list(mprov)) if mprov else ''}) BENERAN ubah Shopee." + colorama.Style.RESET_ALL)
+        log(f"⚠️  MODE LIVE — Fase 2 (harga poin 1-4{' + prov ' + str(list(mprov)) if mprov else ''}) BENERAN ubah Shopee.", level="live")
 
     T = {"grab": 0, "konteks": 0, "gagal": 0}
     for username, info in toko.items():
@@ -99,9 +97,7 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                 # TIER JAM (selalu): produk (base, WAJIB — fase 2 juga makai) + Promo Toko
                 n, nk = fakta.fakta_produk(username, nama, session)
                 T["grab"] += n; T["konteks"] += nk
-                print(colorama.Fore.LIGHTGREEN_EX
-                      + f"[{_t()}] [{nama}] Produk: {n} variasi, {nk} promo->konteks"
-                      + colorama.Style.RESET_ALL)
+                log(f"Produk: {n} variasi, {nk} promo→konteks", level="detail", fase="F1", toko=nama)
                 if aktif("promo_toko"):
                     _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
                 # TIER HARIAN (Fakta)
@@ -127,7 +123,7 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                     fakta.fakta_produk(username, nama, session)    # fase 1 di-skip → grab fresh sendiri
                 d = F2.diagnosa_toko(nama)
                 kasus, aksi = F2.ringkas(d)
-                print(colorama.Fore.WHITE + f"[{_t()}] [{nama}] diagnosa: {kasus} | aksi {aksi}" + colorama.Style.RESET_ALL)
+                log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
                 _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
                 _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
                 _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
@@ -135,10 +131,10 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                 for m in mprov:                                    # poin 5 per cadence (harian/mingguan)
                     _aman(nama, f"prov {m}", lambda f=PROV[m]: f(username, nama, session))
 
-            print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] --- SELESAI ---" + colorama.Style.RESET_ALL)
+            log("--- SELESAI ---", level="detail", toko=nama)
         except Exception as e:
             T["gagal"] += 1
-            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL: {e}", level="error", toko=nama)
     close_session()
 
     if 1 in fase:
@@ -150,9 +146,9 @@ def siklus_terpadu(paksa_semua=False, fase=None):
         try:
             nd = isi_harga_diskon_kosong()
             if nd:
-                print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] {nd} SKU: Harga Diskon diisi dari mode" + colorama.Style.RESET_ALL)
+                log(f"{nd} SKU: Harga Diskon diisi dari mode", level="ok", fase="F1")
         except Exception as e:
-            print(colorama.Fore.RED + f"[{_t()}] isi Harga Diskon GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"isi Harga Diskon GAGAL: {e}", level="error", fase="F1")
 
         # ── HOUSEKEEPING (prune fakta yatim) — di tier MINGGUAN ──
         if due_mingguan:
@@ -172,7 +168,7 @@ def siklus_terpadu(paksa_semua=False, fase=None):
         if mprov:
             catat_fase("provisioning", keterangan=f"poin 5 {list(mprov)} ({mode_txt})")
 
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === SIKLUS SELESAI — fase {fase} · tier: {tier} ===" + colorama.Style.RESET_ALL)
+    log(f"=== SIKLUS SELESAI — fase {fase} · tier: {tier} ===", level="header")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -184,7 +180,8 @@ def jalankan_fase2():
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
     mode_txt = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === FASE 2 (HARGA) — {len(toko)} toko — {mode_txt} ===" + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== FASE 2 (HARGA) — {len(toko)} toko — {mode_txt} ===", level="header")
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -192,16 +189,16 @@ def jalankan_fase2():
             fakta.fakta_produk(username, nama, session)          # grab FRESH (wajib sebelum diagnosa)
             d = F2.diagnosa_toko(nama)
             kasus, aksi = F2.ringkas(d)
-            print(colorama.Fore.WHITE + f"[{_t()}] [{nama}] diagnosa: {kasus} | aksi {aksi}" + colorama.Style.RESET_ALL)
+            log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
             _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
             _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
             _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
             _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
         except Exception as e:
-            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL: {e}", level="error", toko=nama)
         close_session()
     catat_fase("rubah_harga", keterangan=f"Fase 2 harga (promo toko + harga dasar + takedown flash/campaign, {mode_txt})")
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === FASE 2 SELESAI ({mode_txt}) ===" + colorama.Style.RESET_ALL)
+    log(f"=== FASE 2 SELESAI ({mode_txt}) ===", level="header")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -212,9 +209,10 @@ def jalankan_provisioning(modul=("paket",)):
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
     mode_txt = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === PROVISIONING {list(modul)} — {len(toko)} toko [{', '.join(toko)}] — {mode_txt} ===" + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== PROVISIONING {list(modul)} — {len(toko)} toko [{', '.join(toko)}] — {mode_txt} ===", level="header")
     if not config.DRY_RUN:
-        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE LIVE (MODE_LIVE=True). Aksi provisioning bakal beneran ke Shopee." + colorama.Style.RESET_ALL)
+        log("⚠️  MODE LIVE (MODE_LIVE=True). Aksi provisioning bakal beneran ke Shopee.", level="live")
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -230,10 +228,10 @@ def jalankan_provisioning(modul=("paket",)):
             if "garansi" in modul:
                 _aman(nama, "prov garansi", lambda: P.garansi(username, nama, session))
         except Exception as e:
-            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL provisioning: {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL provisioning: {e}", level="error", toko=nama)
         close_session()
     catat_fase("provisioning", keterangan=f"poin 5 {list(modul)} ({mode_txt})")
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === PROVISIONING SELESAI ({mode_txt}) ===" + colorama.Style.RESET_ALL)
+    log(f"=== PROVISIONING SELESAI ({mode_txt}) ===", level="header")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -256,7 +254,7 @@ def jalankan_tes(jam=None, hari=None):
                 skr = d
                 break
         else:
-            print(colorama.Fore.RED + f"[tes] hari '{hari}' ga dikenal — pakai: {' / '.join(config.HARI_ID.values())}" + colorama.Style.RESET_ALL)
+            log(f"hari '{hari}' ga dikenal — pakai: {' / '.join(config.HARI_ID.values())}", level="error")
             return
     jam_siklus.set_simulasi(skr)
 
@@ -268,16 +266,16 @@ def jalankan_tes(jam=None, hari=None):
     fase = config.FASE_AKTIF
     toko = config.daftar_toko_aktif()
     mode = "DRY-RUN (simulasi)" if config.DRY_RUN else "🔴 LIVE (ubah Shopee BENERAN)"
-    print(colorama.Fore.LIGHTMAGENTA_EX + f"\n[{_t()}] === TES 1 SIKLUS — waktu simulasi {hari_sim} {skr:%H:%M} → tier: {tier} ===\n"
-          + f"  FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}\n"
-          + f"  {len(toko)} toko [{', '.join(toko)}] · MODE: {mode}" + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== TES 1 SIKLUS — waktu simulasi {hari_sim} {skr:%H:%M} → tier: {tier} ===", level="header")
+    log(f"FASE_AKTIF={fase} · modul={config.MODUL_AKTIF} · {len(toko)} toko [{', '.join(toko)}] · MODE: {mode}", level="detail")
     if not config.DRY_RUN:
-        print(colorama.Fore.LIGHTRED_EX + f"[{_t()}] ⚠️  MODE_LIVE=True — aksi Fase 2 bakal BENERAN ke Shopee!" + colorama.Style.RESET_ALL)
+        log("⚠️  MODE_LIVE=True — aksi Fase 2 bakal BENERAN ke Shopee!", level="live")
     if 2 in fase and not due_h:
-        print(colorama.Fore.YELLOW + f"[{_t()}] info: provisioning paket/voucher/garansi cuma jalan di tier HARIAN — set JAM_TES={config.JAM_FAKTA_HARIAN} (atau FULL) biar ikut." + colorama.Style.RESET_ALL)
+        log(f"info: provisioning paket/voucher/garansi cuma jalan di tier HARIAN — set JAM_TES={config.JAM_FAKTA_HARIAN} (atau FULL) biar ikut.", level="warning")
 
     siklus_terpadu(paksa_semua=paksa)          # 1 loop toko, 1 sesi per toko utk semua fase
-    print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] === TES 1 SIKLUS SELESAI (tier: {tier}) ===" + colorama.Style.RESET_ALL)
+    log(f"=== TES 1 SIKLUS SELESAI (tier: {tier}) ===", level="header")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -287,7 +285,8 @@ def jalankan_tes(jam=None, hari=None):
 def jalankan_kategori():
     jam_siklus.kunci()
     toko = config.daftar_toko_aktif()
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === ISI KATEGORI — {len(toko)} toko (incremental) ===" + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== ISI KATEGORI — {len(toko)} toko (incremental) ===", level="header")
     total = 0
     for username, info in toko.items():
         nama = info["name"]
@@ -295,12 +294,12 @@ def jalankan_kategori():
             session = grab_session(shop=username, i=info["i"])
             n = fakta.fakta_kategori(nama, session, limit=100000)   # semua yg belum, 1 pass
             total += n
-            print(colorama.Fore.CYAN + f"[{_t()}] [{nama}] kategori terisi +{n}" + colorama.Style.RESET_ALL)
+            log(f"kategori terisi +{n}", level="ok" if n else "detail", fase="F1", toko=nama, modul="kategori")
         except Exception as e:
-            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL: {e}", level="error", toko=nama)
         close_session()
     catat_fase("kategori", keterangan=f"{total} produk diproses, {len(toko)} toko")
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === KATEGORI SELESAI ({total} produk) ===" + colorama.Style.RESET_ALL)
+    log(f"=== KATEGORI SELESAI ({total} produk) ===", level="header")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -309,15 +308,13 @@ def jalankan_kategori():
 def scheduler():
     menit = int(config.MENIT_RUNNING)
     fase = config.FASE_AKTIF
-    print(colorama.Fore.LIGHTMAGENTA_EX
-          + f"[{_t()}] Scheduler aktif — FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}. Nembak tiap jam di menit {menit:02d}. "
-          + f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00"
-          + colorama.Style.RESET_ALL)
+    log(f"Scheduler aktif — FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}. Nembak tiap jam di menit {menit:02d}. "
+        f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00", level="header")
     if 2 in fase:
         m = "🔴 LIVE (ubah Shopee)" if not config.DRY_RUN else "DRY (simulasi)"
-        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 2 aktif — mode {m} (ikut MODE_LIVE)." + colorama.Style.RESET_ALL)
+        log(f"NOTE: FASE 2 aktif — mode {m} (ikut MODE_LIVE).", level="warning")
     if 3 in fase:
-        print(colorama.Fore.YELLOW + f"[{_t()}] NOTE: FASE 3 (laporan) belum dibikin — di-skip." + colorama.Style.RESET_ALL)
+        log("NOTE: FASE 3 (laporan) belum dibikin — di-skip.", level="warning")
     jam_terakhir = None
     while True:
         time.sleep(3)                                  # DETAK (tanpa log biar terminal bersih)
@@ -328,8 +325,7 @@ def scheduler():
                 siklus_terpadu()                       # 1 loop toko, 1 sesi per toko — fase ikut FASE_AKTIF
                 # (fase 3 laporan — belum dibikin)
             except Exception as e:
-                print(colorama.Fore.RED + f"[{_t()}] SIKLUS GAGAL (di-skip, lanjut jam berikutnya): {e}"
-                      + colorama.Style.RESET_ALL)
+                log(f"SIKLUS GAGAL (di-skip, lanjut jam berikutnya): {e}", level="error")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -345,7 +341,8 @@ def _legacy_jalankan(fases):
     toko = config.daftar_toko_aktif()
     mode = "DRY-RUN (simulasi)" if config.DRY_RUN else "LIVE (ubah Shopee beneran)"
     label = " + ".join({2: "Rubah", 3: "Verifikasi", 4: "Perpanjang"}[f] for f in fases)
-    print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === LEGACY [{label}] — {len(toko)} toko — MODE: {mode} ===" + colorama.Style.RESET_ALL)
+    print()
+    log(f"=== LEGACY [{label}] — {len(toko)} toko — MODE: {mode} ===", level="header")
     for username, info in toko.items():
         nama = info["name"]
         try:
@@ -361,22 +358,22 @@ def _legacy_jalankan(fases):
                         proses.append(b)
                 alasan.update(update_harga(username, session, proses, nama_toko=nama))
                 tulis_alasan(nama, alasan)
-                print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] [{nama}] Rubah: {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip" + colorama.Style.RESET_ALL)
+                log(f"Rubah: {len(proses)} diproses, {len(baris)-len(proses)} komisi-skip", level="ok", toko=nama)
             if 3 in fases:
                 if JEDA_VERIF > 0:
                     time.sleep(JEDA_VERIF)
                 rows, konteks = grab_produk(shop=username, nama_toko=nama, session=session)
                 simpan_olah_data(rows); simpan_konteks(nama, konteks)
                 se, be, ta = verifikasi_toko(nama)
-                print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] [{nama}] Verifikasi: {se} sesuai, {be} belum, {ta} tanpa-target" + colorama.Style.RESET_ALL)
+                log(f"Verifikasi: {se} sesuai, {be} belum, {ta} tanpa-target", level="ok", toko=nama)
             if 4 in fases:
                 from modules.duplikat_promo import proses_duplikat_promo
                 proses_duplikat_promo(username, session, baca_baris_rubah(nama))
-                print(colorama.Fore.LIGHTGREEN_EX + f"[{_t()}] [{nama}] Perpanjang promo: dicek" + colorama.Style.RESET_ALL)
+                log("Perpanjang promo: dicek", level="ok", toko=nama)
         except Exception as e:
-            print(colorama.Fore.RED + f"[{_t()}] [{nama}] GAGAL: {e}" + colorama.Style.RESET_ALL)
+            log(f"GAGAL: {e}", level="error", toko=nama)
     close_session()
-    print(colorama.Fore.LIGHTCYAN_EX + f"[{_t()}] === LEGACY [{label}] SELESAI ===" + colorama.Style.RESET_ALL)
+    log(f"=== LEGACY [{label}] SELESAI ===", level="header")
 
 
 def cek_komisi_shopee():
