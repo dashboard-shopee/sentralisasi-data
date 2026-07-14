@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { tsWIB } from "@/lib/format";
+import CustomSelect from "@/components/CustomSelect";
 
 interface AllProdukRow {
   sku: string;
@@ -1141,42 +1142,31 @@ export default function HargaPage() {
         <div className="flex flex-wrap gap-3 mb-5 items-center bg-[#fdfdfd] p-3 rounded-xl border border-[#eef0f6]">
           <div className="flex items-center gap-1.5">
             <span className="text-[12px] font-bold text-[#6b7180]">Toko:</span>
-            <div className="relative">
-              <select
-                value={selectedToko}
-                onChange={(e) => { setSelectedToko(e.target.value); setPage(1); }}
-                className="appearance-none bg-white border border-[#eef0f6] pl-3 pr-8 py-1 rounded-xl text-[12px] font-semibold text-[#4b5563] outline-none focus:border-[#ee4d2d] focus:ring-2 focus:ring-[#ee4d2d]/10 transition-all hover:border-[#ee4d2d]/30 cursor-pointer"
-              >
-                <option value="">Semua Toko</option>
-                {tokos.map((tk) => (
-                  <option key={tk.username} value={tk.nama}>{tk.nama}</option>
-                ))}
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[9px] text-[#8a90a2]">
-                ▼
-              </span>
-            </div>
+            <CustomSelect
+              value={selectedToko}
+              onChange={(val) => { setSelectedToko(val); setPage(1); }}
+              options={tokos.map((tk) => ({ value: tk.nama, label: tk.nama }))}
+              placeholder="Semua Toko"
+              size="sm"
+            />
           </div>
           
           <div className="flex items-center gap-1.5">
             <span className="text-[12px] font-bold text-[#6b7180]">Sumber Harga:</span>
-            <div className="relative">
-              <select
-                value={selectedSumber}
-                onChange={(e) => { setSelectedSumber(e.target.value); setPage(1); }}
-                className="appearance-none bg-white border border-[#eef0f6] pl-3 pr-8 py-1 rounded-xl text-[12px] font-semibold text-[#4b5563] outline-none focus:border-[#ee4d2d] focus:ring-2 focus:ring-[#ee4d2d]/10 transition-all hover:border-[#ee4d2d]/30 cursor-pointer"
-              >
-                <option value="">Semua Sumber</option>
-                <option value="Harga Awal">Harga Awal</option>
-                <option value="Promo Toko">Promo Toko</option>
-                <option value="Paket Diskon">Paket Diskon</option>
-                <option value="Garansi Harga Terbaik">Garansi Harga Terbaik</option>
-                <option value="Komisi Aktif">Komisi Aktif</option>
-              </select>
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[9px] text-[#8a90a2]">
-                ▼
-              </span>
-            </div>
+            <CustomSelect
+              value={selectedSumber}
+              onChange={(val) => { setSelectedSumber(val); setPage(1); }}
+              options={[
+                { value: "", label: "Semua Sumber" },
+                { value: "Harga Awal", label: "Harga Awal" },
+                { value: "Promo Toko", label: "Promo Toko" },
+                { value: "Paket Diskon", label: "Paket Diskon" },
+                { value: "Garansi Harga Terbaik", label: "Garansi Harga Terbaik" },
+                { value: "Komisi Aktif", label: "Komisi Aktif" }
+              ]}
+              placeholder="Semua Sumber"
+              size="sm"
+            />
           </div>
         </div>
       )}

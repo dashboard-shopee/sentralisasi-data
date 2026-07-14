@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Fragment } from "react";
+import CustomSelect from "@/components/CustomSelect";
 
 type Row = Record<string, unknown>;
 type Toko = { username: string; nama: string };
@@ -266,21 +267,12 @@ export default function PusatPromosiPage() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="relative">
-          <select
-            value={toko}
-            onChange={(e) => { setToko(e.target.value); setPage(1); }}
-            className="appearance-none bg-white border border-[#eef0f6] pl-3.5 pr-9 py-1.5 rounded-xl text-[13px] font-semibold text-[#3a3f4d] outline-none focus:border-[#ee4d2d] focus:ring-2 focus:ring-[#ee4d2d]/10 transition-all hover:border-[#ee4d2d]/30 cursor-pointer"
-          >
-            <option value="">Semua Toko</option>
-            {tokos.map((t) => (
-              <option key={t.username} value={t.nama}>{t.nama}</option>
-            ))}
-          </select>
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] text-[#8a90a2]">
-            ▼
-          </span>
-        </div>
+        <CustomSelect
+          value={toko}
+          onChange={(val) => { setToko(val); setPage(1); }}
+          options={tokos.map((t) => ({ value: t.nama, label: t.nama }))}
+          placeholder="Semua Toko"
+        />
         <input
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
