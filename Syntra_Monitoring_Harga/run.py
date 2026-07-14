@@ -36,7 +36,7 @@ import config
 from modules.session import grab_session, close_session, buka_login
 from modules import jam_siklus
 from modules import fakta
-from modules.sql_harga import isi_harga_diskon_kosong
+from modules.sql_harga import isi_harga_diskon_kosong, tulis_alasan
 from modules.log_siklus import catat_fase, log, prune_log
 
 
@@ -124,6 +124,7 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                 d = F2.diagnosa_toko(nama)
                 kasus, aksi = F2.ringkas(d)
                 log(f"diagnosa: {kasus} | aksi {aksi}", level="detail", fase="F2", toko=nama)
+                _aman(nama, "tulis alasan", lambda: tulis_alasan(nama, F2.alasan_dari_diagnosa(d)))
                 _aman(nama, "eksekusi promo toko", lambda: F2.eksekusi_promo_toko(username, nama, session, d))
                 _aman(nama, "eksekusi harga dasar", lambda: F2.eksekusi_harga_dasar(username, nama, session, d))
                 _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))

@@ -152,6 +152,47 @@ def diagnosa_toko(nama_toko):
     return out
 
 
+def bangun_alasan(d):
+    """Rakit teks ALASAN 1 variasi dari diagnosa (kenapa harga segini + aksi apa) — buat
+    kolom harga_olah_data.alasan (dibaca dashboard/laporan). Gabung 1 baris, ringkas.
+    Contoh: 'Target 7.900 (komisi aktif). Promo toko 9.000→7.900. Garansi dicabut (margin 5%<7%).'"""
+    F = config.fmt_angka
+    kasus = d.get("kasus")
+    if kasus == "tanpa_target":
+        return "Tanpa target (Harga Diskon kosong) — harga tidak diubah"
+    src = "komisi aktif" if d.get("komisi_patokan") else "Harga Diskon"
+    bits = [f"Target {F(d.get('target'))} ({src})"]
+    if kasus == "sesuai":
+        bits.append("sudah sesuai — tak ada perubahan")
+        return ". ".join(bits) + "."
+    if kasus == "harga_dasar":
+        bits.append(f"target ≥ harga awal {F(d.get('harga_awal'))} → ubah HARGA DASAR "
+                    "(keluar semua promo, pasang balik paket+voucher)")
+        return ". ".join(bits) + "."
+    # koreksi_turun → jabarin aksi per-promo
+    for a in d.get("aksi", []):
+        nama = a.get("promo") or a.get("aksi") or ""
+        act = a.get("aksi")
+        if act == "set_harga":
+            bits.append(f"Promo toko {F(a.get('dari'))}→{F(a.get('ke'))}")
+        elif act == "daftar_promo_utama":
+            bits.append(f"Daftar promo toko @ {F(a.get('ke'))}")
+        elif act == "takedown":
+            bits.append(f"{nama} dicabut ({a.get('sebab','')})")
+        elif act == "flag_tak_dikenal":
+            bits.append(f"{nama} perlu dicabut manual ({a.get('sebab','')})")
+        elif act == "hold":
+            bits.append(f"{nama} dibiarkan ({a.get('sebab','')})")
+    if len(bits) == 1:
+        bits.append("perlu koreksi turun (belum ada aksi promo cocok)")
+    return ". ".join(bits) + "."
+
+
+def alasan_dari_diagnosa(diagnosa):
+    """{(item_id, model_id): teks alasan} dari list diagnosa — buat SQL.tulis_alasan."""
+    return {(d["item_id"], d["model_id"]): bangun_alasan(d) for d in diagnosa}
+
+
 def ringkas(diagnosa):
     """Ringkasan jumlah per kasus + per jenis aksi + berapa variasi ke-anchor komisi (log/verifikasi)."""
     from collections import Counter
