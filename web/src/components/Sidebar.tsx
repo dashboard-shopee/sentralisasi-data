@@ -236,19 +236,6 @@ export default function Sidebar({
       </nav>
 
       <div className="mt-auto flex flex-col gap-4 shrink-0">
-        {/* Real-time Info Card */}
-        {!minimized && (
-          <div className="px-3 transition-opacity duration-300">
-            <div
-              className="rounded-2xl p-4 text-white text-[12px] leading-relaxed"
-              style={{ background: "linear-gradient(135deg,#ee4d2d,#ff7043)" }}
-            >
-              <div className="font-bold mb-1">Data real-time</div>
-              Sumber tunggal Supabase · update harian.
-            </div>
-          </div>
-        )}
-
         {/* User Profile Card (Setting & Logout) */}
         <div className={`relative ${minimized ? 'px-1' : 'px-3'}`} ref={dropdownRef}>
           <button
