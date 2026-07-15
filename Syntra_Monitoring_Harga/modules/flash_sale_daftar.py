@@ -84,26 +84,47 @@ def stop_sesi(session, flash_sale_id, time_slot_id):
     log(f"sesi {flash_sale_id} distop", level="live", modul="flash")
 
 
+def _as_cat(v):
+    """Kategori jadi int comparable (buat sort). global_cat / cat_path[0] bisa int ATAU
+    dict {catid/id/global_cat_id:...} → ekstrak id-nya. Gagal → 0."""
+    if isinstance(v, dict):
+        for k in ("catid", "cat_id", "id", "global_cat_id", "category_id"):
+            if v.get(k) is not None:
+                v = v[k]; break
+        else:
+            return 0
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 # ── DATA PRODUK (image+kategori dari selector, model+harga+stok+sales dari SQL) ──
 def _peta_selector(session):
-    """{item_id: {img, kategori, harga}} produk eligible flash (paginate)."""
-    peta = {}; offset = 0
-    while True:
+    """{item_id: {img, kategori, harga}} produk eligible flash. Endpoint CURSOR-based:
+    pakai next_offset/cursor dari respons, dan STOP kalau 1 halaman ga nambah item baru
+    (dulu naikin offset manual → Shopee balikin halaman sama → loop ~1000x = 16 menit)."""
+    peta = {}; cursor = ""; offset = 0; guard = 0
+    while guard < 200:                                    # hard cap: 200 halaman (20rb produk) cukup
+        guard += 1
         data = _req("GET", session, URL_SELECTOR, extra_params={
-            "cursor": "", "limit": 100, "offset": offset, "is_ads": 0,
+            "cursor": cursor, "limit": 100, "offset": offset, "is_ads": 0,
             "need_brand": 0, "need_item_model": 0, "scene": "shop_flash_sale"}) or {}
         items = data.get("item_list") or []
+        sebelum = len(peta)
         for it in items:
             imgs = it.get("images") or ""
             cat_path = it.get("category_path") or []
             kategori = it.get("global_cat") or (cat_path[0] if cat_path else 0) or 0
             peta[int(it["itemid"])] = {
                 "img": imgs.split(",")[0] if imgs else "",
-                "kategori": kategori,
+                "kategori": _as_cat(kategori),
                 "harga": int(it.get("price") or 0),
             }
-        if len(items) < 100 or offset > 100000:
+        # STOP: halaman ga penuh, ATAU ga ada item BARU (endpoint ngulang halaman sama).
+        if len(items) < 100 or len(peta) == sebelum:
             break
+        cursor = str(data.get("cursor") or data.get("next_cursor") or "")
         offset += 100
     return peta
 
