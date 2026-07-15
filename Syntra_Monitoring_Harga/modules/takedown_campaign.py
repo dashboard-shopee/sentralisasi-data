@@ -2,18 +2,20 @@
 
 Campaign bulanan (tanggal kembar / gajian / 6.6 dst) MENGUNCI harga item -> harga
 dasar tidak bisa diubah selama item masih dinominasikan. Ini melepasnya via
-campaign_util (browser-context / run_js, wajib lolos anti-bot Shopee).
+campaign_util (browser-context / run_js, wajib lolos anti-bot Shopee — endpoint
+`get_nominated`/`opt_out` DITOLAK kalau lewat requests polos, kebukti ulang 15 Jul).
 
 Alur:
   1. buka_page_toko(shop, i)                  -> browser aktif pada sub-toko itu.
-  2. get_open_sessions -> sesi campaign aktif -> get_nominated_products (peta item).
-  3. cocokkan (item,model) target -> nomination_id -> takedown_products (opt-out).
+  2. get_open_sessions(window="sesi") -> sesi campaign yg LAGI BERJALAN (nominasi bisa
+     udah tutup tapi produk masih jalan & harganya masih terkunci -> perlu di-opt-out).
+  3. get_nominated_products (peta item) -> cocokkan (item,model) target -> nomination_id
+     -> takedown_products (opt-out).
   4. tutup_page().
 
-⚠️ BELUM DIUJI LIVE (dibuat saat akun sementara). Keterbatasan warisan
-   campaign_util.get_open_sessions: fokus pada sesi dalam WINDOW NOMINASI; sesi yg
-   sudah berjalan penuh mungkin tak terjangkau. Perlu verifikasi saat akun asli.
-   DRY_RUN -> tidak benar-benar opt-out (hanya deteksi + log).
+Scope CUMA campaign yg namanya cocok config.CAMPAIGN_KEYWORDS (tanggal kembar/gajian/
+6.6..12.12 dst — grilling 15 Jul: campaign kecil/ga relevan Shopee di-skip total, ga
+perlu di-automasi).
 """
 from modules.log_siklus import log
 import config
@@ -30,7 +32,7 @@ def takedown_dari_campaign(session, shop, i, kunci_set):
     total = 0
     try:
         buka_page_toko(shop, i)                       # browser-context ON (anti-bot)
-        sesi = C.get_open_sessions(session, shop)
+        sesi = C.get_open_sessions(session, shop, window="sesi")   # sesi BERJALAN (buat takedown)
         for s in sesi:
             sid = s.get("session_id")
             if not sid:

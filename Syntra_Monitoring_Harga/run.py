@@ -74,7 +74,7 @@ def _grab_fakta(username, nama, session, due_harian, due_mingguan, aktif, fase_t
             _aman(nama, "garansi", lambda: fakta.fakta_garansi(nama, session))
             _aman(nama, "garansi_nom", lambda: fakta.fakta_garansi_nom(nama, session))
         if aktif("campaign"):
-            _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session))
+            _aman(nama, "campaign", lambda: fakta.fakta_campaign(nama, session, username))
         if aktif("flash"):
             _aman(nama, "flash", lambda: fakta.fakta_flash(nama, session))
         if aktif("voucher"):

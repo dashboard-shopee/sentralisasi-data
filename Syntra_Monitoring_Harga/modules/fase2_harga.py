@@ -13,7 +13,6 @@ Penjualan/hari = rata2 30 hari unit terjual (fact_penjualan Shopee).
 import config
 from modules import sql_harga as SQL
 from modules.log_siklus import log, catat
-from modules.api_util import AntiBotError
 
 # Ambang KPI takedown — SATU sumber di config (jangan hardcode di sini). Alias biar
 # ringkas + kalau config di-tuning, cukup ubah di config.py.
@@ -466,34 +465,22 @@ def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
 
 def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
     """SOLUSI poin 3d. Keluarkan variasi 'koreksi_turun' yg campaign-nya < target*98.5% (atau
-    stok<30 / stok<penjualan-hari) dari campaign Shopee. GANTI `takedown_campaign` lama
-    (browser-context) -> `campaign.takedown` (requests + nomination_id, spec RENCANA_FASE2).
-    session_id+nomination_id di-resolve on-demand: sesi BERJALAN (window='sesi', bukan nominasi —
-    produk bisa masih jalan walau nominasi tutup) -> get_nominated per sesi -> cocokin (item,model).
-    DRY-RUN aware."""
-    from modules import campaign as C
+    stok<30 / stok<penjualan-hari) dari campaign Shopee.
+    ✅ (15 Jul, grilling): balik ke `takedown_campaign.takedown_dari_campaign` (browser-context
+    via campaign_util, scoped config.CAMPAIGN_KEYWORDS/tanggal-kembar) — versi `campaign.py`
+    (requests polos, semua campaign) DITOLAK Shopee (anti-bot, endpoint get_nominated/opt_out
+    wajib signature browser). DRY-RUN aware (guard di takedown_products)."""
+    from modules.takedown_campaign import takedown_dari_campaign
 
-    # get_nominated pakai key STRING (item_id/model_id string) -> samakan bentuk kunci.
-    kunci = {(str(i), str(m)) for (i, m) in _kunci_takedown(diagnosa, "Campaign")}
+    kunci = _kunci_takedown(diagnosa, "Campaign")
     if not kunci:
-        return {"campaign_takedown": 0, "campaign_target": 0, "sesi": 0}
+        return {"campaign_takedown": 0, "campaign_target": 0}
 
-    sesi = C.open_sessions(session, window="sesi")   # sesi berjalan (buat takedown)
-    total = 0
-    try:
-        for s in sesi:
-            sid = s["session_id"]
-            nominated = C.get_nominated(session, sid)    # {(iid,mid): {nomination_id,...}}
-            nom_ids = [v["nomination_id"] for k, v in nominated.items()
-                       if k in kunci and v.get("nomination_id")]
-            if nom_ids:
-                total += C.takedown(session, sid, nom_ids)
-    except AntiBotError:
-        log("campaign takedown kena ANTI-BOT Shopee (butuh SDK) → skip",
-            level="warning", fase="F2", toko=nama_toko, modul="campaign")
+    idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
+    total = takedown_dari_campaign(session, shop, idx, kunci)
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
-    catat(f"({mode}) {len(kunci)} variasi target, {len(sesi)} sesi berjalan → {total} ter-takedown",
+    catat(f"({mode}) {len(kunci)} variasi target → {total} ter-takedown",
           status=("live" if (not config.DRY_RUN and total) else "ok"),
           fase="F2", toko=nama_toko, modul="campaign",
-          detail={"target": len(kunci), "sesi": len(sesi), "takedown": total, "dry": config.DRY_RUN})
-    return {"campaign_takedown": total, "campaign_target": len(kunci), "sesi": len(sesi)}
+          detail={"target": len(kunci), "takedown": total, "dry": config.DRY_RUN})
+    return {"campaign_takedown": total, "campaign_target": len(kunci)}

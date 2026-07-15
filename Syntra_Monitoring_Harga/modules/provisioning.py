@@ -12,7 +12,6 @@ import config
 from modules import paket_diskon as PD
 from modules import voucher as V
 from modules.log_siklus import log, catat
-from modules.api_util import AntiBotError
 
 
 def paket(shop, nama_toko, session):
@@ -249,13 +248,14 @@ def campaign(shop, nama_toko, session):
     """Campaign mingguan — nominasi produk (yg LOLOS kriteria stok) ke sesi campaign yg lagi buka
     window nominasi. Kriteria: stok > KPI_CAMPAIGN_PASANG_STOK_MIN (50) DAN stok > KPI_CAMPAIGN_
     PASANG_STOK_X_PJH (10) × penjualan/hari. Skip produk yg SEMUA modelnya udah ternominasi.
-    ⚠️ harga campaign maks target×0.985 = requirement Shopee saat nominasi/aktivasi (verif live)."""
-    from modules import campaign as C
+    ⚠️ harga campaign maks target×0.985 = requirement Shopee saat nominasi/aktivasi (verif live).
+    ✅ (15 Jul, grilling) browser-context (campaign_util) — versi requests-polos (campaign.py)
+    DITOLAK Shopee (anti-bot di get_nominated). Scope CUMA campaign cocok CAMPAIGN_KEYWORDS
+    (udah built-in di campaign_util.get_open_sessions)."""
+    from modules import campaign as C          # produk_toko (query DB, ga nyentuh Shopee)
+    from modules import campaign_util as CU
+    from modules.session import buka_page_toko, tutup_page
     from modules import sql_harga as SQL
-    sesi = C.open_sessions(session, keywords=config.CAMPAIGN_KEYWORDS)   # cuma sesi buka nominasi
-    if not sesi:
-        log("0 sesi buka nominasi — skip", level="warning", fase="F2", toko=nama_toko, modul="campaign")
-        return {"campaign": 0, "sesi": 0, "lolos": 0}
 
     prod_all = C.produk_toko(nama_toko)                 # semua produk berstok [{item_id, models}]
     stok = SQL.baca_stok_per_item(nama_toko)            # {item_id: stok}
@@ -264,22 +264,27 @@ def campaign(shop, nama_toko, session):
     xf = config.KPI_CAMPAIGN_PASANG_STOK_X_PJH
     lolos = [p for p in prod_all
              if stok.get(p["item_id"], 0) > smin and stok.get(p["item_id"], 0) > xf * pjh.get(p["item_id"], 0.0)]
-    log(f"{len(prod_all)} produk → {len(lolos)} lolos (stok>{smin} & >{xf}×pjh) | {len(sesi)} sesi",
-        level="detail", fase="F2", toko=nama_toko, modul="campaign")
 
+    idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
     total = 0
+    sesi = []
     try:
+        buka_page_toko(shop, idx)
+        sesi = CU.get_open_sessions(session, shop)   # window="nominasi" (default), scope keywords built-in
+        if not sesi:
+            log("0 sesi buka nominasi (tanggal kembar) — skip", level="warning", fase="F2", toko=nama_toko, modul="campaign")
+            return {"campaign": 0, "sesi": 0, "lolos": len(lolos)}
+        log(f"{len(prod_all)} produk → {len(lolos)} lolos (stok>{smin} & >{xf}×pjh) | {len(sesi)} sesi",
+            level="detail", fase="F2", toko=nama_toko, modul="campaign")
         for s in sesi:
             sid = s["session_id"]
-            already = C.get_nominated(session, sid)         # {(iid_str,mid_str): {...}}
+            already = CU.get_nominated_products(session, shop, sid)   # {(iid_str,mid_str): {...}}
             baru = [p for p in lolos
                     if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
-            r = C.nominate(session, sid, baru)
+            r = CU.nominate(session, shop, sid, baru)
             total += r.get("staged", 0)
-    except AntiBotError:
-        log("campaign nominasi kena ANTI-BOT Shopee (butuh SDK) → skip pasang campaign",
-            level="warning", fase="F2", toko=nama_toko, modul="campaign")
-        return {"campaign": total, "sesi": len(sesi), "lolos": len(lolos)}
+    finally:
+        tutup_page()
     catat(f"total staged {total} produk ke {len(sesi)} sesi",
           status="live" if total else "ok", fase="F2", toko=nama_toko, modul="campaign",
           detail={"staged": total, "sesi": len(sesi), "lolos": len(lolos)})

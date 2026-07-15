@@ -21,7 +21,6 @@ import config
 from modules.grab_produk import grab_produk
 from modules import sql_harga as SQL
 from modules.log_siklus import log
-from modules.api_util import AntiBotError
 
 
 def _iso(epoch):
@@ -123,45 +122,48 @@ def fakta_garansi_nom(nama_toko, session):
 
 
 # ── TIER HARIAN: Campaign (grab harian; pasang mingguan) — sesi buka-nominasi + produk ternominasi ──
-def fakta_campaign(nama_toko, session):
-    """campaign.open_sessions + get_nominated -> fakta_campaign_sesi + _item.
+def fakta_campaign(nama_toko, session, shop):
+    """campaign_util.get_open_sessions + get_nominated_products -> fakta_campaign_sesi + _item.
+    ✅ (15 Jul, grilling) browser-context (campaign_util) LEWAT buka_page_toko/tutup_page,
+    scope CUMA campaign yg namanya cocok config.CAMPAIGN_KEYWORDS (tanggal kembar/gajian dst)
+    — versi requests-polos (campaign.py, semua campaign) DITOLAK Shopee (anti-bot).
     Return (n_sesi, n_item)."""
-    from modules import campaign
-    sesi_list = campaign.open_sessions(session)
+    from modules import campaign_util as C
+    from modules.session import buka_page_toko, tutup_page
+
+    idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
     baris_sesi, baris_item = [], []
-    for s in sesi_list:
-        sid = str(s.get("session_id"))
-        baris_sesi.append({
-            "campaign_id": str(s.get("campaign_id", "")),
-            "session_id": sid,
-            "campaign_name": s.get("campaign_name") or None,
-            "session_name": s.get("session_name") or None,
-            "session_start": _iso(s.get("session_start")),
-            "session_end": _iso(s.get("session_end")),
-            "nomination_end": _iso(s.get("nomination_end")),
-        })
-        try:
-            nominasi = campaign.get_nominated(session, sid)   # {(item_str,model_str): {...}}
-        except AntiBotError:
-            _log(nama_toko, "campaign nominasi kena ANTI-BOT Shopee (butuh SDK) → skip grab nominasi semua sesi", colorama.Fore.YELLOW)
-            break   # semua sesi bakal sama → stop, jangan badai
-        except Exception as e:
-            _log(nama_toko, f"get_nominated sesi {sid} gagal: {type(e).__name__}", colorama.Fore.RED)
-            nominasi = {}
-        for (iid, mid), v in nominasi.items():
-            try:
-                item, model = int(iid), int(mid)
-            except (TypeError, ValueError):
-                continue
-            baris_item.append({
-                "session_id": sid, "item_id": item, "model_id": model,
-                "nomination_id": str(v.get("nomination_id") or "") or None,
-                "nominate_status": v.get("nominate_status"),
-                "campaign_price": v.get("campaign_price", 0) or 0,
+    try:
+        buka_page_toko(shop, idx)
+        sesi_list = C.get_open_sessions(session, shop)   # window="nominasi" (default)
+        for s in sesi_list:
+            sid = str(s.get("session_id"))
+            baris_sesi.append({
+                "campaign_id": str(s.get("campaign_id", "")),
+                "session_id": sid,
+                "campaign_name": s.get("campaign_name") or None,
+                "session_name": s.get("session_name") or None,
+                "session_start": _iso(s.get("session_start_time")),
+                "session_end": _iso(s.get("session_end_time")),
+                "nomination_end": _iso(s.get("nomination_end_time")),
             })
+            nominasi = C.get_nominated_products(session, shop, sid)   # {(item_str,model_str): {...}}
+            for (iid, mid), v in nominasi.items():
+                try:
+                    item, model = int(iid), int(mid)
+                except (TypeError, ValueError):
+                    continue
+                baris_item.append({
+                    "session_id": sid, "item_id": item, "model_id": model,
+                    "nomination_id": str(v.get("nomination_id") or "") or None,
+                    "nominate_status": v.get("nominate_status"),
+                    "campaign_price": v.get("campaign_price", 0) or 0,
+                })
+    finally:
+        tutup_page()
     ns = SQL.simpan_fakta_campaign_sesi(nama_toko, baris_sesi)
     ni = SQL.simpan_fakta_campaign_item(nama_toko, baris_item)
-    _log(nama_toko, f"Campaign: {ns} sesi buka-nominasi, {ni} produk ternominasi", colorama.Fore.LIGHTGREEN_EX)
+    _log(nama_toko, f"Campaign: {ns} sesi buka-nominasi (tanggal kembar), {ni} produk ternominasi", colorama.Fore.LIGHTGREEN_EX)
     return ns, ni
 
 

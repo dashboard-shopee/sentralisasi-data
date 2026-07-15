@@ -77,10 +77,13 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
                 raise RuntimeError(f"Gagal memanggil {url} via browser: {cuplikan}")
 
 
-def get_open_sessions(session, shop):
+def get_open_sessions(session, shop, window="nominasi"):
     """
-    Mengambil semua sesi kampanye (gajian sale, tanggal kembar, dll)
-    yang saat ini sedang dalam masa nominasi aktif.
+    Mengambil sesi kampanye (gajian sale, tanggal kembar, dll — cuma yg namanya cocok
+    config.CAMPAIGN_KEYWORDS) via browser-context (anti-bot aman).
+    window="nominasi" (default) -> sesi yg WINDOW NOMINASI-nya buka (buat DAFTAR produk).
+    window="sesi"                -> sesi yg lagi BERJALAN (buat TAKEDOWN; nominasi bisa udah
+                                    tutup tapi produk masih jalan & perlu di-opt-out).
     """
     from modules.session import get_page
     page = get_page()
@@ -149,9 +152,12 @@ def get_open_sessions(session, shop):
             s_id = s.get("session_id")
             nom_start = int(s.get("nomination_start_time", 0))
             nom_end = int(s.get("nomination_end_time", 0))
+            sess_start = int(s.get("session_start_time", 0))
+            sess_end = int(s.get("session_end_time", 0))
 
-            # Sesi aktif untuk nominasi jika waktu sekarang di antara start dan end nomination
-            if nom_start <= current_time <= nom_end:
+            aktif = (nom_start <= current_time <= nom_end) if window == "nominasi" \
+                else (sess_start <= current_time <= sess_end)
+            if aktif:
                 open_sessions.append({
                     "campaign_id": str(campaign_id),
                     "campaign_name": name,
@@ -159,8 +165,8 @@ def get_open_sessions(session, shop):
                     "session_name": s_name,
                     "nomination_start_time": nom_start,
                     "nomination_end_time": nom_end,
-                    "session_start_time": int(s.get("session_start_time", 0)),
-                    "session_end_time": int(s.get("session_end_time", 0))
+                    "session_start_time": sess_start,
+                    "session_end_time": sess_end,
                 })
 
     if open_sessions:
@@ -225,6 +231,44 @@ def get_nominated_products(session, shop, session_id):
         page_num += 1
 
     return nominated_map
+
+
+def nominate(session, shop, session_id, produk_list, chunk=50):
+    """Nominasi produk ke 1 sesi campaign via browser-context (STAGE preview/add per-chunk
+    lalu SUBMIT 1x commit — sama alurnya kaya campaign.nominate, cuma lewat api_post_browser
+    biar lolos anti-bot). produk_list = [{"item_id": id, "models": [model_id,...]}].
+    Return {"staged","committed_model","failed_model"}."""
+    if not produk_list:
+        return {"staged": 0, "committed_model": 0, "failed_model": 0}
+    if getattr(config, "DRY_RUN", False):
+        n = sum(len(p["models"]) for p in produk_list)
+        log(f"(DRY) nominasi {len(produk_list)} produk ({n} model) → sesi {session_id}", level="warning", toko=shop, modul="campaign")
+        return {"staged": len(produk_list), "committed_model": 0, "failed_model": 0}
+
+    staged = 0
+    for i in range(0, len(produk_list), chunk):
+        c = produk_list[i:i + chunk]
+        entities = [{"entity_type": 2,
+                     "product": {"item_id": str(p["item_id"]),
+                                 "models": [{"item_id": str(p["item_id"]), "model_id": str(m)} for m in p["models"]]}}
+                    for p in c]
+        try:
+            r = api_post_browser(config.URL_PREVIEW_ADD, session["params"],
+                {"session_id": str(session_id), "preview_no": "",
+                 "entity_list_data": {"recruiting_entities": entities}}, kunci="data")
+            staged += int((r.get("data") or {}).get("product_success_num") or 0)
+        except Exception as e:
+            log(f"preview/add chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", toko=shop, modul="campaign")
+    committed = failed = 0
+    try:
+        r = api_post_browser(config.URL_SUBMIT_NOMINATION, session["params"],
+            {"session_id": str(session_id), "entity_type": 2, "confirm_risky": False}, kunci="data")
+        pr = (r.get("data") or {}).get("product_result") or {}
+        committed = int(pr.get("success_model_num") or 0); failed = int(pr.get("failed_model_num") or 0)
+    except Exception as e:
+        log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
+    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal)", level="live", toko=shop, modul="campaign")
+    return {"staged": staged, "committed_model": committed, "failed_model": failed}
 
 
 def takedown_products(session, shop, session_id, nomination_ids):
