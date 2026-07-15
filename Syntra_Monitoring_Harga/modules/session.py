@@ -166,6 +166,18 @@ def grab_session(shop, i, percobaan=3):
     return sess
 
 
+def segarkan_abis_browser_context(session, toko=""):
+    """Panggil abis buka_page_toko/tutup_page (browser-context, mis. campaign) — kebukti
+    (15 Jul) bikin token SPC_CDS punya `session` requests jadi basi (modul lain abis itu
+    403 "token not found"). Re-harvest via session["refresh"]() biar sesi requests balik
+    valid. Gagal refresh DITELEN (log doang) — caller lanjut, biar 1 modul gagal ga
+    nge-blok siklus (harvest ulang otomatis lagi pas toko berikutnya / cycle berikutnya)."""
+    try:
+        session["refresh"]()
+    except Exception as e:
+        log(f"gagal refresh sesi abis browser-context: {type(e).__name__}", level="error", toko=toko, modul="session")
+
+
 def close_session():
     # siklus normal sudah nutup browser sendiri di _harvest; ini buat nutup browser login manual.
     global page

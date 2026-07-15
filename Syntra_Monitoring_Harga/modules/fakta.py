@@ -129,7 +129,7 @@ def fakta_campaign(nama_toko, session, shop):
     — versi requests-polos (campaign.py, semua campaign) DITOLAK Shopee (anti-bot).
     Return (n_sesi, n_item)."""
     from modules import campaign_util as C
-    from modules.session import buka_page_toko, tutup_page
+    from modules.session import buka_page_toko, tutup_page, segarkan_abis_browser_context
 
     idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
     baris_sesi, baris_item = [], []
@@ -161,6 +161,7 @@ def fakta_campaign(nama_toko, session, shop):
                 })
     finally:
         tutup_page()
+        segarkan_abis_browser_context(session, nama_toko)
     ns = SQL.simpan_fakta_campaign_sesi(nama_toko, baris_sesi)
     ni = SQL.simpan_fakta_campaign_item(nama_toko, baris_item)
     _log(nama_toko, f"Campaign: {ns} sesi buka-nominasi (tanggal kembar), {ni} produk ternominasi", colorama.Fore.LIGHTGREEN_EX)

@@ -254,7 +254,7 @@ def campaign(shop, nama_toko, session):
     (udah built-in di campaign_util.get_open_sessions)."""
     from modules import campaign as C          # produk_toko (query DB, ga nyentuh Shopee)
     from modules import campaign_util as CU
-    from modules.session import buka_page_toko, tutup_page
+    from modules.session import buka_page_toko, tutup_page, segarkan_abis_browser_context
     from modules import sql_harga as SQL
 
     prod_all = C.produk_toko(nama_toko)                 # semua produk berstok [{item_id, models}]
@@ -285,6 +285,7 @@ def campaign(shop, nama_toko, session):
             total += r.get("staged", 0)
     finally:
         tutup_page()
+        segarkan_abis_browser_context(session, nama_toko)
     catat(f"total staged {total} produk ke {len(sesi)} sesi",
           status="live" if total else "ok", fase="F2", toko=nama_toko, modul="campaign",
           detail={"staged": total, "sesi": len(sesi), "lolos": len(lolos)})

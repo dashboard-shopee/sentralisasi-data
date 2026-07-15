@@ -26,7 +26,7 @@ def takedown_dari_campaign(session, shop, i, kunci_set):
     aktif yang memuatnya. Return jumlah nominasi ter-takedown (0 kalau tak ada)."""
     if not kunci_set:
         return 0
-    from modules.session import buka_page_toko, tutup_page
+    from modules.session import buka_page_toko, tutup_page, segarkan_abis_browser_context
     from modules import campaign_util as C
 
     total = 0
@@ -62,4 +62,5 @@ def takedown_dari_campaign(session, shop, i, kunci_set):
             tutup_page()
         except Exception:
             pass
+        segarkan_abis_browser_context(session, shop)
     return total
