@@ -295,7 +295,13 @@ export default function PusatPromosiPage() {
         {TABS.filter((t) => allowedTabs.includes(t.key)).map((t) => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setPage(1); setExpanded(null); }}
+            onClick={() => {
+              setTab(t.key);
+              setPage(1);
+              setExpanded(null);
+              setRows([]);
+              setLoading(true);
+            }}
             className={
               "px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all " +
               (tab === t.key
@@ -314,7 +320,12 @@ export default function PusatPromosiPage() {
           {GARANSI_SUB.map((s) => (
             <button
               key={s.key}
-              onClick={() => { setGarSub(s.key); setPage(1); }}
+              onClick={() => {
+                setGarSub(s.key);
+                setPage(1);
+                setRows([]);
+                setLoading(true);
+              }}
               className={
                 "px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all border " +
                 (garSub === s.key
@@ -332,7 +343,12 @@ export default function PusatPromosiPage() {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <CustomSelect
           value={toko}
-          onChange={(val) => { setToko(val); setPage(1); }}
+          onChange={(val) => {
+            setToko(val);
+            setPage(1);
+            setRows([]);
+            setLoading(true);
+          }}
           options={tokos.map((t) => ({ value: t.nama, label: t.nama }))}
           placeholder="Semua Toko"
         />
