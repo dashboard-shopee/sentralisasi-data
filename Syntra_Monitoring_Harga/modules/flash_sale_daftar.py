@@ -131,7 +131,11 @@ def _peta_selector(session):
 
 def siapkan_produk(session, nama_toko):
     """Return list produk SIAP flash, URUT kategori lalu penjualan tertinggi:
-    [{item_id, models:[model_id], harga_diskon, stok, img, kategori, sales}]."""
+    [{item_id, models:[{model_id, stok, harga_diskon}], img, kategori, sales}].
+    PER-MODEL (bukan item): 1 item bisa punya variasi beda Target/stok (mis. Rp29.800 vs
+    Rp35.800) — dulu di-agregasi max() lalu DISEBAR RATA ke semua model (bug ketauan dari
+    dashboard: 2 model 29.800 ke-flash-in di harga 35.790, model 1 lagi yg emang 35.800).
+    Sekarang tiap model bawa harga_diskon & stok SENDIRI."""
     from sqlalchemy import text
     from modules.db import get_engine
     from modules import sql_harga as SQL
@@ -141,24 +145,26 @@ def siapkan_produk(session, nama_toko):
     # ke tabel raksasa 789MB tanpa filter periode = hang 10+ menit). Sales via 1 query batch.
     with get_engine().connect() as c:
         rows = c.execute(text("""
-            select o.item_id,
-                   array_agg(distinct o.model_id) mids,
-                   max(o.stok) stok,
-                   max(coalesce(nullif(a.harga_diskon,0), o.harga_tampil)) harga_diskon
+            select o.item_id, o.model_id, o.stok,
+                   coalesce(nullif(a.harga_diskon,0), o.harga_tampil) harga_diskon
             from harga_olah_data o left join harga_all_produk a on upper(a.sku)=upper(o.sku)
             where o.toko=:t and o.stok>0
-            group by o.item_id"""), {"t": nama_toko}).fetchall()
-    sales = SQL.baca_penjualan_per_hari([int(r.item_id) for r in rows])   # {item_id: unit/hari} 1 query
-    hasil = []
+            order by o.item_id"""), {"t": nama_toko}).fetchall()
+    sales = SQL.baca_penjualan_per_hari(list({int(r.item_id) for r in rows}))   # {item_id: unit/hari}
+    by_item = {}
     for r in rows:
         iid = int(r.item_id)
         if iid not in sel or not sel[iid]["img"]:
             continue   # tak eligible flash / tanpa image
-        hasil.append({
-            "item_id": iid, "models": [int(m) for m in r.mids],
-            "harga_diskon": int(r.harga_diskon or 0), "stok": int(r.stok or 0),
+        d = by_item.setdefault(iid, {
+            "item_id": iid, "models": [],
             "img": sel[iid]["img"], "kategori": sel[iid]["kategori"], "sales": sales.get(iid, 0.0),
         })
+        d["models"].append({
+            "model_id": int(r.model_id), "stok": int(r.stok or 0),
+            "harga_diskon": int(r.harga_diskon or 0),
+        })
+    hasil = list(by_item.values())
     # URUT: kategori (grup) lalu penjualan tertinggi
     hasil.sort(key=lambda p: (p["kategori"], -p["sales"]))
     log(f"{len(hasil)} produk siap, urut kategori+penjualan", level="detail", toko=nama_toko, modul="flash")
@@ -175,12 +181,12 @@ def bagi_rotasi(produk, jumlah_sesi, per_sesi=MAKS_PRODUK_PER_SESI):
 
 
 def _entri(produk_item):
-    """Bangun entri set_items per model dari 1 produk. harga flash = harga_diskon - POTONG_HARGA."""
-    harga = max(produk_item["harga_diskon"] - POTONG_HARGA, 1)
-    stok = min(produk_item["stok"], MAKS_STOK)
+    """Bangun entri set_items per model dari 1 produk. harga flash = harga_diskon MODEL itu
+    sendiri − POTONG_HARGA (PER-MODEL, bukan disamain ke semua model dalam 1 item)."""
     return [{
-        "item_id": produk_item["item_id"], "model_id": m, "status": STATUS_MASUK,
-        "input_promo_price": harga, "stock": stok,
+        "item_id": produk_item["item_id"], "model_id": m["model_id"], "status": STATUS_MASUK,
+        "input_promo_price": max(m["harga_diskon"] - POTONG_HARGA, 1),
+        "stock": min(m["stok"], MAKS_STOK),
         "item_display_image": produk_item["img"], "purchase_limit": 0,
     } for m in produk_item["models"]]
 

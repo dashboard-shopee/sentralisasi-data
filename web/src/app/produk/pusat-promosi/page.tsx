@@ -199,12 +199,17 @@ export default function PusatPromosiPage() {
   };
 
   // Status Target vs Posted: sama (toleransi Rp0, harga Shopee integer) -> sesuai; target 0/kosong
-  // -> tak ada target (blm diset di dashboard); selain itu -> beda (belum ke-apply, cek propagasi).
+  // -> tak ada target (blm diset di dashboard). Beda dipisah 2 arah (owner minta 14 Jul):
+  //   - posted < target - Rp10 -> MERAH (jual LEBIH MURAH dari niat, rugi margin, prioritas cek)
+  //   - posted > target        -> AMBER (lebih mahal / belum ke-apply, kurang genting)
+  const AMBANG_MERAH = 10;   // toleransi rounding Shopee (mis. 35.800 vs 35.790 = ga masalah)
   const statusTargetPosted = (target: unknown, posted: unknown) => {
     const t = Number(target) || 0, p = Number(posted) || 0;
     if (t <= 0) return { label: "tak ada target", cls: "text-[#9aa0b2]" };
-    if (t === p) return { label: "✓ sesuai", cls: "text-[#16b8a6] font-semibold" };
-    return { label: `⚠ beda ${rp(Math.abs(t - p))}`, cls: "text-[#e0a030] font-semibold" };
+    const selisih = p - t;   // negatif = posted lebih murah dari target
+    if (Math.abs(selisih) <= AMBANG_MERAH) return { label: "✓ sesuai", cls: "text-[#16b8a6] font-semibold" };
+    if (selisih < 0) return { label: `🔴 lebih murah ${rp(Math.abs(selisih))}`, cls: "text-[#e11d48] font-bold" };
+    return { label: `⚠ lebih mahal ${rp(selisih)}`, cls: "text-[#e0a030] font-semibold" };
   };
 
   const renderProdukDetail = (key: string) => {
