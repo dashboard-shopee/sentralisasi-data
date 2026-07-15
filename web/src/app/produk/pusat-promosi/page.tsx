@@ -44,6 +44,7 @@ const COLS: Record<string, Col[]> = {
   garansi: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
     { k: "namaVariasi", t: "Variasi" },
+    { k: "target", t: "Target", f: "rp" }, { k: "marginTarget", t: "Margin Target", f: "margin" },
     { k: "currentPrice", t: "Harga Kini", f: "rp" }, { k: "marginCurrent", t: "Margin Kini", f: "margin" },
     { k: "bestPrice", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
     { k: "bidPrice", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
@@ -63,6 +64,7 @@ const COLS: Record<string, Col[]> = {
   ],
   garansi_nom: [
     { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" }, { k: "modelName", t: "Variasi" },
+    { k: "target", t: "Target", f: "rp" }, { k: "marginTarget", t: "Margin Target", f: "margin" },
     { k: "hargaReal", t: "Harga Real", f: "rp" }, { k: "marginReal", t: "Margin Real", f: "margin" },
     { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
     { k: "ceiling", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
@@ -160,10 +162,14 @@ export default function PusatPromosiPage() {
   const totalPages = Math.max(1, Math.ceil(total / size));
 
   // Expand-row: klik promo -> produk di dalamnya. Config per tab yg support detail.
-  const DETAIL_CFG: Record<string, { idField: string; detailTab: string; idParam: string; priceField: string; judul: string }> = {
-    voucher: { idField: "voucherId", detailTab: "voucher_produk", idParam: "voucher_id", priceField: "hargaTampil", judul: "voucher" },
-    paket: { idField: "bundleDealId", detailTab: "paket_produk", idParam: "bundle_deal_id", priceField: "hargaTampil", judul: "paket diskon" },
-    promo_toko: { idField: "promotionId", detailTab: "promo_toko_produk", idParam: "promotion_id", priceField: "hargaPromo", judul: "promo toko" },
+  // hasTarget=true -> respons *_produk punya {target, posted}, dirender Target vs Posted + status
+  // (standard di semua tab KECUALI komisi, yg punya logika verdict sendiri & priceField custom).
+  const DETAIL_CFG: Record<string, { idField: string; detailTab: string; idParam: string; hasTarget?: boolean; priceField?: string; judul: string }> = {
+    voucher: { idField: "voucherId", detailTab: "voucher_produk", idParam: "voucher_id", hasTarget: true, judul: "voucher" },
+    paket: { idField: "bundleDealId", detailTab: "paket_produk", idParam: "bundle_deal_id", hasTarget: true, judul: "paket diskon" },
+    promo_toko: { idField: "promotionId", detailTab: "promo_toko_produk", idParam: "promotion_id", hasTarget: true, judul: "promo toko" },
+    campaign: { idField: "sessionId", detailTab: "campaign_produk", idParam: "session_id", hasTarget: true, judul: "campaign" },
+    flash: { idField: "flashSaleId", detailTab: "flash_produk", idParam: "flash_sale_id", hasTarget: true, judul: "flash sale" },
     komisi: { idField: "itemId", detailTab: "komisi_produk", idParam: "item_id", priceField: "hargaJual", judul: "komisi (SKU variasi)" },
   };
   const cfg = DETAIL_CFG[tab];
@@ -192,16 +198,60 @@ export default function PusatPromosiPage() {
     }
   };
 
+  // Status Target vs Posted: sama (toleransi Rp0, harga Shopee integer) -> sesuai; target 0/kosong
+  // -> tak ada target (blm diset di dashboard); selain itu -> beda (belum ke-apply, cek propagasi).
+  const statusTargetPosted = (target: unknown, posted: unknown) => {
+    const t = Number(target) || 0, p = Number(posted) || 0;
+    if (t <= 0) return { label: "tak ada target", cls: "text-[#9aa0b2]" };
+    if (t === p) return { label: "✓ sesuai", cls: "text-[#16b8a6] font-semibold" };
+    return { label: `⚠ beda ${rp(Math.abs(t - p))}`, cls: "text-[#e0a030] font-semibold" };
+  };
+
   const renderProdukDetail = (key: string) => {
     const dd = detail[key];
     if (!dd) return <div className="p-3 text-xs text-[#8a90a2]">{detailLoading ? "Memuat produk…" : "—"}</div>;
     if (dd.shopWide) return <div className="p-3 text-[12px] text-[#6b7180]">🏷️ Berlaku untuk <b>semua produk</b> toko.</div>;
     const produk = dd.produk || [];
+    const judul = cfg?.judul;
+    const n = produk.length;
+    if (cfg?.hasTarget) {
+      return (
+        <div className="p-3">
+          <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {judul} ({n})</div>
+          {n === 0 ? (
+            <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-[10.5px] font-bold text-[#9aa0b2] uppercase tracking-wide px-0.5">
+                <span className="w-[130px]">SKU</span><span className="flex-1 min-w-0">Produk</span>
+                <span className="w-[90px] text-right">Target</span>
+                <span className="w-[90px] text-right">Posted</span>
+                <span className="w-[110px] text-right">Status</span>
+              </div>
+              {produk.map((pr, i) => {
+                const r = pr as Record<string, unknown>;
+                const st = statusTargetPosted(r.target, r.posted);
+                return (
+                  <div key={i} className="flex items-center gap-2 text-[12px]">
+                    <span className="font-semibold text-[#4b5563] w-[130px] truncate">{String(r.sku ?? "-")}</span>
+                    <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(r.namaProduk ?? "")}>{String(r.namaProduk ?? "-")}</span>
+                    <span className="w-[90px] text-right text-[#6b7180]">{rp(r.target)}</span>
+                    <span className="w-[90px] text-right text-[#16b8a6] font-semibold">{rp(r.posted)}</span>
+                    <span className={`w-[110px] text-right ${st.cls}`}>{st.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+    // Komisi (di luar standardisasi): 1 kolom harga custom (priceField), tanpa Target/Status.
     const pf = cfg?.priceField || "hargaTampil";
     return (
       <div className="p-3">
-        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {cfg?.judul} ({produk.length})</div>
-        {produk.length === 0 ? (
+        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {judul} ({n})</div>
+        {n === 0 ? (
           <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
         ) : (
           <div className="flex flex-col gap-1">

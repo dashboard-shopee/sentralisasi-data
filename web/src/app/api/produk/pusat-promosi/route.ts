@@ -4,11 +4,19 @@ import { getViewPerms, isTabAllowed } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
+// TARGET standar (dipakai di semua tab promosi kecuali Komisi): pancing kalau ADA, else Harga
+// Diskon (stored). Identik dgn logika bot (modules/sql_harga.py _SQL_BARIS_RUBAH) — SATU sumber
+// kebenaran, biar dashboard & bot ga pernah beda hitungan. `ap` = alias harga_all_produk (join by SKU).
+const TARGET_EXPR = `coalesce(
+  nullif(coalesce(ap.custom_harga_pancing, ap.harga_pancing), 0),
+  nullif(coalesce(ap.custom_harga_diskon, ap.harga_diskon), 0)
+)`;
+
 // Kolom sensitif (Margin) yang di-mask jadi null di server kalau user tidak
 // punya izin can_view_margin. Harga (Kini/Terbaik/Program/Real) tetap tampil.
 const MASK_FIELDS: Record<string, string[]> = {
-  garansi: ["marginCurrent", "marginBest", "marginProgram"],
-  garansi_nom: ["marginReal", "marginBest", "marginProgram"],
+  garansi: ["marginTarget", "marginCurrent", "marginBest", "marginProgram"],
+  garansi_nom: ["marginTarget", "marginReal", "marginBest", "marginProgram"],
 };
 function maskFields(rows: any[], fields: string[]) {
   if (!fields.length) return rows;
@@ -82,8 +90,10 @@ export async function GET(req: Request) {
         return NextResponse.json({ shopWide: true, produk: [] });
       }
       const produk = await q<Record<string, unknown>>(
-        `select distinct on (item_id) item_id "itemId", sku, nama_produk "namaProduk", harga_tampil "hargaTampil"
-         from harga_olah_data where toko=$1 and item_id = any($2::bigint[]) order by item_id`,
+        `select distinct on (o.item_id) o.item_id "itemId", o.sku, o.nama_produk "namaProduk",
+                o.harga_tampil "posted", ${TARGET_EXPR} "target"
+         from harga_olah_data o left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
+         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id`,
         [tk, scope]
       );
       return NextResponse.json({ shopWide: false, produk });
@@ -103,8 +113,10 @@ export async function GET(req: Request) {
         return NextResponse.json({ produk: [] });
       }
       const produk = await q<Record<string, unknown>>(
-        `select distinct on (item_id) item_id "itemId", sku, nama_produk "namaProduk", harga_tampil "hargaTampil"
-         from harga_olah_data where toko=$1 and item_id = any($2::bigint[]) order by item_id`,
+        `select distinct on (o.item_id) o.item_id "itemId", o.sku, o.nama_produk "namaProduk",
+                o.harga_tampil "posted", ${TARGET_EXPR} "target"
+         from harga_olah_data o left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
+         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id`,
         [tk, scope]
       );
       return NextResponse.json({ produk });
@@ -118,11 +130,48 @@ export async function GET(req: Request) {
       if (!pid || !tk) return NextResponse.json({ error: "promotion_id & toko wajib" }, { status: 400 });
       const produk = await q<Record<string, unknown>>(
         `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
-                o.nama_variasi "namaVariasi", i.harga_promo "hargaPromo"
+                o.nama_variasi "namaVariasi", i.harga_promo "posted", ${TARGET_EXPR} "target"
          from harga_fakta_promo_toko_item i
          left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
+         left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
          where i.toko=$1 and i.promotion_id=$2 order by i.item_id limit 1000`,
         [tk, pid]
+      );
+      return NextResponse.json({ produk });
+    }
+
+    // PRODUK ternominasi dalam 1 sesi Campaign (expand-row tab Campaign). Harga = campaign_price.
+    if (tab === "campaign_produk") {
+      if (!isTabAllowed(perms, "promosi", "campaign")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+      const sid = p.get("session_id");
+      const tk = p.get("toko");
+      if (!sid || !tk) return NextResponse.json({ error: "session_id & toko wajib" }, { status: 400 });
+      const produk = await q<Record<string, unknown>>(
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+                o.nama_variasi "namaVariasi", i.campaign_price "posted", ${TARGET_EXPR} "target"
+         from harga_fakta_campaign_item i
+         left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
+         left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
+         where i.toko=$1 and i.session_id=$2 order by i.item_id limit 1000`,
+        [tk, sid]
+      );
+      return NextResponse.json({ produk });
+    }
+
+    // ITEM dalam 1 sesi Flash Sale (expand-row tab Flash Sale). Harga = promotion_price.
+    if (tab === "flash_produk") {
+      if (!isTabAllowed(perms, "promosi", "flash")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+      const fsid = p.get("flash_sale_id");
+      const tk = p.get("toko");
+      if (!fsid || !tk) return NextResponse.json({ error: "flash_sale_id & toko wajib" }, { status: 400 });
+      const produk = await q<Record<string, unknown>>(
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+                o.nama_variasi "namaVariasi", i.promotion_price "posted", ${TARGET_EXPR} "target"
+         from harga_fakta_flash_item i
+         left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
+         left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
+         where i.toko=$1 and i.flash_sale_id=$2 order by i.item_id limit 1000`,
+        [tk, fsid]
       );
       return NextResponse.json({ produk });
     }
@@ -186,13 +235,16 @@ export async function GET(req: Request) {
       const marginExpr = (priceCol: string) =>
         `(case when ${priceCol} > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(${priceCol}, 0)) else null end)::numeric`;
       cols = `s.toko, s.item_id "itemId", s.model_id "modelId", o.sku, o.nama_produk "namaProduk",
-              o.nama_variasi "namaVariasi", s.current_price "currentPrice", s.best_price "bestPrice",
+              o.nama_variasi "namaVariasi", ${TARGET_EXPR} "target",
+              s.current_price "currentPrice", s.best_price "bestPrice",
               s.bid_price "bidPrice", s.stok, s.diperbarui_pada "diperbaruiPada",
+              ${marginExpr(TARGET_EXPR)} "marginTarget",
               ${marginExpr("s.current_price")} "marginCurrent",
               ${marginExpr("s.best_price")} "marginBest",
               ${marginExpr("s.bid_price")} "marginProgram"`;
       base = `from harga_fakta_garansi s
               left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id
+              left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
               left join (
                 select upper(h.sku) as sku_u,
                   coalesce(e.hpp,0)::numeric as hpp,
@@ -283,13 +335,15 @@ export async function GET(req: Request) {
       const marginExpr = (priceCol: string) =>
         `(case when ${priceCol} > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(${priceCol}, 0)) else null end)::numeric`;
       cols = `s.toko, s.item_id "itemId", s.model_id "modelId", s.item_name "itemName",
-              s.model_name "modelName", o.sku,
+              s.model_name "modelName", o.sku, ${TARGET_EXPR} "target",
+              ${marginExpr(TARGET_EXPR)} "marginTarget",
               o.harga_tampil "hargaReal", ${marginExpr("o.harga_tampil")} "marginReal",
               s.floor, ${marginExpr("s.floor")} "marginBest",
               s.ceiling, ${marginExpr("s.ceiling")} "marginProgram",
               s.stok, s.bid_status "bidStatus"`;
       base = `from harga_fakta_garansi_nom s
               left join harga_olah_data o on o.toko=s.toko and o.item_id=s.item_id and o.model_id=s.model_id
+              left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
               left join (
                 select upper(h.sku) as sku_u,
                   coalesce(e.hpp,0)::numeric as hpp,

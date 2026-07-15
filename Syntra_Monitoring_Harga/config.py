@@ -21,14 +21,14 @@ load_dotenv()
 # 1) 🔴 SAKLAR LIVE — SATU-SATUNYA switch simulasi vs beneran. SEMUA modul & fase ikut ini.
 #    False = DRY-RUN (SIMULASI, AMAN): ngitung + catat rencana, TIDAK ngubah Shopee.
 #    True  = LIVE: SEMUA modul (harga poin 1-4 + provisioning poin 5) BENERAN ubah Shopee.
-MODE_LIVE = False   # ⚠️ M4: DRY dulu (scope 1 toko di TOKO_AKTIF). Naikin True cuma kalau log DRY udah bener.
+MODE_LIVE = True    # 🔴 M4 LIVE (14 Jul): scope kimmioshop, full send (owner ACC full incl 23 sesi flash). Balikin False abis verif.
 
 # 2) FASE yang dijalankan (arsitektur 3 FASE, orkestrasi `siklus_terpadu` 1-sesi/toko):
 #      1 = FAKTA          (grab data, READ-ONLY)
 #      2 = MASALAH+SOLUSI (benerin harga poin 1-4 + pasang/cabut promo poin 5)
 #      3 = LAPORAN        (grab-ulang abis aksi, rangkum ke dashboard)  → dibikin bertahap
 #    Contoh: [1]=grab doang · [1,2]=grab+aksi · [1,2,3]=full. Live/DRY ikut MODE_LIVE.
-FASE_AKTIF = [1,2]
+FASE_AKTIF = [1,2,3]   # 🔴 M4 LIVE: full 3 fase — Fase 3 grab-ulang abis aksi = bukti hidup otomatis
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
 TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balikin [] cuma pas udah full-verified.
