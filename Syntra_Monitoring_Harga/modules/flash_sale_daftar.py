@@ -113,20 +113,21 @@ def siapkan_produk(session, nama_toko):
     [{item_id, models:[model_id], harga_diskon, stok, img, kategori, sales}]."""
     from sqlalchemy import text
     from modules.db import get_engine
+    from modules import sql_harga as SQL
     sel = _peta_selector(session)
+    log(f"selector: {len(sel)} produk eligible flash", level="detail", toko=nama_toko, modul="flash")
+    # Query produk TANPA subquery-korelasi sales (dulu: sum fact_penjualan per baris x 1391 produk
+    # ke tabel raksasa 789MB tanpa filter periode = hang 10+ menit). Sales via 1 query batch.
     with get_engine().connect() as c:
         rows = c.execute(text("""
             select o.item_id,
                    array_agg(distinct o.model_id) mids,
                    max(o.stok) stok,
-                   max(coalesce(nullif(a.harga_diskon,0), o.harga_tampil)) harga_diskon,
-                   coalesce((select sum(fp.unit_pesanan) from fact_penjualan fp
-                             join dim_toko dt on dt.toko_id=fp.toko_id
-                             where fp.produk_id=o.item_id and lower(dt.nama)=lower(:t)
-                               and fp.periode_mulai > now() - interval '30 days'), 0) sales
+                   max(coalesce(nullif(a.harga_diskon,0), o.harga_tampil)) harga_diskon
             from harga_olah_data o left join harga_all_produk a on upper(a.sku)=upper(o.sku)
             where o.toko=:t and o.stok>0
             group by o.item_id"""), {"t": nama_toko}).fetchall()
+    sales = SQL.baca_penjualan_per_hari([int(r.item_id) for r in rows])   # {item_id: unit/hari} 1 query
     hasil = []
     for r in rows:
         iid = int(r.item_id)
@@ -135,7 +136,7 @@ def siapkan_produk(session, nama_toko):
         hasil.append({
             "item_id": iid, "models": [int(m) for m in r.mids],
             "harga_diskon": int(r.harga_diskon or 0), "stok": int(r.stok or 0),
-            "img": sel[iid]["img"], "kategori": sel[iid]["kategori"], "sales": int(r.sales or 0),
+            "img": sel[iid]["img"], "kategori": sel[iid]["kategori"], "sales": sales.get(iid, 0.0),
         })
     # URUT: kategori (grup) lalu penjualan tertinggi
     hasil.sort(key=lambda p: (p["kategori"], -p["sales"]))
