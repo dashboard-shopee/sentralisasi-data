@@ -19,7 +19,7 @@ const TABS = [
 ];
 
 // Kolom per tab: [key, judul, tipe]. tipe: text | rp | dt | num | status
-type Col = { k: string; t: string; f?: "rp" | "dt" | "num" | "status" | "margin" | "verdict" };
+type Col = { k: string; t: string; f?: "rp" | "dt" | "dtt" | "num" | "status" | "margin" | "verdict" };
 const COLS: Record<string, Col[]> = {
   promo_toko: [
     { k: "toko", t: "Toko" }, { k: "nama", t: "Nama Promo" },
@@ -38,8 +38,8 @@ const COLS: Record<string, Col[]> = {
   ],
   campaign: [
     { k: "toko", t: "Toko" }, { k: "campaignName", t: "Campaign" }, { k: "sessionName", t: "Sesi" },
-    { k: "nominated", t: "Produk Ternominasi", f: "num" }, { k: "sessionStart", t: "Mulai Sesi", f: "dt" },
-    { k: "nominationEnd", t: "Tutup Nominasi", f: "dt" },
+    { k: "nominated", t: "Produk Ternominasi", f: "num" }, { k: "sessionStart", t: "Mulai Sesi", f: "dtt" },
+    { k: "nominationEnd", t: "Tutup Nominasi", f: "dtt" },
   ],
   garansi: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
@@ -52,8 +52,8 @@ const COLS: Record<string, Col[]> = {
   ],
   flash: [
     { k: "toko", t: "Toko" }, { k: "flashSaleId", t: "ID Sesi" }, { k: "status", t: "Status", f: "status" },
-    { k: "itemCount", t: "Jml Item", f: "num" }, { k: "startTime", t: "Mulai", f: "dt" },
-    { k: "endTime", t: "Berakhir", f: "dt" },
+    { k: "itemCount", t: "Jml Item", f: "num" }, { k: "startTime", t: "Mulai", f: "dtt" },
+    { k: "endTime", t: "Berakhir", f: "dtt" },
   ],
   komisi: [
     { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" },
@@ -67,7 +67,7 @@ const COLS: Record<string, Col[]> = {
     { k: "target", t: "Target", f: "rp" }, { k: "marginTarget", t: "Margin Target", f: "margin" },
     { k: "hargaReal", t: "Harga Real", f: "rp" }, { k: "marginReal", t: "Margin Real", f: "margin" },
     { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
-    { k: "ceiling", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
+    { k: "ceiling", t: "Harga Program", f: "margin" }, { k: "marginProgram", t: "margin" },
     { k: "stok", t: "Stok", f: "num" },
   ],
 };
@@ -83,9 +83,22 @@ const dt = (v: unknown) => {
   if (isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 };
+const dtt = (v: unknown) => {
+  if (!v) return "-";
+  const d = new Date(String(v));
+  if (isNaN(d.getTime())) return "-";
+  const day = String(d.getDate()).padStart(2, "0");
+  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${day} ${month} ${year} ${hours}:${minutes}`;
+};
 const fmt = (v: unknown, f?: string) => {
   if (f === "rp") return rp(v);
   if (f === "dt") return dt(v);
+  if (f === "dtt") return dtt(v);
   if (f === "num") return v === null || v === undefined || v === "" ? "-" : Number(v).toLocaleString("id-ID");
   if (v === null || v === undefined || v === "") return "-";
   return String(v);
