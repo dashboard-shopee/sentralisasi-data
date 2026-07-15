@@ -447,7 +447,8 @@ def _kunci_takedown(diagnosa, promo):
 def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
     """SOLUSI poin 3c. Keluarkan variasi 'koreksi_turun' yg flash-nya < target-10 (atau stok
     real 0) dari SEMUA flash sale aktif. flash_sale_id di-resolve on-demand oleh takedown_items
-    (peta_item). DRY-RUN aware.
+    (peta_item). Sesi yg diakhirin LANGSUNG DIGANTI real-time (slot sama, produk sehat didaftar
+    ulang pake data fresh — grilling 15 Jul). DRY-RUN aware.
     ⚠️ config.SKIP_FLASH_TAKEDOWN=True -> di-skip di modul (endpoint set-item ditolak Shopee
     code 1001; PR flash sale). Balikin False setelah endpoint per-item dibenerin."""
     from modules import flash_sale as FS
@@ -455,7 +456,7 @@ def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
     kunci = _kunci_takedown(diagnosa, "Flash Sale")
     if not kunci:
         return {"flash_takedown": 0, "flash_target": 0}
-    n = FS.takedown_items(session, shop, kunci)
+    n = FS.takedown_items(session, shop, nama_toko, kunci)
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(kunci)} variasi target → {n} ter-takedown",
           status=("live" if (not config.DRY_RUN and n) else "ok"),

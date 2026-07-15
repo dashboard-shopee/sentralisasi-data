@@ -1,4 +1,4 @@
-"""modules/flash_sale.py — kelola Flash Sale Toko (Fase 2B takedown + Fase 4 daftar).
+"""modules/flash_sale.py — kelola Flash Sale Toko (Fase 2B takedown+ganti real-time + Fase 4 daftar).
 
 Endpoint terverifikasi (sniff __sniff_promo.json), berbasis `requests` (pakai sesi grab):
   - list  : URL_FLASH_LIST  -> flash sale aktif/mendatang (flash_sale_id, status, timeslot).
@@ -125,12 +125,14 @@ def set_items(session, flash_sale_id, entries, chunk=50):
     return (len(failed) == 0), failed
 
 
-def takedown_items(session, shop, kunci_set):
-    """Cabut flash buat variasi bermasalah = AKHIRI SELURUH SESI yang memuatnya.
-    Endpoint per-item (set_shop_flash_sale_items) DITOLAK Shopee (1001) — keputusan
-    owner (grilling 14 Jul): flash takedown = end-session, bukan per-item. 1 produk
-    perlu dicabut -> sesi diakhirin (produk lain di sesi itu ikut kena — diterima).
-    kunci_set = set (item_id, model_id). Return jumlah SESI diakhirin."""
+def takedown_items(session, shop, nama_toko, kunci_set):
+    """Cabut flash buat variasi bermasalah = AKHIRI SESI yang memuatnya, LALU GANTI real-time
+    (grilling 15 Jul): sesi diakhirin (stop_sesi) → sesi baru dibikin DI SLOT YANG SAMA →
+    produk SEHAT di sesi lama (semua item MINUS yg bermasalah) didaftar ulang pake data fresh
+    (FSD.ganti_sesi). Shopee ga punya endpoint "hapus" terpisah dari stop — reuse timeslot_id
+    abis stop ITU cara "hapus lalu bikin ulang"-nya (belum pernah dites live, monitor hasil
+    pertama kali jalan: apa Shopee nolak bikin sesi baru di slot yg baru aja di-stop).
+    kunci_set = set (item_id, model_id) BERMASALAH. Return jumlah SESI diakhirin+diganti."""
     if not kunci_set:
         return 0
     if getattr(config, "SKIP_FLASH_TAKEDOWN", False):
@@ -155,4 +157,11 @@ def takedown_items(session, shop, kunci_set):
             n += 1
         except Exception as e:
             log(f"gagal akhiri FS {fsid}: {type(e).__name__} — lanjut", level="error", toko=shop, modul="flash")
+            continue
+        sehat = {(int(it.get("item_id") or 0), int(it.get("model_id") or 0)) for it in items} - kunci_set
+        try:
+            FSD.ganti_sesi(session, nama_toko, tslot, sehat)
+        except Exception as e:
+            log(f"gagal ganti sesi slot {tslot} (abis stop FS {fsid}): {type(e).__name__} — lanjut",
+                level="error", toko=shop, modul="flash")
     return n

@@ -219,6 +219,36 @@ def daftar_ke_sesi(session, flash_sale_id, produk_sesi):
     return {"masuk": masuk, "gagal": gagal}
 
 
+def ganti_sesi(session, nama_toko, timeslot_id, kunci_sehat):
+    """Self-heal REAL-TIME (grilling 15 Jul): abis sesi bermasalah di-stop (modules/flash_sale.py
+    takedown_items), bikin sesi BARU DI SLOT YANG SAMA (reuse timeslot_id — Shopee ga punya endpoint
+    "hapus" terpisah dari stop, jadi stop+reuse-slot ITU "hapus lalu ganti"-nya) lalu daftarin ULANG
+    cuma produk yg SEHAT (kunci_sehat = set (item_id,model_id) yg TIDAK bermasalah).
+    Data harga/stok FRESH dari siapkan_produk() (bukan reuse data lama sesi yg diakhirin — bisa basi).
+    Return {"masuk","gagal"} (0/0 kalau ga ada yg sehat / gagal bikin sesi)."""
+    if not kunci_sehat:
+        log(f"slot {timeslot_id}: semua item di sesi ini bermasalah, ga ada yg didaftar ulang", level="warning", modul="flash")
+        return {"masuk": 0, "gagal": 0}
+    produk = siapkan_produk(session, nama_toko)
+    produk_sehat = []
+    for p in produk:
+        models = [m for m in p["models"] if (p["item_id"], m["model_id"]) in kunci_sehat]
+        if models:
+            produk_sehat.append({**p, "models": models})
+    if not produk_sehat:
+        log(f"slot {timeslot_id}: produk sehat ga ketemu di data fresh (mgkn ikut kena stok abis/berubah)",
+            level="warning", modul="flash")
+        return {"masuk": 0, "gagal": 0}
+    fsid = bikin_sesi(session, timeslot_id)
+    if not fsid and not getattr(config, "DRY_RUN", False):
+        log(f"gagal bikin sesi baru di slot {timeslot_id} (reuse abis stop)", level="error", modul="flash")
+        return {"masuk": 0, "gagal": 0}
+    r = daftar_ke_sesi(session, fsid, produk_sehat)
+    log(f"slot {timeslot_id}: sesi diganti (fsid baru {fsid}) — {len(produk_sehat)} produk sehat didaftar ulang",
+        level="live" if not config.DRY_RUN else "warning", modul="flash")
+    return r
+
+
 # ── ORKESTRATOR mingguan: grab slot seminggu -> bikin sesi -> daftar produk bergilir ──
 def daftar_mingguan(session, nama_toko, maks_sesi=None):
     """Grab slot seminggu, bikin sesi tiap slot, daftarin SEMUA produk bergilir (maks 50/sesi).

@@ -69,7 +69,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
     if fs_kunci:
         try:
             from modules.flash_sale import takedown_items as fs_takedown
-            fs_takedown(session, shop, fs_kunci)
+            fs_takedown(session, shop, nama_toko or shop, fs_kunci)
         except Exception as e:
             log(f"takedown flash sale gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
