@@ -3,6 +3,7 @@ campaign_util.py — Helper untuk Campaign Shopee (Layer 2, penunjang Langkah 4)
 Menggunakan browser context (fetch via run_js) untuk menghindari pemblokiran WAF 403.
 """
 import time
+import json
 from modules.log_siklus import log
 import config
 from urllib.parse import urlencode
@@ -12,6 +13,13 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
     """
     Mengirimkan request POST API Shopee dari dalam konteks Chrome yang sedang terbuka.
     Menghindari blokir TLS Fingerprint / Akamai WAF.
+
+    ✅ (15 Jul, isolasi test) JS balikin STRING (JSON.stringify), BUKAN object JS mentah —
+    versi lama (`return response.json()` langsung) bikin DrissionPage narik properti objek
+    itu satu-satu via CDP (Runtime.getProperties), yg kebukti GAGAL ("js result parsing
+    error") buat respons gede (mis. banyak produk ternominasi) & mandekin browser abis itu
+    (retry berikutnya "Failed to fetch"). Respons berupa STRING dihindarin lewat jalur CDP
+    object-walk itu sama sekali -> json.loads() polos di sisi Python.
     """
     from modules.session import get_page
     page = get_page()
@@ -35,25 +43,34 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
         },
         body: JSON.stringify(payload)
     }).then(response => {
-        if (!response.ok) {
-            return { 'error': 'HTTP error ' + response.status, 'status': response.status };
-        }
-        return response.json();
+        return response.text().then(txt => JSON.stringify({
+            ok: response.ok, status: response.status, body: txt
+        }));
     }).catch(error => {
-        return { 'error': error.message };
+        return JSON.stringify({ error: String(error && error.message || error) });
     });
     """
 
     delay = 2
     for attempt in range(attempts):
         try:
-            res = page.run_js(js_fetch, full_url, payload)
+            raw = page.run_js(js_fetch, full_url, payload)
+            if not isinstance(raw, str):
+                raise ValueError(f"Respons JS bukan string: {type(raw)}")
+            wrap = json.loads(raw)
+
+            if "error" in wrap:
+                raise RuntimeError(wrap["error"])
+            if not wrap.get("ok"):
+                raise RuntimeError(f"HTTP error {wrap.get('status')}")
+
+            try:
+                res = json.loads(wrap.get("body") or "")
+            except (TypeError, ValueError):
+                raise ValueError(f"Body bukan JSON valid: {(wrap.get('body') or '')[:200]}")
             if not isinstance(res, dict):
                 raise ValueError(f"Respons bukan dict: {type(res)}")
-            
-            if "error" in res:
-                raise RuntimeError(res["error"])
-                
+
             code = res.get("code")
             msg = res.get("msg", "")
 
@@ -65,7 +82,7 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
             # Validasi kunci
             if kunci and kunci not in res:
                 raise ValueError(f"Kunci '{kunci}' tidak ditemukan di response")
-                
+
             return res
         except Exception as e:
             cuplikan = str(e)
@@ -199,7 +216,7 @@ def get_nominated_products(session, shop, session_id):
                     "page_num": page_num,
                     "page_size": page_size
                 },
-                kunci="page_info"  # Validasi dengan page_info
+                kunci="data"   # respons {code,msg,data:{recruiting_entities,page_info}} — "page_info" ADA tapi NESTED di "data", bukan top-level (bug, fix 15 Jul; samain sama campaign.py yg udah kebukti bener)
             )
         except Exception as e:
             log(f"gagal fetch nominated list hal {page_num}: {e}", level="error", toko=shop, modul="campaign")
