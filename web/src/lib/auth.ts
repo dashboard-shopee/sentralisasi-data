@@ -29,7 +29,14 @@ function base64UrlDecode(str: string): string {
   return decodeURIComponent(escape(atob(base64)));
 }
 
-export async function signSession(payload: any, secret: string, durationSeconds: number): Promise<string> {
+export interface SessionPayload {
+  id: number;
+  role: string;
+  username: string;
+  [key: string]: unknown;
+}
+
+export async function signSession(payload: SessionPayload, secret: string, durationSeconds: number): Promise<string> {
   const header = { alg: "HS256", typ: "JWT" };
   const exp = Math.floor(Date.now() / 1000) + durationSeconds;
   const fullPayload = { ...payload, exp };
@@ -49,7 +56,7 @@ export async function signSession(payload: any, secret: string, durationSeconds:
   return `${dataToSign}.${signatureEncoded}`;
 }
 
-export async function verifySession(token: string, secret: string): Promise<any | null> {
+export async function verifySession(token: string, secret: string): Promise<SessionPayload | null> {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;

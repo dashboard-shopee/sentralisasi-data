@@ -90,6 +90,15 @@ const fmt = (v: unknown, f?: string) => {
   if (v === null || v === undefined || v === "") return "-";
   return String(v);
 };
+// Kolom status kadang berupa kode Shopee mentah (1=aktif, 2=berakhir — konvensi dipakai
+// di semua modul bot: config.STATUS_AKTIF/STATUS_NONAKTIF, flash_sale.py). Sisanya (mis.
+// promo_toko yang udah tersimpan sbg teks "berjalan") ditampilkan apa adanya.
+const labelStatus = (v: unknown) => {
+  const s = String(v);
+  if (s === "1") return "Aktif";
+  if (s === "2") return "Berakhir";
+  return fmt(v);
+};
 
 const GARANSI_SUB = [
   { key: "rekomendasi", label: "Belum Didaftar" },
@@ -402,7 +411,7 @@ export default function PusatPromosiPage() {
                               : String(row[c.k]).toLowerCase().includes("datang")
                                 ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-500")
                           }>
-                            {fmt(row[c.k])}
+                            {labelStatus(row[c.k])}
                           </span>
                         ) : c.f === "verdict" ? (
                           <span className={

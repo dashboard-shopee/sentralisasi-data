@@ -22,16 +22,26 @@ export interface ViewPerms {
 const FULL_TABS: Record<string, string[]> = TABS_BY_PAGE;
 
 function normalizeAllowedTabs(raw: unknown): Record<string, string[]> {
-  let parsed: any = raw;
-  if (typeof parsed === "string") {
-    try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+  let parsed: Record<string, unknown> | null = null;
+  if (typeof raw === "string") {
+    try { parsed = JSON.parse(raw); } catch { parsed = null; }
+  } else if (raw && typeof raw === "object") {
+    parsed = raw as Record<string, unknown>;
   }
   const out: Record<string, string[]> = {};
   for (const page of Object.keys(TABS_BY_PAGE)) {
-    const val = parsed && Array.isArray(parsed[page]) ? parsed[page] : null;
+    const val = parsed && Array.isArray(parsed[page]) ? (parsed[page] as string[]) : null;
     out[page] = val && val.length > 0 ? val.filter((t: string) => TABS_BY_PAGE[page].includes(t)) : TABS_BY_PAGE[page];
   }
   return out;
+}
+
+interface DashboardUserRow {
+  can_view_net_price: boolean | null;
+  can_view_margin: boolean | null;
+  can_view_hpp: boolean | null;
+  can_view_harga_jual_komisi: boolean | null;
+  allowed_tabs: unknown;
 }
 
 // Ambil izin lihat (field sensitif + tab per halaman) live dari DB (bukan cache JWT).
@@ -49,7 +59,7 @@ export async function getViewPerms(): Promise<ViewPerms> {
     return { netPrice: true, margin: true, hpp: true, hargaJualKomisi: true, allowedTabs: { ...FULL_TABS } };
   }
 
-  const rows = await q<any>(
+  const rows = await q<DashboardUserRow>(
     "select can_view_net_price, can_view_margin, can_view_hpp, can_view_harga_jual_komisi, allowed_tabs from dashboard_user where id = $1",
     [user.id]
   );

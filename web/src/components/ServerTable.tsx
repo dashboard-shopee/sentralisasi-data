@@ -1101,7 +1101,7 @@ export default function ServerTable({
                 ) : (
                   <FlexChart
                     data={trendData}
-                    series={trendChartSel.map((k) => (trendKind === "jual" ? VARS_JUAL : VARS_IKLAN).find((x) => x.key === k)).filter(Boolean) as any[]}
+                    series={trendChartSel.map((k) => (trendKind === "jual" ? VARS_JUAL : VARS_IKLAN).find((x) => x.key === k)).filter(Boolean) as VarDef[]}
                     isShopComparison={false}
                   />
                 )}
