@@ -84,6 +84,19 @@ def stop_sesi(session, flash_sale_id, time_slot_id):
     log(f"sesi {flash_sale_id} distop", level="live", modul="flash")
 
 
+def hapus_sesi(session, flash_sale_id, time_slot_id):
+    """HAPUS sesi (beda dari stop) — kebukti via sniff (15 Jul): endpoint SAMA persis
+    (set_shop_flash_sale), cuma status=0 (bukan 2). Kode status sesi flash: 0=dihapus,
+    1=aktif/mendatang, 2=berakhir/stop. Dipanggil ABIS stop_sesi (Shopee UI: hapus cuma
+    bisa dari sesi yg udah berakhir) supaya timeslot_id-nya beneran kebuka lagi -> dipakai
+    ganti_sesi buat bikin sesi baru di slot yg sama."""
+    if getattr(config, "DRY_RUN", False):
+        log(f"(DRY) hapus sesi {flash_sale_id} (slot {time_slot_id})", level="warning", modul="flash")
+        return
+    _req("POST", session, URL_SET, {"flash_sale_id": flash_sale_id, "time_slot_id": time_slot_id, "status": 0})
+    log(f"sesi {flash_sale_id} dihapus", level="live", modul="flash")
+
+
 def _as_cat(v):
     """Kategori jadi int comparable (buat sort). global_cat / cat_path[0] bisa int ATAU
     dict {catid/id/global_cat_id:...} → ekstrak id-nya. Gagal → 0."""

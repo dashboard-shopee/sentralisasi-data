@@ -11,7 +11,9 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/static-components": "off",
       "react/no-unstable-nested-components": "off",
-      "@next/next/no-img-element": "off"
+      "@next/next/no-img-element": "off",
+      "prefer-const": "off",
+      "react/no-unescaped-entities": "off"
     }
   },
   // Override default ignores of eslint-config-next.

@@ -126,12 +126,13 @@ def set_items(session, flash_sale_id, entries, chunk=50):
 
 
 def takedown_items(session, shop, nama_toko, kunci_set):
-    """Cabut flash buat variasi bermasalah = AKHIRI SESI yang memuatnya, LALU GANTI real-time
-    (grilling 15 Jul): sesi diakhirin (stop_sesi) → sesi baru dibikin DI SLOT YANG SAMA →
-    produk SEHAT di sesi lama (semua item MINUS yg bermasalah) didaftar ulang pake data fresh
-    (FSD.ganti_sesi). Shopee ga punya endpoint "hapus" terpisah dari stop — reuse timeslot_id
-    abis stop ITU cara "hapus lalu bikin ulang"-nya (belum pernah dites live, monitor hasil
-    pertama kali jalan: apa Shopee nolak bikin sesi baru di slot yg baru aja di-stop).
+    """Cabut flash buat variasi bermasalah = AKHIRI SESI yang memuatnya, HAPUS, LALU GANTI
+    real-time (grilling 15 Jul): sesi diakhirin (stop_sesi, status 2) → sesi DIHAPUS (hapus_sesi,
+    status 0 — kebukti via sniff endpoint SAMA persis set_shop_flash_sale, cuma status beda,
+    Shopee cuma ngizinin hapus dari sesi yg udah berakhir makanya urutannya stop dulu baru hapus)
+    → sesi baru dibikin DI SLOT YANG SAMA → produk SEHAT di sesi lama (semua item MINUS yg
+    bermasalah) didaftar ulang pake data fresh (FSD.ganti_sesi). ⚠️ Belum dites LIVE end-to-end
+    (apa slot beneran kebuka lagi abis dihapus) — monitor hasil pertama kali jalan.
     kunci_set = set (item_id, model_id) BERMASALAH. Return jumlah SESI diakhirin+diganti."""
     if not kunci_set:
         return 0
@@ -158,6 +159,11 @@ def takedown_items(session, shop, nama_toko, kunci_set):
         except Exception as e:
             log(f"gagal akhiri FS {fsid}: {type(e).__name__} — lanjut", level="error", toko=shop, modul="flash")
             continue
+        try:
+            FSD.hapus_sesi(session, fsid, tslot)   # bebasin slot biar bisa dipake sesi baru
+        except Exception as e:
+            log(f"gagal hapus FS {fsid} (udah distop, slot mgkn ga kebuka lagi): {type(e).__name__} — lanjut",
+                level="error", toko=shop, modul="flash")
         sehat = {(int(it.get("item_id") or 0), int(it.get("model_id") or 0)) for it in items} - kunci_set
         try:
             FSD.ganti_sesi(session, nama_toko, tslot, sehat)

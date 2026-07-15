@@ -230,11 +230,12 @@ STATUS_FLASH_IKUT = 1
 # ✅ M4 (14 Jul): takedown FLASH = AKHIRI SESI (bukan per-item). Endpoint per-item
 # `set_shop_flash_sale_items` ditolak Shopee (1001), jadi flash_sale.takedown_items sekarang
 # panggil flash_sale_daftar.stop_sesi (POST set_shop_flash_sale {flash_sale_id,time_slot_id,status:2}).
-# ✅ (15 Jul): sesi yg diakhirin LANGSUNG DIGANTI real-time — sesi baru dibikin di SLOT SAMA
-# (reuse timeslot_id, ga ada endpoint "hapus" terpisah dari Shopee) lalu produk SEHAT (semua
-# item di sesi lama MINUS yg bermasalah) didaftar ulang pake data fresh (flash_sale_daftar.ganti_sesi).
-# True = emergency off-switch (skip stop+ganti semua). False = jalan (DRY-safe). ⚠️ tes DRY+scope dulu,
-# lalu 1x live scoped test dulu buat pastiin Shopee ngizinin bikin sesi baru di slot yg baru distop.
+# ✅ (15 Jul): sesi yg diakhirin LANGSUNG DIGANTI real-time — stop (status 2) -> HAPUS (status 0,
+# endpoint SAMA set_shop_flash_sale, kebukti via sniff) -> sesi baru dibikin di SLOT SAMA (reuse
+# timeslot_id) -> produk SEHAT (semua item di sesi lama MINUS yg bermasalah) didaftar ulang pake
+# data fresh (flash_sale_daftar.ganti_sesi).
+# True = emergency off-switch (skip stop+hapus+ganti semua). False = jalan (DRY-safe).
+# ⚠️ tes DRY+scope dulu, lalu 1x live scoped test buat pastiin slot BENERAN kebuka lagi abis dihapus.
 SKIP_FLASH_TAKEDOWN = False
 MAKS_PRODUK_PER_PROMO = 999      # > ini -> dipecah jadi beberapa promo
 PROMO_IMAGES = []                # thumbnail promo (boleh kosong; Shopee isi otomatis)
