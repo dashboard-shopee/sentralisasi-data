@@ -257,6 +257,11 @@ export default function MobileNav() {
             >
               Tutup
             </button>
+
+            {/* Copyright */}
+            <div className="text-[10px] text-[#9aa0b2] text-center select-none pt-1">
+              copywright@2026 Restu Widodo
+            </div>
           </div>
         </div>
       )}

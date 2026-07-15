@@ -315,6 +315,11 @@ export default function Sidebar({
             </div>
           )}
         </div>
+
+        {/* Copyright */}
+        <div className="text-[10px] text-[#9aa0b2] text-center select-none pb-1 transition-all duration-300">
+          {minimized ? "© 2026" : "copywright@2026 Restu Widodo"}
+        </div>
       </div>
     </aside>
   );
