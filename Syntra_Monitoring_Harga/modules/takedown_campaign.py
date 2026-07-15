@@ -37,7 +37,7 @@ def takedown_dari_campaign(session, shop, i, kunci_set):
             sid = s.get("session_id")
             if not sid:
                 continue
-            nominated = C.get_nominated_products(session, shop, sid)  # {(item,model)->info}
+            nominated = C.get_nominated_products(session, shop, s.get("campaign_id"), sid)  # {(item,model)->info}
             nom_ids = []
             for (iid, mid), info in nominated.items():
                 try:

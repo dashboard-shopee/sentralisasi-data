@@ -147,7 +147,7 @@ def fakta_campaign(nama_toko, session, shop):
                 "session_end": _iso(s.get("session_end_time")),
                 "nomination_end": _iso(s.get("nomination_end_time")),
             })
-            nominasi = C.get_nominated_products(session, shop, sid)   # {(item_str,model_str): {...}}
+            nominasi = C.get_nominated_products(session, shop, s.get("campaign_id"), sid)   # {(item_str,model_str): {...}}
             for (iid, mid), v in nominasi.items():
                 try:
                     item, model = int(iid), int(mid)

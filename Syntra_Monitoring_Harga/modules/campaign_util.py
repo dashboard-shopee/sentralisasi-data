@@ -196,41 +196,61 @@ def get_open_sessions(session, shop, window="nominasi"):
     return open_sessions
 
 
-def get_nominated_products(session, shop, session_id):
+def get_nominated_products(session, shop, campaign_id, session_id, tunggu=8):
     """
     Mengambil semua variasi/model produk yang sudah terdaftar di dalam satu sesi kampanye.
+
+    ✅ (15 Jul, grilling) NAVIGASI BERSUNGGUH, BUKAN fetch injeksi — sniff 15 Jul kebukti
+    `nominated_entity_list` WAJIB signature (x-sap-sec dkk) yg CUMA di-generate SDK Shopee
+    asli pas render halaman detail sesi; fetch injeksi (requests ATAUPUN run_js) SELALU
+    ditolak (90309999) walau headernya udah dibenerin. Tapi pas USER beneran buka halaman
+    `/campaign/{id}/session/{id}`, request itu OTOMATIS di-fire Shopee sendiri & lolos mulus.
+    Jadi: navigasiin browser ke situ, DENGERIN network (page.listen), tangkep response yg
+    lewat OTOMATIS — bukan manggil endpointnya sendiri.
+    ⚠️ Cuma nangkep request yg SEMPAT fire dalam window `tunggu` detik IDLE (reset tiap ada
+    paket baru) — biasanya cukup buat 1 sesi (page render manggil beberapa kali). Kalau sesi
+    punya nominasi lebih banyak dari yg ke-load otomatis (mis. butuh scroll/next-page manual
+    di UI), sisanya ga kebaca — WARNING dicetak kalau itu kejadian.
     """
+    from modules.session import get_page
+    page = get_page()
+    if not page:
+        raise RuntimeError("Jendela browser Chrome belum terinisialisasi.")
+
+    url = f"https://seller.shopee.co.id/portal/marketing/cmt-product/campaign/{campaign_id}/session/{session_id}?source=2"
     nominated_map = {}
-    page_num = 1
-    page_size = 50
-
-    while True:
+    total_count = 0
+    got = 0
+    try:
+        page.listen.start("nominated_entity_list")
+        page.get(url)
+        tangkapan = list(page.listen.steps(timeout=tunggu))
+    finally:
         try:
-            res = api_post_browser(
-                config.URL_GET_NOMINATED_LIST,
-                session["params"],
-                {
-                    "session_id": str(session_id),
-                    "entity_type": [2],
-                    "entity_tab": 0,
-                    "page_num": page_num,
-                    "page_size": page_size
-                },
-                kunci="data"   # respons {code,msg,data:{recruiting_entities,page_info}} — "page_info" ADA tapi NESTED di "data", bukan top-level (bug, fix 15 Jul; samain sama campaign.py yg udah kebukti bener)
-            )
-        except Exception as e:
-            log(f"gagal fetch nominated list hal {page_num}: {e}", level="error", toko=shop, modul="campaign")
-            break
+            page.listen.stop()
+        except Exception:
+            pass
 
-        data_obj = res.get("data") if isinstance(res, dict) else None
-        if not data_obj or not isinstance(data_obj, dict):
-            break
-
+    for pkt in tangkapan:
+        try:
+            body = pkt.response.body
+            if isinstance(body, str):
+                body = json.loads(body)
+            if not isinstance(body, dict):
+                continue
+        except Exception:
+            continue
+        data_obj = body.get("data")
+        pi = body.get("page_info") or (data_obj or {}).get("page_info") or {}
+        total_count = max(total_count, int(pi.get("total_count") or 0))
+        if not isinstance(data_obj, dict):
+            continue
         entities = data_obj.get("recruiting_entities") or []
         for entity in entities:
             prod = entity.get("product") or {}
             item_id = str(prod.get("item_id", ""))
             models = prod.get("models") or []
+            got += len(models)
             for m in models:
                 model_id = str(m.get("model_id", ""))
                 nomination_id = str(m.get("nomination_id", ""))
@@ -243,10 +263,9 @@ def get_nominated_products(session, shop, session_id):
                     "campaign_price": campaign_price,
                 }
 
-        if len(entities) < page_size:
-            break
-        page_num += 1
-
+    if total_count and got < total_count:
+        log(f"sesi {session_id}: cuma {got}/{total_count} nominasi ketangkep dari auto-load halaman (mgkn butuh scroll manual)",
+            level="warning", toko=shop, modul="campaign")
     return nominated_map
 
 

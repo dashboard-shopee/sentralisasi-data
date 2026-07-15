@@ -278,7 +278,7 @@ def campaign(shop, nama_toko, session):
             level="detail", fase="F2", toko=nama_toko, modul="campaign")
         for s in sesi:
             sid = s["session_id"]
-            already = CU.get_nominated_products(session, shop, sid)   # {(iid_str,mid_str): {...}}
+            already = CU.get_nominated_products(session, shop, s.get("campaign_id"), sid)   # {(iid_str,mid_str): {...}}
             baru = [p for p in lolos
                     if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
             r = CU.nominate(session, shop, sid, baru)
