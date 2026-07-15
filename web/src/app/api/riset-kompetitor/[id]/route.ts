@@ -3,6 +3,10 @@ import { q } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 
+// GET ga manggil cookies() (cuma POST/DELETE di file ini yg pakai) -> tanpa ini bisa kena
+// Full Route Cache Next.js, detail produk basi walau data di DB udah keupdate.
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

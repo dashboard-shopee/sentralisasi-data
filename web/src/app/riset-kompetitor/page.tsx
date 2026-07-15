@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 interface ProductAcuan {
@@ -97,9 +97,15 @@ export default function RisetKompetitorPage() {
   const [addingProduct, setAddingProduct] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState(false);
 
+  // Guard race: search debounce cepat / klik produk lain sebelum respons lama nyampe ->
+  // respons lama bisa nimpa hasil baru. 2 guard terpisah (list vs detail = 2 alur independen).
+  const listReqId = useRef(0);
+  const detailReqId = useRef(0);
+
   // Fetch product list
   useEffect(() => {
     async function fetchList() {
+      const myReq = ++listReqId.current;
       setLoading(true);
       try {
         const query = new URLSearchParams({
@@ -108,16 +114,18 @@ export default function RisetKompetitorPage() {
           page: String(page),
           limit: String(limit)
         });
-        const res = await fetch(`/api/riset-kompetitor?${query.toString()}`);
+        const res = await fetch(`/api/riset-kompetitor?${query.toString()}`, { cache: "no-store" });
         const json = await res.json();
+        if (myReq !== listReqId.current) return;
         if (json.success) {
           setProducts(json.data);
           setPagination(json.pagination);
         }
       } catch (err) {
+        if (myReq !== listReqId.current) return;
         console.error("Gagal memuat list riset:", err);
       } finally {
-        setLoading(false);
+        if (myReq === listReqId.current) setLoading(false);
       }
     }
 
@@ -131,6 +139,7 @@ export default function RisetKompetitorPage() {
   // Fetch product details on selection
   useEffect(() => {
     if (!selectedId) {
+      detailReqId.current++;   // batalin request detail yg lagi jalan (produk sebelumnya)
       setDetailProduct(null);
       setCompetitors([]);
       setDbLink(null);
@@ -139,25 +148,28 @@ export default function RisetKompetitorPage() {
     }
 
     async function fetchDetails() {
+      const myReq = ++detailReqId.current;
       setLoadingDetails(true);
       try {
-        const res = await fetch(`/api/riset-kompetitor/${selectedId}`);
+        const res = await fetch(`/api/riset-kompetitor/${selectedId}`, { cache: "no-store" });
         const json = await res.json();
+        if (myReq !== detailReqId.current) return;
         if (json.success) {
           setDetailProduct(json.data.product);
           setCompetitors(json.data.competitors);
           setDbLink(json.data.databaseLink);
           setExcludedCompetitors(json.data.excluded || []);
-          
+
           // Set default edit text input
           const manualCompetitors = json.data.competitors.filter((c: any) => c.tipe === "manual");
           const urls = manualCompetitors.map((c: any) => c.url).filter(Boolean).join("\n");
           setManualLinksInput(urls);
         }
       } catch (err) {
+        if (myReq !== detailReqId.current) return;
         console.error("Gagal memuat detail kompetitor:", err);
       } finally {
-        setLoadingDetails(false);
+        if (myReq === detailReqId.current) setLoadingDetails(false);
       }
     }
 

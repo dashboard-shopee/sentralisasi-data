@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 interface ProductRow {
   sku: string;
@@ -31,6 +31,7 @@ export default function KalkulatorPage() {
   const [perm, setPerm] = useState({ netPrice: true, margin: true, hpp: true, hargaJualKomisi: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [batchErr, setBatchErr] = useState("");
 
   // Settings states
   const [singleSettings, setSingleSettings] = useState<CostSettings>({
@@ -143,7 +144,7 @@ export default function KalkulatorPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/produk/kalkulator?tab=settings");
+      const res = await fetch("/api/produk/kalkulator?tab=settings", { cache: "no-store" });
       const data = await res.json();
       if (data.allowedTabs) setAllowedTabs(data.allowedTabs);
       if (res.status === 403) {
@@ -164,8 +165,13 @@ export default function KalkulatorPage() {
     }
   }, [activeTab]);
 
+  // Guard race: ganti filter/search cepat-cepat -> respons lama bisa nimpa hasil baru.
+  const reqId = useRef(0);
+
   const fetchProducts = useCallback(async () => {
+    const myReq = ++reqId.current;
     setLoading(true);
+    setBatchErr("");
     try {
       const params = new URLSearchParams({
         tab: "batch",
@@ -176,8 +182,9 @@ export default function KalkulatorPage() {
         sort: sortCol,
         dir: sortDir,
       });
-      const res = await fetch(`/api/produk/kalkulator?${params.toString()}`);
+      const res = await fetch(`/api/produk/kalkulator?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
+      if (myReq !== reqId.current) return;
       if (data.allowedTabs) setAllowedTabs(data.allowedTabs);
       if (res.status === 403) { setRows([]); setTotal(0); return; }
       if (res.ok) {
@@ -186,11 +193,17 @@ export default function KalkulatorPage() {
         setTotal(data.total || 0);
         if (data.single) setSingleSettings(data.single);
         if (data.batch) setBatchSettings(data.batch);
+      } else {
+        // dulu: error di sini cuma console.error, tabel tampil "Tidak ada produk" seolah
+        // kosong padahal gagal — sekarang ketauan (dan data lama TIDAK dihapus diam-diam).
+        setBatchErr(data.error || `Gagal memuat data (HTTP ${res.status})`);
       }
     } catch (e) {
+      if (myReq !== reqId.current) return;
+      setBatchErr(e instanceof Error ? e.message : "Gagal memuat data katalog batch");
       console.error("Gagal memuat batch data kalkulator:", e);
     } finally {
-      setLoading(false);
+      if (myReq === reqId.current) setLoading(false);
     }
   }, [search, statusFilter, marginFilter, page, sortCol, sortDir]);
 
@@ -201,6 +214,11 @@ export default function KalkulatorPage() {
   useEffect(() => {
     if (activeTab === "batch" && allowedTabs.includes("batch")) {
       fetchProducts();
+    } else if (activeTab === "batch") {
+      // tab batch aktif tapi allowedTabs BELUM/GA include "batch" (mis. permission sync
+      // belum sampe) -> dulu loading nyangkut true selamanya (fetchProducts ga pernah
+      // dipanggil, ga ada yg nge-set false). Sekarang di-reset biar ga stuck spinner.
+      setLoading(false);
     }
   }, [activeTab, fetchProducts, allowedTabs]);
 
@@ -649,6 +667,12 @@ export default function KalkulatorPage() {
                   <tr>
                     <td colSpan={9} className="text-center py-10 text-slate-400 font-medium">
                       Memuat data katalog...
+                    </td>
+                  </tr>
+                ) : batchErr ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-10 text-red-500 font-medium">
+                      ⚠️ {batchErr} — coba refresh halaman.
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (

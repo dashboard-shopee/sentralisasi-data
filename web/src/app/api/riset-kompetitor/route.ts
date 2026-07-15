@@ -3,6 +3,10 @@ import { q } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 
+// GET ga manggil cookies()/fungsi dinamis apapun -> tanpa ini, Next.js bisa nge-cache respons
+// di Full Route Cache dan dashboard nampilin data BASI walau DB udah keupdate (bug "data ga berubah").
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const market = searchParams.get("market") || "";

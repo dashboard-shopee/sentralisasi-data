@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import CustomSelect from "@/components/CustomSelect";
 
 type Row = Record<string, unknown>;
@@ -113,7 +113,13 @@ export default function PusatPromosiPage() {
   const [allowedTabs, setAllowedTabs] = useState<string[]>([...ALL_TABS_PROMOSI]);
   const size = 50;
 
+  // Guard race: klik tab A (fetch lambat, mis. Campaign banyak JOIN) lalu pindah tab B
+  // (fetch cepat) sebelum A selesai -> respons A yg nyampe belakangan bisa NIMPA state B.
+  // reqId = nomor urut tiap load(); commit ke state cuma kalau masih request TERBARU.
+  const reqId = useRef(0);
+
   const load = useCallback(async () => {
+    const myReq = ++reqId.current;
     setLoading(true);
     setErr("");
     try {
@@ -126,6 +132,7 @@ export default function PusatPromosiPage() {
       if (search) u.searchParams.set("q", search);
       const r = await fetch(u.toString(), { cache: "no-store" });
       const d = await r.json();
+      if (myReq !== reqId.current) return;   // request lama -> respons dibuang, ga pernah setState
       if (r.status === 403) {
         const allowed: string[] = d.allowedTabs || [];
         setAllowedTabs(allowed);
@@ -145,11 +152,12 @@ export default function PusatPromosiPage() {
       if (d.perm) setPerm(d.perm);
       if (d.allowedTabs) setAllowedTabs(d.allowedTabs);
     } catch (e) {
+      if (myReq !== reqId.current) return;
       setErr(e instanceof Error ? e.message : String(e));
       setRows([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (myReq === reqId.current) setLoading(false);
     }
   }, [tab, garSub, page, toko, search]);
 

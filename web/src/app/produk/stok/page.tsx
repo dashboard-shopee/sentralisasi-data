@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 interface SkuRow {
   sku: string;
@@ -71,7 +71,11 @@ export default function StokPage() {
     return `${s.getDate()}/${s.getMonth() + 1} - ${e.getDate()}/${e.getMonth() + 1}`;
   };
 
+  // Guard race: search cepat-cepat (debounce beririsan) -> respons lama bisa nimpa hasil baru.
+  const reqId = useRef(0);
+
   const fetchData = useCallback(async () => {
+    const myReq = ++reqId.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -82,16 +86,19 @@ export default function StokPage() {
         dir: sortDir
       });
 
-      const res = await fetch(`/api/produk/stok?${params.toString()}`);
+      const res = await fetch(`/api/produk/stok?${params.toString()}`, { cache: "no-store" });
+      if (myReq !== reqId.current) return;
       if (res.ok) {
         const d = await res.json();
+        if (myReq !== reqId.current) return;
         setRows(d.rows || []);
         setTotal(d.total || 0);
       }
     } catch (e) {
+      if (myReq !== reqId.current) return;
       console.error("Gagal mengambil data stok ERP:", e);
     } finally {
-      setLoading(false);
+      if (myReq === reqId.current) setLoading(false);
     }
   }, [q, page, size, sortCol, sortDir]);
 

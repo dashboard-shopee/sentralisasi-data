@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { tsWIB } from "@/lib/format";
 import CustomSelect from "@/components/CustomSelect";
 
@@ -179,7 +179,12 @@ export default function HargaPage() {
     }
   };
 
+  // Guard race: klik tab berat (mis. Riwayat) lalu pindah tab ringan sebelum respons lama
+  // nyampe -> respons lama bisa nimpa state tab baru. Cuma request TERBARU boleh setState.
+  const reqId = useRef(0);
+
   const fetchData = useCallback(async () => {
+    const myReq = ++reqId.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -196,8 +201,9 @@ export default function HargaPage() {
         if (selectedSumber) params.append("sumber", selectedSumber);
       }
 
-      const res = await fetch(`/api/produk/harga?${params.toString()}`);
+      const res = await fetch(`/api/produk/harga?${params.toString()}`, { cache: "no-store" });
       const d = await res.json();
+      if (myReq !== reqId.current) return;
       if (res.status === 403) {
         const allowed: string[] = d.allowedTabs || [];
         setAllowedTabs(allowed);
@@ -219,9 +225,10 @@ export default function HargaPage() {
         if (d.allowedTabs) setAllowedTabs(d.allowedTabs);
       }
     } catch (e) {
+      if (myReq !== reqId.current) return;
       console.error("Gagal mengambil data monitoring harga:", e);
     } finally {
-      setLoading(false);
+      if (myReq === reqId.current) setLoading(false);
     }
   }, [tab, q, page, size, sortCol, sortDir, selectedToko, selectedSumber]);
 

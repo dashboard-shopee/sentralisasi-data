@@ -105,7 +105,7 @@ export default function PengaturanAkses() {
     setLoading(true);
     setErr("");
     try {
-      const r = await fetch("/api/users");
+      const r = await fetch("/api/users", { cache: "no-store" });
       const data = await r.json();
       if (r.ok) {
         setUsers(data.users || []);
