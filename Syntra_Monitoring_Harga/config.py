@@ -37,7 +37,11 @@ TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balik
 # 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
 #    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
 # M4: full modul buat verif DRY semua provisioning. Kecilin lagi kalau mau fokus 1 modul.
-MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "flash", "kategori"]
+# ⚠️ "campaign" DIMATIIN SEMENTARA (15 Jul) — browser-context (buka_page_toko) buat campaign
+# ke-bukti NGERUSAK sesi `requests` yg dipake modul lain (semua modul abis campaign kena
+# "token not found" 403). Diduga buka browser BARU (shop_switcher lagi) bikin Shopee ROTASI
+# token SPC_CDS yg lagi dipake sesi `requests` existing. Nyalain lagi abis fix (lihat STATUS.md).
 # MODUL_AKTIF = ["promo_toko", "paket", "voucher", "kategori"]
 
 # 5) Setelan lain:

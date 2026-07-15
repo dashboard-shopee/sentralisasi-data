@@ -74,7 +74,10 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
             log(f"takedown flash sale gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
     # TAKEDOWN CAMPAIGN (browser-context) — item base-edit yang ikut campaign bulanan.
-    camp_kunci = {k for k in kunci if any("Campaign" in j for j in promo_item.get(k, set()))}
+    # ⚠️ gate MODUL_AKTIF: buka_page_toko (browser baru) kebukti (15 Jul) NGERUSAK token
+    # sesi `requests` yg lagi dipake — jangan jalan kalau campaign dimatiin.
+    camp_kunci = {k for k in kunci if any("Campaign" in j for j in promo_item.get(k, set()))} \
+        if "campaign" in config.MODUL_AKTIF else set()
     if camp_kunci:
         try:
             from modules.takedown_campaign import takedown_dari_campaign
