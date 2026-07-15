@@ -185,7 +185,11 @@ export default function KalkulatorPage() {
       const res = await fetch(`/api/produk/kalkulator?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (myReq !== reqId.current) return;
-      if (data.allowedTabs) setAllowedTabs(data.allowedTabs);
+      // JANGAN setAllowedTabs di sini biarpun respons bawa itu (fetchSettings udah nyimpennya).
+      // AKAR BUG: allowedTabs adalah dependency useEffect yg MANGGIL fetchProducts ini — kalau
+      // di-set ulang tiap fetch sukses (array baru walau ISI SAMA, beda reference), React nganggep
+      // berubah -> effect nembak lagi -> fetch lagi -> LOOP TANPA HENTI (kebukti: puluhan request
+      // identik di Network tab, UI kelihatan "Memuat data katalog..." nyangkut selamanya).
       if (res.status === 403) { setRows([]); setTotal(0); return; }
       if (res.ok) {
         if (data.perm) setPerm(data.perm);
