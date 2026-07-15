@@ -109,7 +109,7 @@ const fmt = (v: unknown, f?: string) => {
 const labelStatus = (v: unknown) => {
   const s = String(v);
   if (s === "1") return "Aktif";
-  if (s === "2") return "Berakhir";
+  if (s === "2") return "Nonaktif";
   return fmt(v);
 };
 
