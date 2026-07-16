@@ -8,6 +8,24 @@
 
 **Tech Stack:** Python 3.13, DrissionPage (browser-context), SQLAlchemy + Supabase Postgres, `requests`. Jalanin via `python run.py <cmd>`.
 
+## ✅ STATUS EKSEKUSI (update 16 Jul) — kode + DRY beres, LIVE belum
+
+Semua 8 task **code-complete + DRY-verified + di-commit/push**. **BELUM ADA yang jalan LIVE** (`MODE_LIVE=False`). Langkah "owner ACC → live" tiap task = PENDING.
+
+| Task | Code | DRY-verified | LIVE |
+|---|---|---|---|
+| 0 STATUS jujur | ✅ | ✅ grep klaim palsu kosong | — (docs) |
+| 1 Flash ct=7 | ✅ | ✅ 276 flash di konteks (dari 0) | ⏳ |
+| 2 Executor garansi | ✅ | ✅ callable, wired 2 titik | ⏳ |
+| 3 Fix nama toko | ✅ | ✅ _nama_display→display, DB bersih | ⏳ probe nominate live |
+| 4 Baca 7 sesi | ✅ | ✅ 7 sesi kebaca live, 978125 ada | ✅ (read-only) |
+| 5 Campaign diagnosa | ✅ | ✅ inject test → ke-flag takedown | ⏳ |
+| 6 Fase 3 | ✅ | ✅ 1217 alasan ketulis (DRY full) | ⏳ live sekali |
+| 7 Rem paket | ✅ | ✅ syntax+import (logic simpel) | ⏳ probe toko flaky (ZIO/BEVERRA) |
+| 8 Bisect voucher | ✅ | ✅ mock poison {3,7}/8 → 4 voucher | ⏳ probe poison asli |
+
+**Sisa:** verifikasi LIVE per-task (flip MODE_LIVE=True + ACC angka DRY per-task) · draft nyangkut sesi 978067/978125 (bersihin manual UI) · Task 7-8 probe butuh toko flaky masuk scope (fase rollout).
+
 ## Global Constraints
 
 - **MODE_LIVE sekarang `True`, scope `TOKO_AKTIF=["kimmioshop"]`.** Tiap task DRY dulu (`MODE_LIVE=False`) → tunjukin angka → owner ACC → baru live. JANGAN live tanpa ACC.
