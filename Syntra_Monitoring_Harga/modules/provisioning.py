@@ -104,6 +104,23 @@ def _kode_voucher(vouchers, username, now, idx):
     return base + "Z"
 
 
+def _buat_voucher_bisect(session, nama_slot, buat_fn, ids):
+    """Create voucher; kalau ERROR_PARAM (poison) & >1 item → split & rekursi buang item biang.
+    buat_fn(ids_list) -> vid (raise RuntimeError 'ERROR_PARAM' kalau poison). Return (vids, dibuang)."""
+    ids = sorted(ids)
+    try:
+        return [buat_fn(ids)], []
+    except RuntimeError as e:
+        if "ERROR_PARAM" not in str(e) or len(ids) <= 1:
+            if len(ids) == 1:
+                return [], ids     # 1 item & tetap gagal → itu poison, buang
+            raise
+    mid = len(ids) // 2
+    v1, d1 = _buat_voucher_bisect(session, nama_slot, buat_fn, ids[:mid])
+    v2, d2 = _buat_voucher_bisect(session, nama_slot, buat_fn, ids[mid:])
+    return v1 + v2, d1 + d2
+
+
 def voucher(shop, nama_toko, session):
     """Voucher PRODUK per-BAND harga (KPI owner 13 Jul) — maksa pembeli ambil >1 pcs.
       Band: 1..14999 (KPI_VOUCHER_BAND1_MAKS), lanjut per 20rb (KPI_VOUCHER_BAND_LEBAR),
@@ -218,14 +235,21 @@ def voucher(shop, nama_toko, session):
             start = int(v.get("end_time") or 0)
         else:
             start = now + 300
-        kode = _kode_voucher(vouchers, shop, now, idx)
         try:
-            vidbaru = V.buat_voucher(session, nama_slot, kode, start,
-                                     start + config.KPI_VOUCHER_DURASI_HARI * 86400,
-                                     discount=config.KPI_VOUCHER_DISKON_PCT, min_price=min_b,
-                                     max_value=None, item_ids=sorted(ids), **V.TIPE["produk"])
-            buat += 1
-            vouchers.append({"voucher_code": kode})   # cegah kode dobel di slot berikutnya (1 sesi)
+            def _create(_ids):
+                # kode UNIK tiap create: generate + DAFTARIN ke `vouchers` sebelum call, biar
+                # bisect-half & slot berikut ga dapet kode kembar (Shopee tolak kode dobel 1400101001).
+                k = _kode_voucher(vouchers, shop, now, idx)
+                vouchers.append({"voucher_code": k})
+                return V.buat_voucher(session, nama_slot, k, start,
+                                      start + config.KPI_VOUCHER_DURASI_HARI * 86400,
+                                      discount=config.KPI_VOUCHER_DISKON_PCT, min_price=min_b,
+                                      max_value=None, item_ids=_ids, **V.TIPE["produk"])
+            vids, dibuang = _buat_voucher_bisect(session, nama_slot, _create, ids)
+            if dibuang:
+                log(f"{nama_slot}: {len(dibuang)} item poison dibuang via bisect: {dibuang[:10]}",
+                    level="warning", fase="F2", toko=nama_toko, modul="voucher")
+            buat += len(vids)
         except Exception as e:
             gagal += 1
             log(f"{nama_slot} buat GAGAL: {e}", level="error", fase="F2", toko=nama_toko, modul="voucher")
