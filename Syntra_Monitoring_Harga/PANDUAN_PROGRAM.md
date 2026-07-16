@@ -176,6 +176,24 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 
 ## 📎 11. CATATAN TEKNIS (buat dev / sesi baru)
 
+### 📋 PLAN AKTIF (16 Jul) → `docs/plans/2026-07-16-perbaikan-takedown-fase2.md`
+> Hasil grilling 16 Jul. **8 task**, urut aman→berisiko, tiap yg nyentuh Shopee: DRY → owner ACC → live.
+> Eksekusi via subagent per-task (pilihan owner). BELUM dieksekusi. Detail lengkap di file plan.
+
+Akar masalah: grab (Fase 1) NYAMBUNG ke tabel fakta + dashboard (route `pusat-promosi`, filter nama
+display), TAPI aksi cabut Fase 2 belum jalan buat flash/campaign/garansi.
+- **Task 0** — jujurin STATUS.md (cabut klaim campaign "SOLVED FINAL" yg keliru)
+- **Task 1** — Flash masuk konteks: tambah `7:"Flash Sale"` di `PROMO_LABEL` (flash = campaign_type 7, kebukti probe). Cuma nangkep flash ONGOING (sesi akan-datang = keputusan owner tertunda)
+- **Task 2** — bikin `eksekusi_takedown_garansi` (executor cabut/jam yg hilang)
+- **Task 3** — fix bug nama toko campaign (`nominate` tulis 'kimmioshop' vs baca 'Kimmioshop' → juga bikin dashboard campaign KOSONG)
+- **Task 4** — `get_open_sessions` baca 7 sesi (`data.general` + `data.list[]`), campaign_id per-sesi
+- **Task 5** — inject nominasi (`baca_campaign_item`) ke `diagnosa_toko` biar takedown campaign nyala
+- **Task 6** — verifikasi Fase 3 sekali live (alasan ketulis + status terkini)
+- **Task 7** — rem anti-dobel paket 3-toko flaky (Topikece/ZIO/BEVERRA): skip kalau list kosong tapi `total_count>0`
+- **Task 8** — bisect voucher on ERROR_PARAM (buang item poison non-stok-0, sisanya tetap dapet voucher)
+
+⚠️ Task 7-8 domain beda (provisioning rollout) — digabung atas permintaan owner, bisa dikerjain terpisah.
+
 ### ▶️ HANDOFF — BACA INI DULU (update 13 Jul)
 
 **POSISI SEKARANG:** Fase 1 (grab) udah jalan di **SEMUA 10 toko** (kebukti, 0 anti-bot). **Orkestrasi = `siklus_terpadu`** (13 Jul, permintaan owner): scheduler & `tes` jalanin SATU loop toko — **1 ambil sesi per toko buat SEMUA fase** (dulu 3× buka browser: fase1/harga/provisioning sendiri-sendiri). Fase ikut `FASE_AKTIF`, fase 2 pake data grab barusan (ga grab ulang). Command manual (`grab`/`fase2`/`provisioning`) tetap ada. **Paket & Voucher ✅ verified live.** Owner lagi tes mandiri via `tes_harga.bat`.
