@@ -4,6 +4,22 @@
 
 **Goal:** Nyalain takedown per-jam Flash + Campaign + Garansi yang selama ini mati (nerima 0 / executor ga ada), plus benerin bug pencatatan campaign, biar Fase 2 poin 3③④⑤ jalan sesuai STATUS.
 
+## 📐 SPEC KPI CAMPAIGN PASANG (owner, 16 Jul) — buat Task 9 (nyusul)
+
+Verif live 16 Jul: 7 sesi kimmioshop kebagi **3 grup** (per campaign_id). Owner mau bot otomatis daftarin per-grup, **skip bersih** kalau sesi nolak (jangan ninggalin draft nyangkut kayak 978125).
+
+- **A. Eligibility (produk mana dinominasi):** stok > 50 DAN stok > 10×pjh. *(udah ada di provisioning.campaign)*
+- **B. Harga campaign yg di-SET (BARU, per DURASI sesi):** `campaign_price = target × faktor`
+  - sesi **1 hari** (session_end − session_start ≤ ~1 hari) → **diskon 1,5%** → faktor `0.985`
+  - sesi **>1 hari** (mis. umum 26 Jul–9 Aug) → **diskon 0,15%** → faktor `0.9985`
+  - deteksi dari DURASI, BUKAN campaign_id (id ganti tiap bulan).
+- **C. Stok campaign yg DIAJUKAN (BARU, tiered ~10%):**
+  - stok >1000 → ajukan **100** · 501–1000 → **50** · 251–500 → **25** · ≤250 → **5**
+- **D. Skip bersih (reaktif):** nominate per sesi; kalau submit gagal (diskon kurang / sesi nolak) → **buang preview draft** biar ga numpuk. Ekspektasi owner: tiap grup ada ≥1 sesi yg keterima.
+- **E. Takedown (cabut, terpisah — udah ada):** stok<30 / stok<pjh / harga < target×0.985.
+
+⚠️ **Implementasi (Task 9, belum dikerjain):** `nominate()` skrg pakai `fill_recommend_price` (Shopee yg ngitung harga) + GA set campaign_stock. Buat tegakin B & C, tambah langkah **preview/edit** (set `campaign_price` + `campaign_stock` per nomination_id, kaya alur manual owner di sniff) sebelum submit. Unknown yg perlu di-sniff/probe dulu: mekanisme **buang draft** on-fail (endpoint discard preview belum ketemu).
+
 **Architecture:** Diagnosa (`fase2_harga.diagnosa_toko`) mutusin per-variasi promo apa yang harus dicabut, berdasar keikutsertaan promo di `harga_promo_konteks` + fakta table. Eksekutor (`eksekusi_takedown_*`) jalanin cabutnya. Akar masalah: (1) Flash ga kelabel di konteks (ct=7 ga dikenal), (2) executor garansi/jam ga ada, (3) campaign nyimpen DB pakai username tapi baca pakai nama-display → ga ketemu, + cuma baca 3/7 sesi.
 
 **Tech Stack:** Python 3.13, DrissionPage (browser-context), SQLAlchemy + Supabase Postgres, `requests`. Jalanin via `python run.py <cmd>`.
