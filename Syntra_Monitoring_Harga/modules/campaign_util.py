@@ -169,7 +169,10 @@ def get_open_sessions(session, shop, window="nominasi"):
             log(f"gagal fetch session untuk campaign {name}: {e}", level="error", toko=shop, modul="campaign")
             continue
 
-        product_sessions = session_res.get("data", {}).get("general", {}).get("product_session") or []
+        data_sr = session_res.get("data", {}) or {}
+        product_sessions = list((data_sr.get("general", {}) or {}).get("product_session") or [])
+        for grp in (data_sr.get("list") or []):
+            product_sessions.extend(grp.get("product_session") or [])
         for s in product_sessions:
             s_name = str(s.get("session_name", "")).strip()
             s_id = s.get("session_id")
@@ -182,7 +185,7 @@ def get_open_sessions(session, shop, window="nominasi"):
                 else (sess_start <= current_time <= sess_end)
             if aktif:
                 open_sessions.append({
-                    "campaign_id": str(campaign_id),
+                    "campaign_id": str(s.get("campaign_id") or campaign_id),
                     "campaign_name": name,
                     "session_id": str(s_id),
                     "session_name": s_name,
