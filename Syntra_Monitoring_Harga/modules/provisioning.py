@@ -30,9 +30,13 @@ def paket(shop, nama_toko, session):
         return {"paket": None, "produk": 0}
 
     deals = PD.list_deals(session) or []
+    kap = PD.baca_kapasitas(session)
+    if not deals and (kap.get("total_count") or 0) > 0:
+        log(f"list deal KOSONG tapi Shopee bilang ada {kap['total_count']} deal — FLAKY, skip (rem anti-dobel)",
+            level="warning", fase="F2", toko=nama_toko, modul="paket")
+        return {"paket": None, "skip": "list_flaky", "total_count": kap.get("total_count")}
     terdaftar = PD.item_ids_terdaftar(session, deals)      # produk yg udah di paket manapun
     belum = sorted(semua - terdaftar)
-    kap = PD.baca_kapasitas(session)
     log(f"{len(semua)} produk | {len(terdaftar)} udah di paket | {len(belum)} BELUM | kapasitas {kap}",
         level="detail", fase="F2", toko=nama_toko, modul="paket")
 
