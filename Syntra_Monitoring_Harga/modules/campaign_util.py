@@ -9,6 +9,12 @@ import config
 from urllib.parse import urlencode
 
 
+def _nama_display(shop):
+    """username -> nama display; kalau udah display, balikin apa adanya."""
+    info = config.SHOP_DATABASE.get(shop)
+    return info["name"] if info else shop
+
+
 def api_post_browser(url, params, payload, kunci="data", attempts=4):
     """
     Mengirimkan request POST API Shopee dari dalam konteks Chrome yang sedang terbuka.
@@ -367,7 +373,7 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
             baris = [{"session_id": session_id, "item_id": iid, "model_id": mid, **info}
                      for (iid, mid), info in draf.items()]
             if baris:
-                SQL.upsert_fakta_campaign_item(shop, baris)
+                SQL.upsert_fakta_campaign_item(_nama_display(shop), baris)
                 log(f"sesi {session_id}: {len(baris)} nomination_id draft dicatet ke DB", level="detail", toko=shop, modul="campaign")
         except Exception as e:
             log(f"gagal catet nomination_id draft: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")

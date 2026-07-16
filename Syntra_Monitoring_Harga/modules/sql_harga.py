@@ -483,6 +483,8 @@ def upsert_fakta_campaign_item(toko, baris):
     baris = list {session_id, item_id, model_id, nomination_id, nominate_status, campaign_price}."""
     if not baris:
         return 0
+    if not config.is_toko_resmi(toko):
+        return 0
     params = [{"toko": toko, "session_id": str(b["session_id"]), "item_id": int(b["item_id"]),
                "model_id": int(b["model_id"]), "nomination_id": b.get("nomination_id"),
                "nominate_status": b.get("nominate_status"), "campaign_price": b.get("campaign_price") or 0}
