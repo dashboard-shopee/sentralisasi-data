@@ -55,6 +55,25 @@ Semua 8 task **code-complete + DRY-verified + di-commit/push**. **BELUM ADA yang
 
 **Sisa:** verifikasi LIVE per-task (flip MODE_LIVE=True + ACC angka DRY per-task) · draft nyangkut sesi 978067/978125 (bersihin manual UI) · Task 7-8 probe butuh toko flaky masuk scope (fase rollout).
 
+## 🗺️ SISA PEKERJAAN KESELURUHAN PROGRAM (update 16 Jul) — bukan cuma takedown
+
+Status per fase (kimmioshop + Alialia buat garansi): **cabut/takedown udah mateng + LIVE-verified. Pasang campaign + poin 1-4 harga + rollout = belum.** Program BELUM production-ready.
+
+**✅ Udah mateng (kode + live-verified):**
+- Fase 1 grab semua modul (campaign baca 7 sesi)
+- Poin 3③④⑤ CABUT garansi/flash/campaign — garansi withdraw (Alialia), flash self-heal (stop→hapus→recreate), campaign takedown (sesi bersih)
+- Poin 5 pasang paket/voucher/garansi/flash
+
+**⏳ SISA — urut prioritas (owner putusin urutan):**
+- [ ] **S1. Campaign pasang — harga clamp (Task 9 lanjutan).** Harga 1.5% di-override Shopee (committed dpt harga rekomendasi, bukan yg di-set). Fix edit-pisah udah di kode TAPI belum re-verif. Perlu 1 tes bersih: baca `max_campaign_entry_price` (ceiling) + cek apa harga pisah nyangkut ATAU Shopee clamp. Kalau clamp → KPI harga jadi GATE (skip kalau diskon Shopee kegedean), bukan SET.
+- [ ] **S2. Optimasi API campaign (Task 10, ringkas).** Write (add/edit/submit/opt_out) + get_landing/session_list JALAN plain requests; cuma baca nomination_id (preview_list) yg butuh browser. Rework `campaign_util` → plain-write + browser CUMA buat 1 read nomination_id (lebih ringkas & aman drpd browser semua). Full-browser-free GA BISA (read anti-bot).
+- [ ] **S3. 🔴 POIN 1-4 HARGA LIVE-VERIFY.** BELUM PERNAH live sama sekali — cuma DRY. Ini kontrol harga inti (bisa ngubah harga banyak produk). WAJIB tes scope 1 toko + DRY→ACC→live sangat hati-hati sebelum dipercaya.
+- [ ] **S4. Task 7 (rem paket) + Task 8 (bisect voucher) LIVE-test** di toko flaky (Topikece/ZIO/BEVERRA) — kode beres, belum live.
+- [ ] **S5. Fase 3 LIVE full-cycle** (skrg DRY-verified 1217 alasan; belum live).
+- [ ] **S6. Rollout 9 toko lain.** Semua verif baru di kimmioshop (+ Alialia garansi). Voucher/paket/campaign belum di 9 toko.
+- [ ] **S7. Config balik default aman** (`MODE_LIVE`/`TOKO_AKTIF`/`FASE_AKTIF` masih mode tes scope kimmioshop).
+- [ ] **S8. Housekeeping:** item lama `49909255539` (~12 model) di campaign 978125 (owner putusin) · mekanisme discard-draft recovery (sniff kalau kepake) · draft nyangkut sesi lain bersihin manual.
+
 ## 🔬 TEMUAN VERIF LIVE (16 Jul) — Task 3 write-path OK, gap opt_out DIBONGKAR
 
 Verif live Task 3 (nominate 1 model isolated ke sesi 978125):
