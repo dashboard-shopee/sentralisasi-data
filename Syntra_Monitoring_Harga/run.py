@@ -144,6 +144,7 @@ def siklus_terpadu(paksa_semua=False, fase=None):
                     _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
                     if aktif("campaign"):   # browser-context (buka_page_toko) — jangan jalan kalau dimatiin
                         _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
+                    _aman(nama, "takedown garansi", lambda: F2.eksekusi_takedown_garansi(username, nama, session, d))
                     for m in mprov:                                # poin 5 per cadence (harian/mingguan)
                         _aman(nama, f"prov {m}", lambda f=PROV[m]: f(username, nama, session))
 
@@ -243,6 +244,7 @@ def jalankan_fase2():
                 _aman(nama, "takedown flash", lambda: F2.eksekusi_takedown_flash(username, nama, session, d))
                 if "campaign" in config.MODUL_AKTIF:   # browser-context (buka_page_toko) — jangan jalan kalau dimatiin
                     _aman(nama, "takedown campaign", lambda: F2.eksekusi_takedown_campaign(username, nama, session, d))
+                _aman(nama, "takedown garansi", lambda: F2.eksekusi_takedown_garansi(username, nama, session, d))
         except Exception as e:
             log(f"GAGAL: {e}", level="error", toko=nama)
         close_session()

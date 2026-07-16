@@ -484,3 +484,19 @@ def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
           fase="F2", toko=nama_toko, modul="campaign",
           detail={"target": len(kunci), "takedown": total, "dry": config.DRY_RUN})
     return {"campaign_takedown": total, "campaign_target": len(kunci)}
+
+
+def eksekusi_takedown_garansi(shop, nama_toko, session, diagnosa):
+    """SOLUSI poin 3③. Withdraw variasi 'koreksi_turun' yg garansi-nya undercut (best<target-500)
+    atau margin@program<7%. bid_id dibawa langsung di flag diagnosa. DRY-aware (garansi.withdraw)."""
+    from modules import garansi as G
+    bids = [a["bid_id"] for d in diagnosa for a in d["aksi"]
+            if a.get("promo") == "Garansi" and a.get("aksi") == "takedown" and a.get("bid_id")]
+    if not bids:
+        return {"garansi_takedown": 0, "garansi_target": 0}
+    n = G.withdraw(session, bids)[0] if not config.DRY_RUN else 0
+    mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    catat(f"({mode}) {len(bids)} bid garansi target -> {n} ter-withdraw",
+          status=("live" if (not config.DRY_RUN and n) else "ok"),
+          fase="F2", toko=nama_toko, modul="garansi", detail={"target": len(bids), "withdraw": n, "dry": config.DRY_RUN})
+    return {"garansi_takedown": n, "garansi_target": len(bids)}
