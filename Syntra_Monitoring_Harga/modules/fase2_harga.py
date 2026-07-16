@@ -120,6 +120,15 @@ def diagnosa_toko(nama_toko):
     no anti-bot. (Sinkronisasi set/takedown komisi ke Shopee = bagian C, kena anti-bot, terpisah.)"""
     baris = SQL.baca_baris_rubah(nama_toko)
     promo = SQL.baca_promo_detail(nama_toko)
+    camp = SQL.baca_campaign_item(nama_toko)   # {(item,model): {campaign_price micro, ...}}
+    for (iid, mid), cv in camp.items():
+        harga = int((cv.get("campaign_price") or 0)) // config.FAKTOR_HARGA
+        if harga <= 0:
+            continue
+        promo.setdefault((iid, mid), []).append({
+            "jenis": "Campaign", "harga_promo": harga, "status": "aktif",
+            "stok": 0,   # stok diisi dari baris di loop bawah (b["stok"])
+        })
     garansi = SQL.baca_garansi_best(nama_toko)
     penjualan = SQL.baca_penjualan_per_hari([b["item_id"] for b in baris])
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
