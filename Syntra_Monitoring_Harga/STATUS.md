@@ -110,7 +110,8 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_t
 - ✅ Promo Toko — nyambung (Shopee kasih ct=8 di API produk)
 - ✅ **Flash CABUT** — wire (ct=7) + self-heal stop→hapus→recreate produk sama TERVERIFIKASI LIVE 16 Jul (sesi 481492786769946→481954642538724 slot sama)
 - ✅ **Garansi CABUT** — wire + withdraw TERVERIFIKASI LIVE 16 Jul di Alialia (count 168→167, bid ilang, lalu restore)
-- 🔧 Campaign CABUT — wire beres (DRY), tapi verif live nunggu SESI BERSIH (978125 tercemar draft nyangkut). Lihat docs/plans/2026-07-16-perbaikan-takedown-fase2.md
+- ✅ **Campaign CABUT** — verified live 16 Jul (sesi bersih) + S2: jalur per-jam FULL requests polos (tanpa browser). Lihat docs/plans/2026-07-16-perbaikan-takedown-fase2.md
+- 🔧 **Campaign PASANG** — gate KPI vs ceiling Shopee LIVE-PROVEN 16 Jul mlm, TAPI 🔴 temuan bisnis: ceiling ≈ 0.95×harga tampil → KPI diskon 1,5%/0,15% GA AKAN lolos di sesi skrg → bot skip semua (sesuai spec "ga bisa daftar → skip"). KEPUTUSAN OWNER: relax KPI ≥5% / biarin skip / naikin harga pre-campaign. Detail di plan S1.
 - ⏳ Fase 3 (laporan), ⏳ Poin 1–4 harga (logika beres, belum PERNAH diverifikasi live — hati2 pas nyalain MODE_LIVE)
 
 **⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom · voucher fe_status · stok-habis→0 = akar voucher poison KELAR · auto-isi harga diskon) · M2 ✅ (Loop A→B · Fase 3 grab-ulang · alasan per-produk ke DB) · M3 ✅ logika (rem 30/40% gate · komisi peg +trigger Shopee `komisi_hold` · garansi takedown jam 2-kolom margin@Program · poin 4 re-attach→provisioning harian) — ⚠️ **BELUM LIVE, tes scope 1 toko + DRY dulu** ·
