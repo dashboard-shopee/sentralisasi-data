@@ -27,6 +27,12 @@ Verif live 16 Jul: 7 sesi kimmioshop kebagi **3 grup** (per campaign_id). Owner 
 - **Keputusan (owner 16 Jul): REAKTIF.** Discard draft GA dibutuhin di operasi normal (harga bener → submit bersih; ga-eligible reject di preview/add). Discard cuma buat RECOVERY draft sisa run crash — sniff terpisah nanti, GA ngeblok Task 9.
 - Yg WAJIB dijaga: **preview_no fresh per sesi** (`preview_no:""` katanya ga selalu fresh — pastiin pas implementasi).
 
+**🔬 TEMUAN VERIF LIVE TASK 9 (16 Jul):**
+- ✅ Alur add→edit→submit JALAN, submit BERSIH (0 draft nyangkut), takedown JALAN di sesi bersih. Deteksi durasi bener (86399s→1.5%). KPI hitung bener.
+- ⚠️ **HARGA GAK NYANGKUT**: set 4432 (1.5%), committed dapet 3825 (harga rekomendasi Shopee). Edit versi GABUNG (price+stock 1 entry) → gagal. FIX: edit DIPISAH per entry (sniff owner). **BELUM re-verif** apa pisah bikin nyangkut ATAU Shopee CLAMP ke `max_campaign_entry_price` (perlu baca ceiling + retest bersih).
+- ❌ **FULL API (no browser) GAK BISA**: `preview/add`+`edit`+`submit`+`opt_out`+`get_landing`+`get_session_list` LOLOS requests polos, TAPI `preview_list`+`nominated_entity_list`+`selector/verify` (baca nomination_id) = ANTI-BOT 90309999 → WAJIB browser navigate-listen. nominate butuh nomination_id → browser tetap perlu (buat baca). Optimasi mungkin: write plain + browser CUMA buat 1 read nomination_id (lebih ringkas dari skrg yg browser semua).
+- ⚠️ Sisa lama item `49909255539` (~12 model status 30) di sesi 978125 dari kerjaan pre-compaction — owner putusin hapus/biarin.
+
 **Architecture:** Diagnosa (`fase2_harga.diagnosa_toko`) mutusin per-variasi promo apa yang harus dicabut, berdasar keikutsertaan promo di `harga_promo_konteks` + fakta table. Eksekutor (`eksekusi_takedown_*`) jalanin cabutnya. Akar masalah: (1) Flash ga kelabel di konteks (ct=7 ga dikenal), (2) executor garansi/jam ga ada, (3) campaign nyimpen DB pakai username tapi baca pakai nama-display → ga ketemu, + cuma baca 3/7 sesi.
 
 **Tech Stack:** Python 3.13, DrissionPage (browser-context), SQLAlchemy + Supabase Postgres, `requests`. Jalanin via `python run.py <cmd>`.
