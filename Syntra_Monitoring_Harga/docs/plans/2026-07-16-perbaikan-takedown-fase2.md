@@ -15,8 +15,8 @@ Semua 8 task **code-complete + DRY-verified + di-commit/push**. **BELUM ADA yang
 | Task | Code | DRY-verified | LIVE |
 |---|---|---|---|
 | 0 STATUS jujur | ✅ | ✅ grep klaim palsu kosong | — (docs) |
-| 1 Flash ct=7 | ✅ | ✅ 276 flash di konteks (dari 0) | ⏳ |
-| 2 Executor garansi | ✅ | ✅ callable, wired 2 titik | ⏳ |
+| 1 Flash ct=7 | ✅ | ✅ 276 flash di konteks; 276 ke-flag pas ambang dipaksa | ✅ self-heal stop→hapus→recreate produk sama (sesi 481492786769946→481954642538724, slot sama) |
+| 2 Executor garansi | ✅ | ✅ inject bid sintetis → executor nerima garansi_target=1 | ✅ withdraw live di Alialia (count 168→167, bid ilang), lalu restore |
 | 3 Fix nama toko | ✅ | ✅ _nama_display→display, DB bersih | ⏳ probe nominate live |
 | 4 Baca 7 sesi | ✅ | ✅ 7 sesi kebaca live, 978125 ada | ✅ (read-only) |
 | 5 Campaign diagnosa | ✅ | ✅ inject test → ke-flag takedown | ⏳ |
