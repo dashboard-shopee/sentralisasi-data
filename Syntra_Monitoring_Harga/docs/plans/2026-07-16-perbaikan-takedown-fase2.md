@@ -18,7 +18,14 @@ Verif live 16 Jul: 7 sesi kimmioshop kebagi **3 grup** (per campaign_id). Owner 
 - **D. Skip bersih (reaktif):** nominate per sesi; kalau submit gagal (diskon kurang / sesi nolak) → **buang preview draft** biar ga numpuk. Ekspektasi owner: tiap grup ada ≥1 sesi yg keterima.
 - **E. Takedown (cabut, terpisah — udah ada):** stok<30 / stok<pjh / harga < target×0.985.
 
-⚠️ **Implementasi (Task 9, belum dikerjain):** `nominate()` skrg pakai `fill_recommend_price` (Shopee yg ngitung harga) + GA set campaign_stock. Buat tegakin B & C, tambah langkah **preview/edit** (set `campaign_price` + `campaign_stock` per nomination_id, kaya alur manual owner di sniff) sebelum submit. Unknown yg perlu di-sniff/probe dulu: mekanisme **buang draft** on-fail (endpoint discard preview belum ketemu).
+⚠️ **Implementasi (Task 9, belum dikerjain):** `nominate()` skrg pakai `fill_recommend_price` (Shopee yg ngitung harga) + GA set campaign_stock. Buat tegakin B & C, tambah langkah **preview/edit** (set `campaign_price` + `campaign_stock` per nomination_id, kaya alur manual owner di sniff) sebelum submit.
+
+**🔬 TEMUAN INVESTIGASI 16 Jul (selector/verify + draft):**
+- `selector/verify` (pre-filter eligibility Shopee) **KENA ANTI-BOT** (`Failed to fetch` via injected call) — sama kaya nominated_entity_list. Pre-filter via endpoint Shopee GA BISA otomatis.
+- Kategori kimmioshop mostly aksesoris → cuma **~6 item Home&Living** (kriteria 8.8) dari 222. Campaign 8.8 buat toko ini emang cocoknya dikit (bukan bug).
+- **Draft nyangkut BUKAN alur normal**: sniff bukti `preview/add` nolak produk ga-eligible DI SITU (978067: 12 ok/1 gagal), `submit` SELALU 12/12 bersih (0 gagal). Draft nyangkut 978125 = akibat bug Rp0 lama (submit gagal), bukan operasi normal.
+- **Keputusan (owner 16 Jul): REAKTIF.** Discard draft GA dibutuhin di operasi normal (harga bener → submit bersih; ga-eligible reject di preview/add). Discard cuma buat RECOVERY draft sisa run crash — sniff terpisah nanti, GA ngeblok Task 9.
+- Yg WAJIB dijaga: **preview_no fresh per sesi** (`preview_no:""` katanya ga selalu fresh — pastiin pas implementasi).
 
 **Architecture:** Diagnosa (`fase2_harga.diagnosa_toko`) mutusin per-variasi promo apa yang harus dicabut, berdasar keikutsertaan promo di `harga_promo_konteks` + fakta table. Eksekutor (`eksekusi_takedown_*`) jalanin cabutnya. Akar masalah: (1) Flash ga kelabel di konteks (ct=7 ga dikenal), (2) executor garansi/jam ga ada, (3) campaign nyimpen DB pakai username tapi baca pakai nama-display → ga ketemu, + cuma baca 3/7 sesi.
 
