@@ -100,6 +100,24 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
                 raise RuntimeError(f"Gagal memanggil {url} via browser: {cuplikan}")
 
 
+def _api_post(session, url, payload, kunci="data", attempts=4):
+    """Router jalur API campaign (16 Jul, S2 optimasi):
+    - Browser-context LAGI KEBUKA → lewat browser (api_post_browser). Wajib, karena abis
+      navigasi halaman, token SPC_CDS sesi requests jadi BASI (403) — lihat
+      session.segarkan_abis_browser_context.
+    - Browser GA kebuka → requests POLOS. Verif 16 Jul: preview/add + preview/edit +
+      submit_entity_online + nominated/opt_out + get_landing_page_campaign_list +
+      get_session_list semuanya LOLOS polos; cuma preview_list + nominated_entity_list
+      (baca nomination_id) yg anti-bot (90309999) wajib navigate-listen.
+    Efek: takedown per-jam (get_open_sessions + opt_out + DB) bisa jalan TANPA buka
+    browser sama sekali — lebih cepet & sesi requests ga dibasiin."""
+    from modules.session import get_page
+    if get_page():
+        return api_post_browser(url, session["params"], payload, kunci=kunci, attempts=attempts)
+    from modules.api_util import api_post
+    return api_post(url, session["headers"], session["params"], payload, kunci=kunci, attempts=attempts)
+
+
 def get_open_sessions(session, shop, window="nominasi"):
     """
     Mengambil sesi kampanye (gajian sale, tanggal kembar, dll — cuma yg namanya cocok
@@ -121,9 +139,9 @@ def get_open_sessions(session, shop, window="nominasi"):
 
     # 1) Ambil list kampanye landing page
     try:
-        res = api_post_browser(
+        res = _api_post(
+            session,
             config.URL_GET_LANDING_CAMPAIGN,
-            session["params"],
             {
                 "campaign_scene": [],
                 "view_flag": 1,
@@ -154,9 +172,9 @@ def get_open_sessions(session, shop, window="nominasi"):
 
         # 3) Fetch sesi di bawah kampanye yang cocok
         try:
-            session_res = api_post_browser(
+            session_res = _api_post(
+                session,
                 config.URL_GET_SESSION_LIST,
-                session["params"],
                 {
                     "campaign_id": str(campaign_id),
                     "view_type": 0,
@@ -270,6 +288,8 @@ def get_nominated_products(session, shop, campaign_id, session_id, tunggu=8):
                     "nomination_id": nomination_id,
                     "nominate_status": nominate_status,
                     "campaign_price": campaign_price,
+                    "original_price": m.get("original_price"),
+                    "max_entry_price": (m.get("pricing_application_info") or {}).get("max_campaign_entry_price"),
                 }
 
     if total_count and got < total_count:
@@ -380,7 +400,7 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
                                  "models": [{"item_id": str(p["item_id"]), "model_id": str(m["model_id"])} for m in p["models"]]}}
                     for p in c]
         try:
-            r = api_post_browser(config.URL_PREVIEW_ADD, session["params"],
+            r = _api_post(session, config.URL_PREVIEW_ADD,
                 {"session_id": str(session_id), "preview_no": preview_no,
                  "entity_list_data": {"recruiting_entities": entities},
                  "fill_recommend_price": True, "operate_start_time": int(time.time())}, kunci="data")
@@ -447,7 +467,7 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
                           "purchase_limit": str(int(stok))})
     if infos and preview_no:
         try:
-            api_post_browser(config.URL_PREVIEW_EDIT, session["params"],
+            _api_post(session, config.URL_PREVIEW_EDIT,
                 {"session_id": str(session_id), "preview_no": str(preview_no),
                  "update_product_preview_infos": infos, "types": [2]}, kunci="data")
             log(f"sesi {session_id}: SET harga+stok KPI ({len(infos)} entry pisah)", level="detail", toko=shop, modul="campaign")
@@ -456,14 +476,18 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
 
     committed = failed = 0
     try:
-        r = api_post_browser(config.URL_SUBMIT_NOMINATION, session["params"],
+        r = _api_post(session, config.URL_SUBMIT_NOMINATION,
             {"session_id": str(session_id), "entity_type": 2, "confirm_risky": False}, kunci="data")
         pr = (r.get("data") or {}).get("product_result") or {}
         committed = int(pr.get("success_model_num") or 0); failed = int(pr.get("failed_model_num") or 0)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
 
-    # skip-bersih model gate-fail: opt_out langsung + hapus baris DB (biar diagnosa ga nge-flag zombie)
+    # skip-bersih model gate-fail: opt_out langsung + hapus baris DB (biar diagnosa ga nge-flag zombie).
+    # ⚠️ (16 Jul, verif live sesi 957874) abis submit, nominasi bisa NAHAN di status 10 (review
+    # Shopee, sesi tipe tertentu mis. "Koleksi Ingatkan Diskon") -> opt_out ditolak 329400012
+    # "current status does not support". Fallback: baris DB SENGAJA DIBIARIN -> harga committed
+    # (= ceiling) < target×0.985 -> diagnosa per-jam nge-flag -> takedown nyabut begitu status 30.
     gate_skip = 0
     if langgar and committed:
         time.sleep(2)   # kasih napas transisi staged(10)->committed(30) di sisi Shopee
@@ -476,10 +500,16 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
                                         [(int(iid), int(mid)) for (iid, mid) in langgar])
             except Exception as e:
                 log(f"gagal hapus baris gate-skip dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
+        else:
+            log(f"sesi {session_id}: opt_out inline {len(ids)} model gate-fail DITOLAK (kemungkinan "
+                f"masih status review/10) — baris DB dibiarin, takedown per-jam bakal nyabut pas status 30",
+                level="warning", toko=shop, modul="campaign")
 
-    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal, {gate_skip} gate-skip)",
+    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal, "
+        f"{len(langgar)} gate-fail, {gate_skip} langsung ke-cabut)",
         level="live", toko=shop, modul="campaign")
-    return {"staged": staged, "committed_model": committed, "failed_model": failed, "gate_skip": gate_skip}
+    return {"staged": staged, "committed_model": committed, "failed_model": failed,
+            "gate_skip": gate_skip, "gate_langgar": len(langgar)}
 
 
 def takedown_products(session, shop, session_id, nomination_ids):
@@ -494,9 +524,9 @@ def takedown_products(session, shop, session_id, nomination_ids):
     for i in range(0, len(nomination_ids), chunk_size):
         chunk = nomination_ids[i:i + chunk_size]
         try:
-            api_post_browser(
+            _api_post(
+                session,
                 config.URL_OPT_OUT_NOMINATION,
-                session["params"],
                 {
                     "session_id": str(session_id),
                     "nomination_ids": chunk,
