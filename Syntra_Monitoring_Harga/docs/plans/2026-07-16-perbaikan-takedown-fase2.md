@@ -26,6 +26,21 @@ Semua 8 task **code-complete + DRY-verified + di-commit/push**. **BELUM ADA yang
 
 **Sisa:** verifikasi LIVE per-task (flip MODE_LIVE=True + ACC angka DRY per-task) · draft nyangkut sesi 978067/978125 (bersihin manual UI) · Task 7-8 probe butuh toko flaky masuk scope (fase rollout).
 
+## 🔬 TEMUAN VERIF LIVE (16 Jul) — Task 3 write-path OK, gap opt_out DIBONGKAR
+
+Verif live Task 3 (nominate 1 model isolated ke sesi 978125):
+- ✅ **Write-path LIVE-PROVEN**: nominate `committed 1 model`, DB nyatet `toko='Kimmioshop'` (display, bukan 'kimmioshop') — bug nama toko Task 3 beneran kelar di live.
+- ❌ **opt_out gagal `10002 not found`** → diselidiki (bedah `__sniff_campaign_aksi.json`, read-only).
+
+**HASIL INVESTIGASI (kesimpulan penting buat Task 5):**
+- nomination_id **STABIL** melewati transisi staged→committed. Sniff bukti: id `2300000005165047425` muncul di `preview_list` (nominate_status **10**) DAN `nominated_entity_list` (nominate_status **30**) — **id SAMA PERSIS**. Jadi premis Task 3/5 (simpen preview-id → pakai buat opt_out) **VALID**, bukan cacat.
+- Kegagalan opt_out gua **BUKAN** karena desain, tapi karena **sesi 978125 TERCEMAR**: ada draft nyangkut (item 24148110949 Rp0) yg bikin tiap submit "1 gagal" + sisa state tes lama → id yg ke-capture jadi ga valid. Sesi BERSIH → konsisten (kebukti di sniff).
+
+**OPEN ITEM (belum kelar):**
+- [ ] **Manual (owner):** cabut item tes `51309165959` dari sesi 978125 tab "Dinominasikan" + buang draft nyangkut `24148110949` tab "Menunggu Didaftarkan". Ini ngebersihin sesi → `nominated_entity_list` kebaca lagi.
+- [ ] **Verif live Task 5 (campaign takedown) HARUS di sesi BERSIH** — JANGAN pakai 978125 selama draft nyangkut belum dibuang (testbed tercemar → hasil ga bisa dipercaya).
+- [ ] Robustness: `takedown_products` opt_out yg `10002 not found` (id stale krn state sesi berubah) udah non-fatal (log + lanjut per-chunk) — cukup; kalau sering, tambah re-grab id sebelum opt_out.
+
 ## Global Constraints
 
 - **MODE_LIVE sekarang `True`, scope `TOKO_AKTIF=["kimmioshop"]`.** Tiap task DRY dulu (`MODE_LIVE=False`) → tunjukin angka → owner ACC → baru live. JANGAN live tanpa ACC.

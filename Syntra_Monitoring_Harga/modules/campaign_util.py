@@ -292,6 +292,12 @@ def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
     SQL.upsert_fakta_campaign_item supaya takedown_campaign.py bisa lookup dari DB sendiri,
     gak perlu tanya nominated_entity_list (signature-locked) atau klik tab (kena captcha).
 
+    ✅ (16 Jul, verif) nomination_id STABIL melewati staged(status 10)->committed(status 30):
+    sniff bukti id yg SAMA muncul di preview_list (status 10) DAN nominated_entity_list
+    (status 30). Jadi opt_out pakai id preview ini VALID — takedown-dari-DB desainnya benar.
+    ⚠️ Kegagalan opt_out `10002 not found` = GEJALA SESI TERCEMAR (draft nyangkut / submit
+    "1 gagal" berulang), BUKAN id preview-vs-committed. Testbed harus sesi BERSIH.
+
     Return {(item_id, model_id): {"nomination_id","nominate_status","campaign_price"}}.
     """
     from modules.session import get_page
