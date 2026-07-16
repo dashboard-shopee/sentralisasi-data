@@ -498,6 +498,19 @@ def upsert_fakta_campaign_item(toko, baris):
     return len(params)
 
 
+def hapus_campaign_item(toko, session_id, pairs):
+    """Hapus baris nominasi spesifik (abis opt_out sukses) biar diagnosa/takedown gak
+    nge-flag zombie sampe nunggu snapshot grab harian. pairs = [(item_id, model_id), ...]."""
+    if not pairs:
+        return 0
+    q = text("delete from harga_fakta_campaign_item where toko = :t and session_id = :s "
+             "and item_id = :i and model_id = :m")
+    with get_engine().begin() as c:
+        for iid, mid in pairs:
+            c.execute(q, {"t": toko, "s": str(session_id), "i": int(iid), "m": int(mid)})
+    return len(pairs)
+
+
 def simpan_fakta_flash_sesi(toko, baris):
     """baris = list {flash_sale_id, status, timeslot_id, start_time, end_time, item_count}."""
     return _snapshot_toko(

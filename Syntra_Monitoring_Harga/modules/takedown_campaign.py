@@ -46,10 +46,11 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
             if not sid:
                 continue
             nominated = SQL.baca_campaign_item(nama_toko, sid)  # {(iid_int,mid_int)->info} dari DB
-            nom_ids = []
+            nom_ids, pairs = [], []
             for (iid, mid), info in nominated.items():
                 if (iid, mid) in kunci_set and info.get("nomination_id"):
                     nom_ids.append(info["nomination_id"])
+                    pairs.append((iid, mid))
             if not nom_ids:
                 continue
             if config.DRY_RUN:
@@ -59,6 +60,11 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
             else:
                 if C.takedown_products(session, shop, sid, nom_ids):
                     total += len(nom_ids)
+                    # bersihin baris DB biar diagnosa jam berikutnya ga nge-flag zombie
+                    try:
+                        SQL.hapus_campaign_item(nama_toko, sid, pairs)
+                    except Exception as e:
+                        log(f"gagal hapus baris takedown dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
     except Exception as e:
         log(f"takedown campaign gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
     finally:

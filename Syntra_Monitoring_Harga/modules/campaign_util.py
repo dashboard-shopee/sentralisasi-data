@@ -298,7 +298,13 @@ def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
     ⚠️ Kegagalan opt_out `10002 not found` = GEJALA SESI TERCEMAR (draft nyangkut / submit
     "1 gagal" berulang), BUKAN id preview-vs-committed. Testbed harus sesi BERSIH.
 
-    Return {(item_id, model_id): {"nomination_id","nominate_status","campaign_price"}}.
+    ✅ (16 Jul, bedah sniff) preview_list juga bawa `pricing_application_info.
+    max_campaign_entry_price` (= reference_price_by_shopee, micro) — CEILING harga campaign.
+    Shopee CLAMP campaign_price ke ceiling ini (kebukti live: set 4432, committed 3825 =
+    ceiling model itu). Ditangkep di sini sbg `max_entry_price` buat gate KPI di nominate().
+
+    Return {(item_id, model_id): {"nomination_id","nominate_status","campaign_price",
+    "max_entry_price"}}.
     """
     from modules.session import get_page
     page = get_page()
@@ -337,6 +343,7 @@ def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
                     "nomination_id": str(m.get("nomination_id", "")),
                     "nominate_status": m.get("nominate_status"),
                     "campaign_price": m.get("campaign_price"),
+                    "max_entry_price": (m.get("pricing_application_info") or {}).get("max_campaign_entry_price"),
                 }
     return hasil
 
@@ -401,19 +408,37 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
         except Exception as e:
             log(f"gagal catet nomination_id draft: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
 
-    # SET harga (per-durasi sesi) + stok (tiered) per KPI via preview/edit.
-    # ⚠️ (16 Jul, verif live) entry HARGA dan STOK DIPISAH — persis alur sniff manual owner:
-    # {nomination_ids, campaign_price_type, campaign_price} + {nomination_ids, campaign_stock,
-    # purchase_limit}. Versi lama (gabung 1 entry) kebukti harga GAK NYANGKUT (committed dpt
-    # harga rekomendasi Shopee, bukan yg di-set). ⚠️ BELUM re-verif live apa pisah bikin nyangkut
-    # atau Shopee clamp ke max_campaign_entry_price — cek ulang sebelum andelin.
-    infos = []
+    # ⛔ GATE KPI harga vs CEILING Shopee (16 Jul, bedah sniff + verif live):
+    # `max_entry_price` (preview_list) = harga maksimum campaign yg Shopee terima; harga
+    # yg di-set LEBIH TINGGI bakal di-CLAMP turun ke ceiling (kebukti: set 4432, committed
+    # 3825 = ceiling). Kalau harga KPI (target×faktor) > ceiling → diskon yg Shopee paksa
+    # LEBIH DALEM dari KPI → model DILARANG ikut. Endpoint discard-draft GA ADA, jadi
+    # jalur skip-bersih = ikut submit dulu → langsung opt_out (endpoint proven).
+    lolos, langgar = {}, {}
     for (iid, mid), info in draf.items():
         nomid = info.get("nomination_id")
         hv = hs.get((str(iid), str(mid)))
         if not nomid or not hv:
             continue
         harga_rp, stok = hv
+        ceiling = info.get("max_entry_price")
+        if harga_rp and ceiling and int(round(harga_rp * config.FAKTOR_HARGA)) > int(ceiling):
+            langgar[(iid, mid)] = info
+        else:
+            lolos[(iid, mid)] = info
+    if langgar:
+        log(f"sesi {session_id}: {len(langgar)} model GAGAL gate KPI (ceiling Shopee < target×faktor) "
+            f"→ di-opt-out abis submit (skip bersih)", level="warning", toko=shop, modul="campaign")
+
+    # SET harga (per-durasi sesi) + stok (tiered) per KPI via preview/edit — CUMA model lolos gate.
+    # ⚠️ (16 Jul, verif live) entry HARGA dan STOK DIPISAH — persis alur sniff manual owner:
+    # {nomination_ids, campaign_price_type, campaign_price} + {nomination_ids, campaign_stock,
+    # purchase_limit}. Versi lama (gabung 1 entry) harga gak nyangkut — TAPI tes itu pakai harga
+    # DI ATAS ceiling (mustahil nyangkut apapun formatnya); format pisah tetep dipake (sesuai sniff).
+    infos = []
+    for (iid, mid), info in lolos.items():
+        nomid = info["nomination_id"]
+        harga_rp, stok = hs[(str(iid), str(mid))]
         if harga_rp and harga_rp > 0:
             infos.append({"nomination_ids": [str(nomid)], "campaign_price_type": 1,
                           "campaign_price": str(int(round(harga_rp * config.FAKTOR_HARGA)))})
@@ -437,8 +462,24 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
         committed = int(pr.get("success_model_num") or 0); failed = int(pr.get("failed_model_num") or 0)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
-    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal)", level="live", toko=shop, modul="campaign")
-    return {"staged": staged, "committed_model": committed, "failed_model": failed}
+
+    # skip-bersih model gate-fail: opt_out langsung + hapus baris DB (biar diagnosa ga nge-flag zombie)
+    gate_skip = 0
+    if langgar and committed:
+        time.sleep(2)   # kasih napas transisi staged(10)->committed(30) di sisi Shopee
+        ids = [i["nomination_id"] for i in langgar.values()]
+        if takedown_products(session, shop, session_id, ids):
+            gate_skip = len(ids)
+            try:
+                from modules import sql_harga as SQL
+                SQL.hapus_campaign_item(_nama_display(shop), session_id,
+                                        [(int(iid), int(mid)) for (iid, mid) in langgar])
+            except Exception as e:
+                log(f"gagal hapus baris gate-skip dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
+
+    log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal, {gate_skip} gate-skip)",
+        level="live", toko=shop, modul="campaign")
+    return {"staged": staged, "committed_model": committed, "failed_model": failed, "gate_skip": gate_skip}
 
 
 def takedown_products(session, shop, session_id, nomination_ids):
