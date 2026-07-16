@@ -65,14 +65,19 @@ Status per fase (kimmioshop + Alialia buat garansi): **cabut/takedown udah maten
 - Poin 5 pasang paket/voucher/garansi/flash
 
 **⏳ SISA — urut prioritas (owner putusin urutan):**
-- [ ] **S1. Campaign pasang — harga clamp (Task 9 lanjutan).** Harga 1.5% di-override Shopee (committed dpt harga rekomendasi, bukan yg di-set). Fix edit-pisah udah di kode TAPI belum re-verif. Perlu 1 tes bersih: baca `max_campaign_entry_price` (ceiling) + cek apa harga pisah nyangkut ATAU Shopee clamp. Kalau clamp → KPI harga jadi GATE (skip kalau diskon Shopee kegedean), bukan SET.
-- [ ] **S2. Optimasi API campaign (Task 10, ringkas).** Write (add/edit/submit/opt_out) + get_landing/session_list JALAN plain requests; cuma baca nomination_id (preview_list) yg butuh browser. Rework `campaign_util` → plain-write + browser CUMA buat 1 read nomination_id (lebih ringkas & aman drpd browser semua). Full-browser-free GA BISA (read anti-bot).
+- [x] **S1. Campaign pasang — harga clamp (Task 9 lanjutan). KELAR 16 Jul mlm (commit 6fd9d19):**
+  CLAMP KEBUKTI + GATE DIIMPLEMENT & LIVE-PROVEN. Temuan kunci:
+  - `preview_list` bawa `pricing_application_info.max_campaign_entry_price` (= `reference_price_by_shopee`) = CEILING. Harga yg di-set > ceiling di-CLAMP turun (4432→3825 kemaren = ceiling model itu, BUKAN bug edit).
+  - Gate di `nominate()`: desired > ceiling → model gate-fail → opt_out abis submit (endpoint discard-draft GA ADA). ⚠️ Temuan live: abis submit nominasi bisa NAHAN status 10 (review) → opt_out inline ditolak `329400012` → fallback: baris DB dibiarin, takedown per-jam nyabut pas status 30 (self-heal).
+  - 🔴 **TEMUAN BISNIS (owner wajib tau):** 6/6 kandidat tes GAGAL gate — ceiling ≈ **0.95×harga tampil** (verif eksak item 24148110949: tampil 11900, ceiling 11305). Rule sesi (sniff): min-diskon + "pengecekan harga". Karena bot jaga harga konstan di target, ceiling selalu ~5% di bawah target → **KPI 1.5%/0.15% ga akan pernah lolos di sesi2 ini → bot bakal skip SEMUA (sesuai KPI, "klo ga bisa d daftarin skip")**. Kalau owner mau produk keikut campaign → pilihan: (a) relax KPI diskon ke ≥5%, (b) biarin skip semua, (c) naikin harga tampil dulu pre-campaign (lawan filosofi poin 1-4). KEPUTUSAN OWNER.
+  - Konsekuensi: verif "harga nyangkut via edit-pisah" belum kebukti (ga ada kandidat lolos gate buat dites) — otomatis kebukti nanti kalau owner relax KPI / ada produk yg ceiling-nya longgar.
+- [x] **S2. Optimasi API campaign. KELAR 16 Jul mlm (commit d4ba8e0):** `_api_post` router (browser kebuka→browser, nggak→requests polos). **Takedown per-jam sekarang FULL TANPA BROWSER** (get_open_sessions + opt_out + DB polos semua; ga ada lagi buka_page/segarkan di jalur itu). Nominate mingguan tetep browser (preview_list anti-bot). ⏳ live-verif jalur polos nyusul (bareng cleanup item tes).
 - [ ] **S3. 🔴 POIN 1-4 HARGA LIVE-VERIFY.** BELUM PERNAH live sama sekali — cuma DRY. Ini kontrol harga inti (bisa ngubah harga banyak produk). WAJIB tes scope 1 toko + DRY→ACC→live sangat hati-hati sebelum dipercaya.
 - [ ] **S4. Task 7 (rem paket) + Task 8 (bisect voucher) LIVE-test** di toko flaky (Topikece/ZIO/BEVERRA) — kode beres, belum live.
 - [ ] **S5. Fase 3 LIVE full-cycle** (skrg DRY-verified 1217 alasan; belum live).
 - [ ] **S6. Rollout 9 toko lain.** Semua verif baru di kimmioshop (+ Alialia garansi). Voucher/paket/campaign belum di 9 toko.
 - [ ] **S7. Config balik default aman** (`MODE_LIVE`/`TOKO_AKTIF`/`FASE_AKTIF` masih mode tes scope kimmioshop).
-- [ ] **S8. Housekeeping:** item lama `49909255539` (~12 model) di campaign 978125 (owner putusin) · mekanisme discard-draft recovery (sniff kalau kepake) · draft nyangkut sesi lain bersihin manual.
+- [ ] **S8. Housekeeping:** item lama `49909255539` (~12 model) di campaign 978125 (owner putusin) · mekanisme discard-draft recovery (sniff kalau kepake) · draft nyangkut sesi lain bersihin manual · **⚠️ 6 item TES gate-fail nyangkut status 10 (16 Jul mlm): 1 di sesi 957874 (item 24148110949) + 5 di sesi 978125 (26644645406/27194629760/27544655729/28194629754/40031314216) — opt_out ditolak selama status 10 (review); sweep poll jalan, kalau ga flip ke 30 → owner cabut via UI. Baris DB sengaja DIBIARIN biar takedown per-jam nyabut otomatis.**
 
 ## 🔬 TEMUAN VERIF LIVE (16 Jul) — Task 3 write-path OK, gap opt_out DIBONGKAR
 
