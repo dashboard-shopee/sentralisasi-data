@@ -342,43 +342,57 @@ def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
 
 
 def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None):
-    """Nominasi produk ke 1 sesi campaign via browser-context (STAGE preview/add per-chunk
-    lalu SUBMIT 1x commit — sama alurnya kaya campaign.nominate, cuma lewat api_post_browser
-    biar lolos anti-bot). produk_list = [{"item_id": id, "models": [model_id,...]}].
-    ✅ (15 Jul, grilling) `fill_recommend_price: True` + `operate_start_time` — kebukti dari
-    sniff aksi manual owner: TANPA ini, campaign_price selalu 0 -> submit_entity_online GAGAL
-    100% ("Harga promo harus > 0"). Dengan flag ini, Shopee ITU SENDIRI yang ngitung harga
-    rekomendasi per model (verified sniff: item yg sukses dapet campaign_price otomatis).
+    """Nominasi produk ke 1 sesi campaign via browser-context. Alur = alur UI manual owner
+    (sniff): preview/add (STAGE) → preview_list (ambil nomination_id) → preview/edit (SET
+    campaign_price + campaign_stock per nomination_id sesuai KPI) → submit (COMMIT).
+      produk_list = [{"item_id": id, "models": [{"model_id": m, "campaign_price": <rupiah>,
+                      "campaign_stock": <qty>}, ...]}].
+    ✅ (16 Jul, spec owner) harga di-SET eksplisit per KPI (harga per-durasi sesi + stok tiered)
+    lewat preview/edit — BUKAN cuma fill_recommend_price. campaign_price → micro (×FAKTOR_HARGA).
+    fill_recommend_price di add tetap dipertahankan sbg baseline (cegah Rp0 kalau edit meleset).
     Return {"staged","committed_model","failed_model"}."""
     if not produk_list:
         return {"staged": 0, "committed_model": 0, "failed_model": 0}
+    # peta harga(rupiah)+stok per (item,model) buat langkah preview/edit
+    hs = {}
+    for p in produk_list:
+        for m in p["models"]:
+            hs[(str(p["item_id"]), str(m["model_id"]))] = (m.get("campaign_price"), m.get("campaign_stock"))
     if getattr(config, "DRY_RUN", False):
         n = sum(len(p["models"]) for p in produk_list)
-        log(f"(DRY) nominasi {len(produk_list)} produk ({n} model) → sesi {session_id}", level="warning", toko=shop, modul="campaign")
+        log(f"(DRY) nominasi {len(produk_list)} produk ({n} model) → sesi {session_id} "
+            f"(harga+stok per-KPI di-set via preview/edit)", level="warning", toko=shop, modul="campaign")
         return {"staged": len(produk_list), "committed_model": 0, "failed_model": 0}
 
     staged = 0
+    preview_no = ""
     for i in range(0, len(produk_list), chunk):
         c = produk_list[i:i + chunk]
         entities = [{"entity_type": 2,
                      "product": {"item_id": str(p["item_id"]),
-                                 "models": [{"item_id": str(p["item_id"]), "model_id": str(m)} for m in p["models"]]}}
+                                 "models": [{"item_id": str(p["item_id"]), "model_id": str(m["model_id"])} for m in p["models"]]}}
                     for p in c]
         try:
             r = api_post_browser(config.URL_PREVIEW_ADD, session["params"],
-                {"session_id": str(session_id), "preview_no": "",
+                {"session_id": str(session_id), "preview_no": preview_no,
                  "entity_list_data": {"recruiting_entities": entities},
                  "fill_recommend_price": True, "operate_start_time": int(time.time())}, kunci="data")
-            staged += int((r.get("data") or {}).get("product_success_num") or 0)
+            d = r.get("data") or {}
+            staged += int(d.get("product_success_num") or 0)
+            preview_no = str(d.get("preview_no") or preview_no)   # dipakai buat preview/edit
         except Exception as e:
             log(f"preview/add chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", toko=shop, modul="campaign")
 
-    # ✅ catet nomination_id SENDIRI ke DB selagi masih draft (preview_list, aman/no-captcha) —
-    # ini sumber kebenaran buat takedown_campaign.py nanti, bukan nominated_entity_list.
-    if staged and campaign_id:
+    if not staged:
+        log(f"sesi {session_id}: 0 produk ke-stage (semua ditolak preview/add) — skip bersih", level="warning", toko=shop, modul="campaign")
+        return {"staged": 0, "committed_model": 0, "failed_model": 0}
+
+    # nomination_id per (item,model) via preview_list (aman/no-captcha)
+    draf = get_preview_nomination_ids(shop, campaign_id, session_id) if campaign_id else {}
+    # catet ke DB (sumber takedown; campaign_price di-refresh grab harian abis edit)
+    if draf:
         try:
             from modules import sql_harga as SQL
-            draf = get_preview_nomination_ids(shop, campaign_id, session_id)
             baris = [{"session_id": session_id, "item_id": iid, "model_id": mid, **info}
                      for (iid, mid), info in draf.items()]
             if baris:
@@ -386,6 +400,32 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
                 log(f"sesi {session_id}: {len(baris)} nomination_id draft dicatet ke DB", level="detail", toko=shop, modul="campaign")
         except Exception as e:
             log(f"gagal catet nomination_id draft: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
+
+    # SET harga (per-durasi sesi) + stok (tiered) per KPI via preview/edit
+    infos = []
+    for (iid, mid), info in draf.items():
+        nomid = info.get("nomination_id")
+        hv = hs.get((str(iid), str(mid)))
+        if not nomid or not hv:
+            continue
+        harga_rp, stok = hv
+        entry = {"nomination_ids": [str(nomid)]}
+        if harga_rp and harga_rp > 0:
+            entry["campaign_price_type"] = 1
+            entry["campaign_price"] = str(int(round(harga_rp * config.FAKTOR_HARGA)))
+        if stok and stok > 0:
+            entry["campaign_stock"] = str(int(stok))
+            entry["purchase_limit"] = str(int(stok))
+        if len(entry) > 1:
+            infos.append(entry)
+    if infos and preview_no:
+        try:
+            api_post_browser(config.URL_PREVIEW_EDIT, session["params"],
+                {"session_id": str(session_id), "preview_no": str(preview_no),
+                 "update_product_preview_infos": infos, "types": [2]}, kunci="data")
+            log(f"sesi {session_id}: SET harga+stok KPI {len(infos)} model", level="detail", toko=shop, modul="campaign")
+        except Exception as e:
+            log(f"preview/edit (set harga+stok) gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
 
     committed = failed = 0
     try:

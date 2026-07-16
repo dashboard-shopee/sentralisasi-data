@@ -95,9 +95,16 @@ KPI_CAMPAIGN_STOK_MIN  = 30      # takedown campaign bila stok  < ini
 #    pasang HANYA jika best ≥ target−KPI_GARANSI_SELISIH DAN margin@best ≥ KPI_GARANSI_MARGIN_MIN.
 
 # ── PASANG CAMPAIGN (provisioning mingguan) ──
-KPI_CAMPAIGN_PASANG_FAKTOR     = 0.985  # harga potongan campaign MAKS target × ini
-KPI_CAMPAIGN_PASANG_STOK_MIN   = 50     # syarat pasang: stok > ini
+KPI_CAMPAIGN_PASANG_FAKTOR     = 0.985  # harga potongan campaign MAKS target × ini (dipakai takedown/acuan)
+KPI_CAMPAIGN_PASANG_STOK_MIN   = 50     # syarat pasang (eligibility): stok > ini
 KPI_CAMPAIGN_PASANG_STOK_X_PJH = 10     # DAN stok > ini × pjh
+# Harga campaign yg di-SET, per DURASI sesi (spec owner 16 Jul): sesi 1 hari butuh diskon
+# lebih dalam (1.5%) drpd sesi panjang (0.15%). campaign_price = target × faktor.
+KPI_CAMPAIGN_FAKTOR_1HARI      = 0.985  # sesi ≤1 hari → diskon 1.5%
+KPI_CAMPAIGN_FAKTOR_MULTIHARI  = 0.9985 # sesi >1 hari (umum) → diskon 0.15%
+# Stok yg DIAJUKAN ke campaign = tiered ~10% dari stok asli (spec owner 16 Jul).
+# list (batas_bawah_stok, stok_diajukan) urut DESC; stok > batas → ajukan segini.
+KPI_CAMPAIGN_STOK_TIER         = [(1000, 100), (500, 50), (250, 25), (0, 5)]
 
 # ── PASANG PAKET DISKON (provisioning harian) ──
 KPI_PAKET_TIER        = [(2, 1), (3, 2), (7, 3)]  # (min_qty, diskon%): beli 2→1%, 3→2%, 7→3%
@@ -269,6 +276,7 @@ URL_GET_LANDING_CAMPAIGN = "https://seller.shopee.co.id/api/mkt/cmt/get_landing_
 URL_GET_SESSION_LIST = "https://seller.shopee.co.id/api/mkt/cmt/commonscene/get_session_list"
 URL_GET_NOMINATED_LIST = "https://seller.shopee.co.id/api/mkt/cmt/nominated/nominated_entity_list"
 URL_PREVIEW_ADD = "https://seller.shopee.co.id/api/mkt/cmt/preview/add"
+URL_PREVIEW_EDIT = "https://seller.shopee.co.id/api/mkt/cmt/preview/edit"
 URL_PREVIEW_LIST = "https://seller.shopee.co.id/api/mkt/cmt/preview/preview_list"
 URL_SUBMIT_NOMINATION = "https://seller.shopee.co.id/api/mkt/cmt/preview/submit_entity_online"
 URL_OPT_OUT_NOMINATION = "https://seller.shopee.co.id/api/mkt/cmt/nominated/opt_out"

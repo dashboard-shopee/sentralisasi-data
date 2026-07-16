@@ -272,6 +272,23 @@ def voucher(shop, nama_toko, session):
             "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal}
 
 
+def _stok_campaign(stok_asli):
+    """Stok yg DIAJUKAN ke campaign = tiered ~10% dari stok asli (spec owner 16 Jul).
+    KPI_CAMPAIGN_STOK_TIER = [(1000,100),(500,50),(250,25),(0,5)] (DESC). stok>batas → ajukan."""
+    for batas, ajukan in config.KPI_CAMPAIGN_STOK_TIER:
+        if stok_asli > batas:
+            return ajukan
+    return config.KPI_CAMPAIGN_STOK_TIER[-1][1]
+
+
+def _faktor_harga_sesi(s):
+    """Faktor harga campaign per DURASI sesi (spec owner 16 Jul): sesi ≤1 hari butuh diskon
+    1.5% (faktor 0.985) · sesi >1 hari (umum) cukup 0.15% (0.9985). Deteksi dari durasi,
+    BUKAN campaign_id (id ganti tiap bulan). Durasi ga jelas → multihari (diskon dangkal, aman)."""
+    durasi = int(s.get("session_end_time", 0) or 0) - int(s.get("session_start_time", 0) or 0)
+    return config.KPI_CAMPAIGN_FAKTOR_1HARI if 0 < durasi <= 86400 else config.KPI_CAMPAIGN_FAKTOR_MULTIHARI
+
+
 def campaign(shop, nama_toko, session):
     """Campaign mingguan — nominasi produk (yg LOLOS kriteria stok) ke sesi campaign yg lagi buka
     window nominasi. Kriteria: stok > KPI_CAMPAIGN_PASANG_STOK_MIN (50) DAN stok > KPI_CAMPAIGN_
@@ -288,6 +305,8 @@ def campaign(shop, nama_toko, session):
     prod_all = C.produk_toko(nama_toko)                 # semua produk berstok [{item_id, models}]
     stok = SQL.baca_stok_per_item(nama_toko)            # {item_id: stok}
     pjh = SQL.baca_penjualan_per_hari([p["item_id"] for p in prod_all])
+    tgt = {(b["item_id"], b["model_id"]): b["harga_akhir"]           # target harga per (item,model)
+           for b in SQL.baca_baris_rubah(nama_toko) if b.get("harga_akhir")}
     smin = config.KPI_CAMPAIGN_PASANG_STOK_MIN
     xf = config.KPI_CAMPAIGN_PASANG_STOK_X_PJH
     lolos = [p for p in prod_all
@@ -307,14 +326,30 @@ def campaign(shop, nama_toko, session):
         for s in sesi:
             sid = s["session_id"]
             cid = s.get("campaign_id")
+            faktor = _faktor_harga_sesi(s)                     # KPI harga per DURASI sesi
             # sumber "udah ternominasi apa belum" = DB KITA SENDIRI (dicatet nominate() pas
             # staging) — bukan get_nominated_products() live, karena itu ngandelin
             # nominated_entity_list yg gak kebaca kalau sesi lagi ada draft nyangkut
             # (default-tab-nya geser, bukan "Dinominasikan" -> false-negative 0 hasil).
             already = SQL.baca_campaign_item(nama_toko, sid)   # {(iid_int,mid_int): {...}}
-            baru = [p for p in lolos
-                    if not all((int(p["item_id"]), int(m)) in already for m in p["models"])]
-            r = CU.nominate(session, shop, sid, baru, campaign_id=cid)
+            # bangun produk_list dgn harga (target×faktor) + stok (tiered) per model, skip yg udah nom
+            produk_list = []
+            for p in lolos:
+                iid = p["item_id"]
+                models = []
+                for m in p["models"]:
+                    if (int(iid), int(m)) in already:
+                        continue                               # model ini udah dinominasi -> skip
+                    target = tgt.get((iid, m))
+                    if not target or target <= 0:
+                        continue                               # ga ada target -> ga bisa itung harga
+                    models.append({"model_id": m, "campaign_price": round(target * faktor),
+                                   "campaign_stock": _stok_campaign(stok.get(iid, 0))})
+                if models:
+                    produk_list.append({"item_id": iid, "models": models})
+            if not produk_list:
+                continue                                       # sesi ini ga ada yg baru buat didaftar
+            r = CU.nominate(session, shop, sid, produk_list, campaign_id=cid)
             total += r.get("staged", 0)
     finally:
         tutup_page()
