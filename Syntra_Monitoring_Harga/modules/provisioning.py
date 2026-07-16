@@ -278,10 +278,15 @@ def campaign(shop, nama_toko, session):
             level="detail", fase="F2", toko=nama_toko, modul="campaign")
         for s in sesi:
             sid = s["session_id"]
-            already = CU.get_nominated_products(session, shop, s.get("campaign_id"), sid)   # {(iid_str,mid_str): {...}}
+            cid = s.get("campaign_id")
+            # sumber "udah ternominasi apa belum" = DB KITA SENDIRI (dicatet nominate() pas
+            # staging) — bukan get_nominated_products() live, karena itu ngandelin
+            # nominated_entity_list yg gak kebaca kalau sesi lagi ada draft nyangkut
+            # (default-tab-nya geser, bukan "Dinominasikan" -> false-negative 0 hasil).
+            already = SQL.baca_campaign_item(nama_toko, sid)   # {(iid_int,mid_int): {...}}
             baru = [p for p in lolos
-                    if not all((str(p["item_id"]), str(m)) in already for m in p["models"])]
-            r = CU.nominate(session, shop, sid, baru)
+                    if not all((int(p["item_id"]), int(m)) in already for m in p["models"])]
+            r = CU.nominate(session, shop, sid, baru, campaign_id=cid)
             total += r.get("staged", 0)
     finally:
         tutup_page()

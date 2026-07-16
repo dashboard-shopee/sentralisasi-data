@@ -477,7 +477,7 @@ def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
         return {"campaign_takedown": 0, "campaign_target": 0}
 
     idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
-    total = takedown_dari_campaign(session, shop, idx, kunci)
+    total = takedown_dari_campaign(session, shop, idx, kunci, nama_toko=nama_toko)
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(kunci)} variasi target → {total} ter-takedown",
           status=("live" if (not config.DRY_RUN and total) else "ok"),

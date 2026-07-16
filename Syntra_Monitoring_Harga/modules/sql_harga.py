@@ -445,6 +445,57 @@ def simpan_fakta_campaign_item(toko, baris):
         pk=("toko", "session_id", "item_id", "model_id"))
 
 
+_SQL_UPSERT_CAMPAIGN_ITEM = text("""
+    insert into harga_fakta_campaign_item
+        (toko, session_id, item_id, model_id, nomination_id, nominate_status, campaign_price, diperbarui_pada)
+    values
+        (:toko, :session_id, :item_id, :model_id, :nomination_id, :nominate_status, :campaign_price, now())
+    on conflict (toko, session_id, item_id, model_id) do update set
+        nomination_id   = excluded.nomination_id,
+        nominate_status = excluded.nominate_status,
+        campaign_price  = excluded.campaign_price,
+        diperbarui_pada = now()
+""")
+
+
+def baca_campaign_item(toko, session_id=None):
+    """{(item_id, model_id): {"session_id","nomination_id","nominate_status","campaign_price"}}
+    dari harga_fakta_campaign_item — sumber kebenaran KITA SENDIRI (dicatet nominate() pas
+    staging), gantiin get_nominated_products() live yg butuh nominated_entity_list
+    (signature-locked) buat sesi yg ada draft nyangkut (auto default-tab-nya bukan
+    "Dinominasikan" -> gak kebaca). session_id=None -> semua sesi toko itu."""
+    q = "select session_id, item_id, model_id, nomination_id, nominate_status, campaign_price from harga_fakta_campaign_item where toko = :t"
+    params = {"t": toko}
+    if session_id:
+        q += " and session_id = :s"
+        params["s"] = str(session_id)
+    with get_engine().connect() as c:
+        rows = c.execute(text(q), params).fetchall()
+    return {(int(r.item_id), int(r.model_id)): {
+        "session_id": r.session_id, "nomination_id": r.nomination_id,
+        "nominate_status": r.nominate_status, "campaign_price": r.campaign_price,
+    } for r in rows}
+
+
+def upsert_fakta_campaign_item(toko, baris):
+    """UPSERT (bukan snapshot/delete-all) — buat dipanggil INCREMENTAL dari nominate() begitu
+    dapet nomination_id fresh, tanpa nghapus baris sesi/produk lain punya toko itu.
+    baris = list {session_id, item_id, model_id, nomination_id, nominate_status, campaign_price}."""
+    if not baris:
+        return 0
+    params = [{"toko": toko, "session_id": str(b["session_id"]), "item_id": int(b["item_id"]),
+               "model_id": int(b["model_id"]), "nomination_id": b.get("nomination_id"),
+               "nominate_status": b.get("nominate_status"), "campaign_price": b.get("campaign_price") or 0}
+              for b in baris]
+    seen = {}
+    for p in params:
+        seen[(p["toko"], p["session_id"], p["item_id"], p["model_id"])] = p
+    params = list(seen.values())
+    with get_engine().begin() as c:
+        c.execute(_SQL_UPSERT_CAMPAIGN_ITEM, params)
+    return len(params)
+
+
 def simpan_fakta_flash_sesi(toko, baris):
     """baris = list {flash_sale_id, status, timeslot_id, start_time, end_time, item_count}."""
     return _snapshot_toko(

@@ -82,7 +82,7 @@ def edit_harga_dasar(shop, session, daftar, nama_toko=None):
         try:
             from modules.takedown_campaign import takedown_dari_campaign
             idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
-            takedown_dari_campaign(session, shop, idx, camp_kunci)
+            takedown_dari_campaign(session, shop, idx, camp_kunci, nama_toko=nama_toko or shop)
         except Exception as e:
             log(f"takedown campaign gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 
@@ -249,7 +249,7 @@ def update_harga(shop, session, baris, nama_toko=None):
         try:
             from modules.takedown_campaign import takedown_dari_campaign
             idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
-            takedown_dari_campaign(session, shop, idx, camp)
+            takedown_dari_campaign(session, shop, idx, camp, nama_toko=nama_toko or shop)
         except Exception as e:
             log(f"takedown campaign gagal: {type(e).__name__}", level="error", fase="F2", toko=shop, modul="harga")
 

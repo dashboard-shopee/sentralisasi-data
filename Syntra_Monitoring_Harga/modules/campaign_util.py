@@ -269,10 +269,71 @@ def get_nominated_products(session, shop, campaign_id, session_id, tunggu=8):
     return nominated_map
 
 
-def nominate(session, shop, session_id, produk_list, chunk=50):
+def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
+    """
+    Nangkep nomination_id produk yg LAGI di draft/preview (belum/baru di-submit) di 1 sesi,
+    via navigasi + dengerin `preview_list` (BUKAN `nominated_entity_list`) — endpoint ini
+    OTOMATIS fire pas halaman sesi di-buka NORMAL kalau sesi itu punya draft pending (tab
+    default-nya "Menunggu Didaftarkan"), jadi bisa dibaca aman TANPA klik (klik tab manual
+    kebukti live 15 Jul KENA verify/traffic/error — captcha WAF Shopee, bukan cuma 90309999).
+
+    ✅ (15 Jul, grilling "gua mau full otomatis") INI KUNCI biar nominate() bisa nyatet
+    nomination_id-nya SENDIRI pas baru staging (preview/add) — nomination_id udah kebentuk
+    dari situ, gak perlu nunggu submit. Dicatet ke DB (harga_fakta_campaign_item) via
+    SQL.upsert_fakta_campaign_item supaya takedown_campaign.py bisa lookup dari DB sendiri,
+    gak perlu tanya nominated_entity_list (signature-locked) atau klik tab (kena captcha).
+
+    Return {(item_id, model_id): {"nomination_id","nominate_status","campaign_price"}}.
+    """
+    from modules.session import get_page
+    page = get_page()
+    if not page:
+        raise RuntimeError("Jendela browser Chrome belum terinisialisasi.")
+
+    url = f"https://seller.shopee.co.id/portal/marketing/cmt-product/campaign/{campaign_id}/session/{session_id}?source=2"
+    hasil = {}
+    try:
+        page.listen.start("preview_list")
+        page.get(url)
+        tangkapan = list(page.listen.steps(timeout=tunggu))
+    finally:
+        try:
+            page.listen.stop()
+        except Exception:
+            pass
+
+    for pkt in tangkapan:
+        try:
+            body = pkt.response.body
+            if isinstance(body, str):
+                body = json.loads(body)
+            if not isinstance(body, dict):
+                continue
+        except Exception:
+            continue
+        data_obj = body.get("data") or {}
+        entities = ((data_obj.get("entity_list_data") or {}).get("recruiting_entities")) or []
+        for entity in entities:
+            prod = entity.get("product") or {}
+            item_id = str(prod.get("item_id", ""))
+            for m in (prod.get("models") or []):
+                model_id = str(m.get("model_id", ""))
+                hasil[(item_id, model_id)] = {
+                    "nomination_id": str(m.get("nomination_id", "")),
+                    "nominate_status": m.get("nominate_status"),
+                    "campaign_price": m.get("campaign_price"),
+                }
+    return hasil
+
+
+def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None):
     """Nominasi produk ke 1 sesi campaign via browser-context (STAGE preview/add per-chunk
     lalu SUBMIT 1x commit — sama alurnya kaya campaign.nominate, cuma lewat api_post_browser
     biar lolos anti-bot). produk_list = [{"item_id": id, "models": [model_id,...]}].
+    ✅ (15 Jul, grilling) `fill_recommend_price: True` + `operate_start_time` — kebukti dari
+    sniff aksi manual owner: TANPA ini, campaign_price selalu 0 -> submit_entity_online GAGAL
+    100% ("Harga promo harus > 0"). Dengan flag ini, Shopee ITU SENDIRI yang ngitung harga
+    rekomendasi per model (verified sniff: item yg sukses dapet campaign_price otomatis).
     Return {"staged","committed_model","failed_model"}."""
     if not produk_list:
         return {"staged": 0, "committed_model": 0, "failed_model": 0}
@@ -291,10 +352,26 @@ def nominate(session, shop, session_id, produk_list, chunk=50):
         try:
             r = api_post_browser(config.URL_PREVIEW_ADD, session["params"],
                 {"session_id": str(session_id), "preview_no": "",
-                 "entity_list_data": {"recruiting_entities": entities}}, kunci="data")
+                 "entity_list_data": {"recruiting_entities": entities},
+                 "fill_recommend_price": True, "operate_start_time": int(time.time())}, kunci="data")
             staged += int((r.get("data") or {}).get("product_success_num") or 0)
         except Exception as e:
             log(f"preview/add chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", toko=shop, modul="campaign")
+
+    # ✅ catet nomination_id SENDIRI ke DB selagi masih draft (preview_list, aman/no-captcha) —
+    # ini sumber kebenaran buat takedown_campaign.py nanti, bukan nominated_entity_list.
+    if staged and campaign_id:
+        try:
+            from modules import sql_harga as SQL
+            draf = get_preview_nomination_ids(shop, campaign_id, session_id)
+            baris = [{"session_id": session_id, "item_id": iid, "model_id": mid, **info}
+                     for (iid, mid), info in draf.items()]
+            if baris:
+                SQL.upsert_fakta_campaign_item(shop, baris)
+                log(f"sesi {session_id}: {len(baris)} nomination_id draft dicatet ke DB", level="detail", toko=shop, modul="campaign")
+        except Exception as e:
+            log(f"gagal catet nomination_id draft: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
+
     committed = failed = 0
     try:
         r = api_post_browser(config.URL_SUBMIT_NOMINATION, session["params"],
