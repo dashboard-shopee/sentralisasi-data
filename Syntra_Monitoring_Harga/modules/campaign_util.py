@@ -401,7 +401,12 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
         except Exception as e:
             log(f"gagal catet nomination_id draft: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
 
-    # SET harga (per-durasi sesi) + stok (tiered) per KPI via preview/edit
+    # SET harga (per-durasi sesi) + stok (tiered) per KPI via preview/edit.
+    # ⚠️ (16 Jul, verif live) entry HARGA dan STOK DIPISAH — persis alur sniff manual owner:
+    # {nomination_ids, campaign_price_type, campaign_price} + {nomination_ids, campaign_stock,
+    # purchase_limit}. Versi lama (gabung 1 entry) kebukti harga GAK NYANGKUT (committed dpt
+    # harga rekomendasi Shopee, bukan yg di-set). ⚠️ BELUM re-verif live apa pisah bikin nyangkut
+    # atau Shopee clamp ke max_campaign_entry_price — cek ulang sebelum andelin.
     infos = []
     for (iid, mid), info in draf.items():
         nomid = info.get("nomination_id")
@@ -409,21 +414,18 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
         if not nomid or not hv:
             continue
         harga_rp, stok = hv
-        entry = {"nomination_ids": [str(nomid)]}
         if harga_rp and harga_rp > 0:
-            entry["campaign_price_type"] = 1
-            entry["campaign_price"] = str(int(round(harga_rp * config.FAKTOR_HARGA)))
+            infos.append({"nomination_ids": [str(nomid)], "campaign_price_type": 1,
+                          "campaign_price": str(int(round(harga_rp * config.FAKTOR_HARGA)))})
         if stok and stok > 0:
-            entry["campaign_stock"] = str(int(stok))
-            entry["purchase_limit"] = str(int(stok))
-        if len(entry) > 1:
-            infos.append(entry)
+            infos.append({"nomination_ids": [str(nomid)], "campaign_stock": str(int(stok)),
+                          "purchase_limit": str(int(stok))})
     if infos and preview_no:
         try:
             api_post_browser(config.URL_PREVIEW_EDIT, session["params"],
                 {"session_id": str(session_id), "preview_no": str(preview_no),
                  "update_product_preview_infos": infos, "types": [2]}, kunci="data")
-            log(f"sesi {session_id}: SET harga+stok KPI {len(infos)} model", level="detail", toko=shop, modul="campaign")
+            log(f"sesi {session_id}: SET harga+stok KPI ({len(infos)} entry pisah)", level="detail", toko=shop, modul="campaign")
         except Exception as e:
             log(f"preview/edit (set harga+stok) gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
 
