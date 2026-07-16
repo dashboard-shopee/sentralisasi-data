@@ -208,8 +208,8 @@ CHROME_USER_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__c
 STOK_FIELD = "total_available_stock"   # / "total_seller_stock" / "total_shopee_stock"
 
 # ── Label sumber harga (campaign_type dari ongoing_campaigns) ──
-#    3=Paket Diskon, 8=Promo Toko, 11=Garansi Harga Terbaik, 0=Campaign.
-PROMO_LABEL = {0: "Campaign", 3: "Paket Diskon", 8: "Promo Toko", 11: "Garansi Harga Terbaik"}
+#    0=Campaign, 3=Paket Diskon, 7=Flash Sale, 8=Promo Toko, 11=Garansi Harga Terbaik.
+PROMO_LABEL = {0: "Campaign", 3: "Paket Diskon", 7: "Flash Sale", 8: "Promo Toko", 11: "Garansi Harga Terbaik"}
 LABEL_HARGA_AWAL = "Harga Awal"    # tidak ada promo -> origin_price
 LABEL_PROMO_LAIN = "Promosi Lain"  # ada promo tapi tipe belum dikenali
 
