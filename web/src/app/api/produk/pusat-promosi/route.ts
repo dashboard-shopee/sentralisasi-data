@@ -141,6 +141,8 @@ export async function GET(req: Request) {
     }
 
     // PRODUK ternominasi dalam 1 sesi Campaign (expand-row tab Campaign). Harga = campaign_price.
+    // ⚠️ campaign_price di fakta = satuan MICRO Shopee (rupiah × 100.000) — wajib dibagi
+    // sebelum tampil (17 Jul: Rp6.375 sempet tampil "Rp 637.500.000").
     if (tab === "campaign_produk") {
       if (!isTabAllowed(perms, "promosi", "campaign")) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
       const sid = p.get("session_id");
@@ -148,7 +150,8 @@ export async function GET(req: Request) {
       if (!sid || !tk) return NextResponse.json({ error: "session_id & toko wajib" }, { status: 400 });
       const produk = await q<Record<string, unknown>>(
         `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
-                o.nama_variasi "namaVariasi", i.campaign_price "posted", ${TARGET_EXPR} "target"
+                o.nama_variasi "namaVariasi",
+                round(i.campaign_price / 100000.0) "posted", ${TARGET_EXPR} "target"
          from harga_fakta_campaign_item i
          left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
          left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
