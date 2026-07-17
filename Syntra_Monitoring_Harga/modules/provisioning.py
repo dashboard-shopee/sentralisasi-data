@@ -281,6 +281,28 @@ def _stok_campaign(stok_asli):
     return config.KPI_CAMPAIGN_STOK_TIER[-1][1]
 
 
+def _senin_daftar(s, hari_ini=None):
+    """Timing daftar campaign (spec owner 17 Jul): daftarin CUMA pas Senin yg tepat,
+    biar ga kedinian. Kelewat Senin-nya -> SKIP (bukan susulan).
+      - Sesi >1 hari  -> Senin di MINGGU sesi MULAI (26=Minggu -> Senin 20 · 26=Rabu ->
+        Senin 24 · 26=Senin -> hari itu).
+      - Sesi ≤1 hari  -> Senin TERAKHIR sebelum/pas TUTUP NOMINASI.
+    Return True kalau hari_ini = Senin yg dimaksud buat sesi ini."""
+    from datetime import date, timedelta
+    hari_ini = hari_ini or date.today()
+    if hari_ini.weekday() != 0:          # bukan Senin -> ga ada pendaftaran campaign
+        return False
+    start = int(s.get("session_start_time", 0) or 0)
+    end = int(s.get("session_end_time", 0) or 0)
+    nom_end = int(s.get("nomination_end_time", 0) or 0)
+    anchor_ts = start if (end - start) > 86400 else (nom_end or start)
+    if anchor_ts <= 0:
+        return False
+    a = date.fromtimestamp(anchor_ts)    # WIB (jam mesin)
+    senin_anchor = a - timedelta(days=a.weekday())
+    return hari_ini == senin_anchor
+
+
 def _faktor_harga_sesi(s):
     """Faktor harga campaign per DURASI sesi (spec owner 16 Jul): sesi ≤1 hari butuh diskon
     1.5% (faktor 0.985) · sesi >1 hari (umum) cukup 0.15% (0.9985). Deteksi dari durasi,
@@ -326,6 +348,11 @@ def campaign(shop, nama_toko, session):
         for s in sesi:
             sid = s["session_id"]
             cid = s.get("campaign_id")
+            # ⏱️ timing Senin (owner 17 Jul): cuma daftar pas Senin yg tepat buat sesi ini
+            if not _senin_daftar(s):
+                log(f"sesi {s.get('session_name','')[:40]} BELUM jatuh tempo daftar (aturan Senin) — skip",
+                    level="detail", fase="F2", toko=nama_toko, modul="campaign")
+                continue
             faktor = _faktor_harga_sesi(s)                     # KPI harga per DURASI sesi
             # sumber "udah ternominasi apa belum" = DB KITA SENDIRI (dicatet nominate() pas
             # staging) — bukan get_nominated_products() live, karena itu ngandelin
