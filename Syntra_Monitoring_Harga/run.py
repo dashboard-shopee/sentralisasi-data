@@ -524,33 +524,14 @@ def grab_komisi_browser(interaktif=True):
         nama = info["name"]
         print(colorama.Fore.LIGHTCYAN_EX + f"\n[{_t()}] === GRAB KOMISI BROWSER — {nama} ({username}) ===" + colorama.Style.RESET_ALL)
         raw, items = [], {}
-        try:
-            page = S.buka_page_toko(shop=username, i=info["i"])
-            page.listen.start("affiliateplatform/gql")
-            for url in KOMISI_URLS:
-                try:
-                    print(colorama.Fore.WHITE + f"[komisi grab] navigate: {url.split('?')[0].split('/portal/')[-1]}" + colorama.Style.RESET_ALL)
-                    page.get(url); page.wait(3)
-                    for _ in range(12):     # scroll biar lazy-load / pagination kepanggil
-                        try: page.scroll.to_bottom()
-                        except Exception: pass
-                        page.wait(1)
-                except Exception as e:
-                    print(colorama.Fore.YELLOW + f"[komisi grab] nav gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
-            # JEDA MANUAL (CLI): kalau auto-nav meleset, buka halaman Komisi manual di Chrome +
-            # scroll. Paket gql ke-BUFFER selama ini. SCHEDULER (interaktif=False): skip, wait aja.
-            if interaktif:
-                print(colorama.Fore.LIGHTYELLOW_EX + "\n[komisi grab] >>> Kalau tabel komisi BELUM kebuka: buka manual di Chrome ini "
-                      "(menu Affiliate/Komisi), SCROLL sampai habis." + colorama.Style.RESET_ALL)
-                try:
-                    input(colorama.Fore.LIGHTYELLOW_EX + "[komisi grab] >>> Tekan ENTER kalau udah keliatan semua produk komisi... " + colorama.Style.RESET_ALL)
-                except EOFError:
-                    page.wait(5)
-            else:
-                page.wait(5)   # unattended: kasih waktu gql kepanggil
-            # drain paket ke-capture (berhenti kalau 8s ga ada request baru)
+
+        def _drain(page, timeout):
+            """Konsumsi paket gql & BACA BODY BEGITU DATENG. ⚠️ (17 Jul, akar '0 item'):
+            body paket yg di-drain TELAT (nunggu abis scroll+wait ~20s) balik KOSONG
+            (buffer CDP keburu dibuang) → parser dapet string kosong. Makanya drain
+            dilakuin BERKALA di sela navigasi, bukan sekali di akhir."""
             try:
-                for p in page.listen.steps(timeout=8):
+                for p in page.listen.steps(timeout=timeout):
                     body = getattr(getattr(p, "response", None), "body", None)
                     postdata = getattr(getattr(p, "request", None), "postData", None)
                     op = ""
@@ -564,6 +545,32 @@ def grab_komisi_browser(interaktif=True):
                     _parse_komisi_list(body, items)
             except Exception as e:
                 print(colorama.Fore.YELLOW + f"[komisi grab] drain gagal: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
+
+        try:
+            page = S.buka_page_toko(shop=username, i=info["i"])
+            page.listen.start("affiliateplatform/gql")
+            for url in KOMISI_URLS:
+                try:
+                    print(colorama.Fore.WHITE + f"[komisi grab] navigate: {url.split('?')[0].split('/portal/')[-1]}" + colorama.Style.RESET_ALL)
+                    page.get(url)
+                    _drain(page, 10)                     # paket load awal (incl. GetOpenCampaignProducts)
+                    for _ in range(4):                   # scroll biar lazy-load / pagination kepanggil
+                        try: page.scroll.to_bottom()
+                        except Exception: pass
+                        page.wait(1)
+                    _drain(page, 6)                      # paket hasil scroll
+                except Exception as e:
+                    print(colorama.Fore.YELLOW + f"[komisi grab] nav gagal: {type(e).__name__}" + colorama.Style.RESET_ALL)
+            # JEDA MANUAL (CLI): kalau auto-nav meleset, buka halaman Komisi manual di Chrome +
+            # scroll. SCHEDULER (interaktif=False): skip.
+            if interaktif and not items:
+                print(colorama.Fore.LIGHTYELLOW_EX + "\n[komisi grab] >>> Kalau tabel komisi BELUM kebuka: buka manual di Chrome ini "
+                      "(menu Affiliate/Komisi), SCROLL sampai habis." + colorama.Style.RESET_ALL)
+                try:
+                    input(colorama.Fore.LIGHTYELLOW_EX + "[komisi grab] >>> Tekan ENTER kalau udah keliatan semua produk komisi... " + colorama.Style.RESET_ALL)
+                except EOFError:
+                    page.wait(5)
+                _drain(page, 8)
             out = f"__komisi_shopee_{username}.json"
             with open(out, "w", encoding="utf-8") as f:
                 J.dump({"raw": raw, "items": list(items.values())}, f, ensure_ascii=False, indent=2)
