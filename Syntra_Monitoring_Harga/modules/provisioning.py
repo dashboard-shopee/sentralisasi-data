@@ -29,8 +29,21 @@ def paket(shop, nama_toko, session):
         log("0 produk di olah_data — skip (grab Fase 1 dulu)", level="warning", fase="F2", toko=nama_toko, modul="paket")
         return {"paket": None, "produk": 0}
 
-    deals = PD.list_deals(session) or []
+    # ⚠️ (17 Jul, ZIO/BEVERRA) bundle_deal/list bisa ERROR KERAS `1400101507 database
+    # unavailable` PERMANEN di toko tertentu (DB deal sisi Shopee korup — diduga warisan
+    # deal bengkak era pre-cap-2000). Kapasitas (endpoint beda) tetep kebaca. Aturan:
+    #   list ERROR + kapasitas bilang 0 deal aktif → AMAN anggap kosong → lanjut BUAT baru.
+    #   list ERROR + kapasitas bilang ADA deal      → skip (rem anti-dobel, jangan nebak).
     kap = PD.baca_kapasitas(session)
+    try:
+        deals = PD.list_deals(session) or []
+    except RuntimeError as e:
+        if "1400101507" in str(e) and (kap.get("total_count") or 0) == 0:
+            log("list deal ERROR 1400101507 TAPI kapasitas 0 deal aktif → anggap kosong, lanjut buat baru",
+                level="warning", fase="F2", toko=nama_toko, modul="paket")
+            deals = []
+        else:
+            raise
     if not deals and (kap.get("total_count") or 0) > 0:
         log(f"list deal KOSONG tapi Shopee bilang ada {kap['total_count']} deal — FLAKY, skip (rem anti-dobel)",
             level="warning", fase="F2", toko=nama_toko, modul="paket")
