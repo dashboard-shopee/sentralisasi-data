@@ -156,11 +156,18 @@ def fakta_campaign(nama_toko, session, shop):
             "session_end": _iso(s.get("session_end_time")),
             "nomination_end": _iso(s.get("nomination_end_time")),
         })
-        st = C.get_nomination_statistics(session, sid)   # POLOS
-        n_nom = sum(int(st.get(k) or 0) for k in
-                    ("nominated_count", "pending_submission_count", "pending_seller_count"))
-        if not st or n_nom > 0:
-            perlu.append(s)
+        # count nominasi: prioritas dari get_session_list (udah kebawa gratis, 17 Jul —
+        # temuan rekaman manual owner); fallback statistics per-sesi kalau field ga ada.
+        if s.get("nominated_count") is not None:
+            n_nom = int(s.get("nominated_count") or 0) + int(s.get("pending_seller_count") or 0)
+            if n_nom > 0:
+                perlu.append(s)
+        else:
+            st = C.get_nomination_statistics(session, sid)   # POLOS
+            n_nom = sum(int(st.get(k) or 0) for k in
+                        ("nominated_count", "pending_submission_count", "pending_seller_count"))
+            if not st or n_nom > 0:
+                perlu.append(s)
     if perlu:
         _log(nama_toko, f"campaign: {len(perlu)}/{len(sesi_list)} sesi ada nominasi → baca detail via browser")
         try:

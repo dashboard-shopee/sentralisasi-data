@@ -231,6 +231,12 @@ def get_open_sessions(session, shop, window="nominasi"):
                     "nomination_end_time": nom_end,
                     "session_start_time": sess_start,
                     "session_end_time": sess_end,
+                    # (17 Jul, rekaman manual owner) get_session_list ternyata bawa COUNT
+                    # nominasi per sesi — gratis, polos, 1 call. None kalau field ga ada.
+                    "nominated_count": s.get("nominated_count"),
+                    "pending_seller_count": s.get("pending_seller_count"),
+                    "approved_count": s.get("approved_count"),
+                    "rejected_count": s.get("rejected_count"),
                 })
 
     if open_sessions:
