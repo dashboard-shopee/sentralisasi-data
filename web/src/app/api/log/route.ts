@@ -100,6 +100,9 @@ export async function GET() {
   // Program/pemicu di DB yg belum terdaftar di katalog -> tampilkan juga.
   const extra: Record<string, { key: string; label: string; triggers: Record<string, unknown> }> = {};
   for (const r of heartbeat) {
+    // pemicu 'harga' yg ga kekatalog JANGAN dibikinin kartu nyasar (17 Jul, owner):
+    // heartbeat modul udah tampil di grid per-modul dalam kartu Syntra Monitoring Harga.
+    if (r.program === "harga") continue;
     const k = `${r.program}|${r.pemicu}`;
     if (seen.has(k)) continue;
     seen.add(k);

@@ -76,11 +76,8 @@ const MODUL_LABEL: Record<string, string> = {
 function FaktaPerModul({ items }: { items: ModulTerakhir[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="card p-5">
-      <h2 className="font-bold text-[15px] mb-1 flex items-center gap-2">
-        <span className="w-1.5 h-4 rounded bg-[#ee4d2d] inline-block" />
-        Fakta & Aksi per Modul — Monitoring Harga
-      </h2>
+    <div className="mt-4 pt-4 border-t border-[#eef0f6]">
+      <h3 className="font-bold text-[13px] mb-1 text-slate-700">Fakta & Aksi per Modul</h3>
       <p className="text-[12px] text-[#8a90a2] mb-3">Kapan terakhir tiap modul jalan + hasil terakhirnya.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {items.map((m) => (
@@ -147,7 +144,6 @@ export default function LogPage() {
         <div className="card p-8 text-center text-[#8a90a2] text-[13px]">Memuat…</div>
       ) : (
         <div className="flex flex-col gap-6">
-          <FaktaPerModul items={modulTerakhir} />
           {programs.map((p) => (
             <div key={p.key} className="card p-5">
               <h2 className="font-bold text-[15px] mb-3 flex items-center gap-2">
@@ -232,6 +228,7 @@ export default function LogPage() {
                   );
                 })}
               </div>
+              {p.key === "harga" && <FaktaPerModul items={modulTerakhir} />}
             </div>
           ))}
         </div>
