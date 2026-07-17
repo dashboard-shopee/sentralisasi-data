@@ -31,13 +31,17 @@ MODE_LIVE = True   # 🔴 LIVE kimmioshop (ACC owner 17 Jul): fase2+fase3 live-v
 FASE_AKTIF = [1,2,3]   # 🔴 M4 LIVE: full 3 fase — Fase 3 grab-ulang abis aksi = bukti hidup otomatis
 
 # 3) TOKO yang diproses.  [] = SEMUA 10 toko.  ["kimmioshop"] = 1 toko (buat tes bertahap).
-TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balikin [] cuma pas udah full-verified.
-# TOKO_AKTIF = []
+
+# TOKO_AKTIF = ["kimmioshop"]   # ⚠️ M4: scope 1 toko kelinci-percobaan. Balikin [] cuma pas udah full-verified.
+TOKO_AKTIF = []
 
 # 4) MODUL yang aktif (di-grab & diproses). Buang dari list = modul itu di-SKIP.
 #    (produk/harga/stok = base, SELALU jalan, ga bisa dimatiin.)
 # M4: full modul buat verif DRY semua provisioning. Kecilin lagi kalau mau fokus 1 modul.
-MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+
+# MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
+MODUL_AKTIF = ["komisi", "promo_toko", "paket", "voucher",  "kategori"]
+
 # ✅ "campaign" DINYALAIN LAGI (15 Jul) — 3 bug ke-fix: (1) token-rotasi abis browser-context
 # ditambal via segarkan_abis_browser_context(), (2) api_post_browser ganti JSON.stringify,
 # (3) get_nominated_products pindah ke navigasi browser beneran (bukan fetch injeksi) — root
@@ -109,10 +113,10 @@ KPI_CAMPAIGN_STOK_TIER         = [(1000, 100), (500, 50), (250, 25), (0, 5)]
 # ── PASANG PAKET DISKON (provisioning harian) ──
 KPI_PAKET_TIER        = [(2, 1), (3, 2), (7, 3)]  # (min_qty, diskon%): beli 2→1%, 3→2%, 7→3%
 KPI_PAKET_USAGE_LIMIT = 100000                    # kuota pemakaian paket
-KPI_PAKET_MAKS_ITEM   = 100000                    # maks produk per-paket → EFEKTIF 1 paket (ga overflow).
-                                                  # Batas item asli Shopee GA di-ekspos API (cek 12 Jul); paket
-                                                  # #5 lama muat 227 produk lancar. Kalau nanti attach gagal
-                                                  # massal (deal penuh), turunkan ke angka asli yg ketauan.
+KPI_PAKET_MAKS_ITEM   = 2000                      # maks produk per-paket = 2000 (TEMUAN OWNER 17 Jul dari UI
+                                                  # Shopee — sebelumnya 100000 krn API ga ekspos batas; diduga
+                                                  # biang deal bengkak di ZIO/BEVERRA → bundle_deal/list error
+                                                  # 1400101507). Lewat 2000 → bot bikin paket tambahan.
 
 # ── PASANG VOUCHER (provisioning harian) — voucher PRODUK per BAND harga (spec owner 13 Jul):
 #    band 1..BAND1_MAKS lalu per BAND_LEBAR (grid fix); MIN BELANJA = batas atas band + 1
