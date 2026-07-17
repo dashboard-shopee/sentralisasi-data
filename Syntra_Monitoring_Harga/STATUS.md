@@ -103,9 +103,8 @@ memuat `3`. Heartbeat `laporan` → dashboard /log.
 ---
 
 ## 📍 PROGRES SEKARANG (update 17 Jul mlm) — SIAP RUNNING 10 TOKO
-**Status: production-ready** (`MODE_LIVE=True` · `TOKO_AKTIF=[]` 10 toko). Tinggal `RUN.bat`.
-⚠️ `MODUL_AKTIF` skrg TANPA garansi/campaign/flash (pilihan owner buat run awal) — modul itu +
-CABUT-nya mati sampe dimasukin lagi (termasuk cabut 6 item tes pending-review + item lama di 957815).
+**Status: production-ready** (`MODE_LIVE=True` · `TOKO_AKTIF=[]` 10 toko · `MODUL_AKTIF` FULL 8 modul,
+owner 17 Jul: jalan 24 jam). Tinggal `RUN.bat`. Sisa item tes pending udah dibersihin owner manual 17 Jul mlm.
 - 🔧 **Config = control panel** — double-klik `RUN.bat` → scheduler · **`tes_harga.bat`** → tes 1 siklus SEKARANG (`JAM_TES=FULL` = semua tier dipaksa). Atur di `config.py`: `FASE_AKTIF` · `TOKO_AKTIF` · `MODUL_AKTIF` · jam trigger.
 - ✅ **Paket** verified live + 17 Jul: **cap 2000/paket** (temuan owner, overflow → paket #2) · **ZIO/BEVERRA UNBLOCKED** (list error 1400101507 + kapasitas 0 → anggap kosong, lanjut buat; DRY: ZIO bakal enroll 935)
 - ✅ **Voucher per-BAND + cap 2×AOV** verified live 13 Jul kimmioshop + 17 Jul BEVERRA (bisect poison LIVE) · **overflow >500 dipecah PER-KATEGORI UTUH** (spec owner 17 Jul; NOMIDE: B1 424 campur + B1#2 105 full 1 kategori) · produk mahal (band > cap 2×AOV) tetep TANPA voucher (keputusan owner 17 Jul)
