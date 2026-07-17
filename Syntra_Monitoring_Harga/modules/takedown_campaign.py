@@ -77,6 +77,7 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
                     level="warning", toko=shop, modul="campaign")
                 total += len(nom_ids)
             else:
+                stat0 = C.get_nomination_statistics(session, sid)
                 if C.takedown_products(session, shop, sid, nom_ids):
                     total += len(nom_ids)
                     # bersihin baris DB biar diagnosa jam berikutnya ga nge-flag zombie
@@ -84,6 +85,13 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
                         SQL.hapus_campaign_item(nama_toko, sid, pairs)
                     except Exception as e:
                         log(f"gagal hapus baris takedown dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
+                    # BUKTI HIDUP murah (statistik polos, 17 Jul): count nominasi harus turun
+                    stat1 = C.get_nomination_statistics(session, sid)
+                    if stat0 and stat1:
+                        n0 = int(stat0.get("nominated_count") or 0)
+                        n1 = int(stat1.get("nominated_count") or 0)
+                        log(f"sesi {sid}: nominated_count {n0} → {n1} (cabut {len(nom_ids)})",
+                            level=("ok" if n1 < n0 else "warning"), toko=shop, modul="campaign")
     except Exception as e:
         log(f"takedown campaign gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
     return total

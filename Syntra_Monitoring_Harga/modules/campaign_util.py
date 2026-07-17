@@ -121,6 +121,23 @@ def _api_post(session, url, payload, kunci="data", attempts=4):
     return api_post(url, config.grab_headers(session), session["params"], payload, kunci=kunci, attempts=attempts)
 
 
+def get_nomination_statistics(session, session_id):
+    """Statistik nominasi 1 sesi via requests POLOS — BUKTI HIDUP MURAH tanpa browser
+    (17 Jul, sniff ulang: payload wajib `campaign_scene`, bukan entity_type; verified live:
+    nominated_count/seller_nominated_count kebaca polos). nominated_entity_list tetep
+    signature-locked (90309999 walau payload identik page) — count ini penggantinya buat
+    verifikasi naik/turun. Return dict data (nominated_count, pending_*, rejected_count, ...)."""
+    try:
+        r = _api_post(session, config.URL_STAT_NOMINASI,
+                      {"session_id": str(session_id),
+                       "campaign_scene": "CAMPAIGN_SCENE_PRODUCT_PROMOTION_CAMPAIGN"},
+                      kunci="data", attempts=2)
+        return r.get("data") or {}
+    except Exception as e:
+        log(f"statistik nominasi sesi {session_id} gagal: {type(e).__name__}", level="warning", modul="campaign")
+        return {}
+
+
 def get_open_sessions(session, shop, window="nominasi"):
     """
     Mengambil sesi kampanye (gajian sale, tanggal kembar, dll — cuma yg namanya cocok
