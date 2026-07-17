@@ -20,7 +20,7 @@ import colorama; colorama.init()
 import config
 from modules.grab_produk import grab_produk
 from modules import sql_harga as SQL
-from modules.log_siklus import log
+from modules.log_siklus import log, catat
 
 
 def _iso(epoch):
@@ -44,6 +44,12 @@ _WARNA2LEVEL = {
 
 def _log(nama, teks, warna=colorama.Fore.WHITE):
     log(teks, level=_WARNA2LEVEL.get(warna, "detail"), fase="F1", toko=nama, modul="fakta")
+
+
+def _detak(nama, modul, teks):
+    """Heartbeat per-MODUL ke siklus_log (17 Jul, permintaan owner: halaman /log harus
+    nunjukin tiap modul terakhir jalan kapan + hasilnya). 1 baris DB per grab modul."""
+    catat(teks, status="ok", fase="F1", toko=nama, modul=modul)
 
 
 # ── TIER JAM: produk (harga + stok) + konteks promo ──
@@ -95,7 +101,7 @@ def fakta_garansi(nama_toko, session):
             "stok": v.get("stok", 0) or 0,
         })
     n = SQL.simpan_fakta_garansi(nama_toko, baris)
-    _log(nama_toko, f"Garansi: {n} variasi (Kini/Terbaik/Program)", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "garansi", f"Garansi: {n} variasi (Kini/Terbaik/Program)")
     return n
 
 
@@ -117,7 +123,7 @@ def fakta_garansi_nom(nama_toko, session):
                       "floor": o["floor"], "ceiling": o["ceiling"], "stok": o["stok"],
                       "bid_id": o["bid_id"], "bid_status": o["bid_status"]})
     n = SQL.simpan_fakta_garansi_nom(nama_toko, baris) if baris else 0
-    _log(nama_toko, f"Garansi nominasi: {n} baris (rekom+terbaik+perlu-ditinjau)", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "garansi", f"Garansi nominasi: {n} baris (rekom+terbaik+perlu-ditinjau)")
     return n
 
 
@@ -164,7 +170,7 @@ def fakta_campaign(nama_toko, session, shop):
         segarkan_abis_browser_context(session, nama_toko)
     ns = SQL.simpan_fakta_campaign_sesi(nama_toko, baris_sesi)
     ni = SQL.simpan_fakta_campaign_item(nama_toko, baris_item)
-    _log(nama_toko, f"Campaign: {ns} sesi buka-nominasi (tanggal kembar), {ni} produk ternominasi", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "campaign", f"Campaign: {ns} sesi buka-nominasi (tanggal kembar), {ni} produk ternominasi")
     return ns, ni
 
 
@@ -205,7 +211,7 @@ def fakta_flash(nama_toko, session):
             })
     ns = SQL.simpan_fakta_flash_sesi(nama_toko, baris_sesi)
     ni = SQL.simpan_fakta_flash_item(nama_toko, baris_item)
-    _log(nama_toko, f"Flash Sale: {ns} sesi, {ni} item", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "flash", f"Flash Sale: {ns} sesi, {ni} item")
     return ns, ni
 
 
@@ -258,7 +264,7 @@ def fakta_voucher(nama_toko, session):
             if b["voucher_id"]:
                 seen[b["voucher_id"]] = b
     n = SQL.simpan_fakta_voucher(nama_toko, list(seen.values()))
-    _log(nama_toko, f"Voucher: {n} (berjalan+akan datang)", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "voucher", f"Voucher: {n} (berjalan+akan datang)")
     return n
 
 
@@ -286,7 +292,7 @@ def fakta_paket(nama_toko, session):
             "item_count": len(items),
         })
     n = SQL.simpan_fakta_paket(nama_toko, baris)
-    _log(nama_toko, f"Paket Diskon: {n}", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "paket", f"Paket Diskon: {n}")
     return n
 
 
@@ -323,7 +329,7 @@ def fakta_promo_toko(username, nama_toko, session):
                 })
     ns = SQL.simpan_fakta_promo_toko(nama_toko, ent)
     ni = SQL.simpan_fakta_promo_toko_item(nama_toko, items)
-    _log(nama_toko, f"Promo Toko: {ns} promo (berjalan+akan datang), {ni} produk", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "promo_toko", f"Promo Toko: {ns} promo (berjalan+akan datang), {ni} produk")
     return ns, ni
 
 
@@ -347,7 +353,7 @@ def fakta_kategori(nama_toko, session, limit=None):
             gagal += 1   # error transien/hard -> skip (di-retry siklus berikutnya)
     n = SQL.simpan_kategori(nama_toko, baris)
     ada = sum(1 for b in baris if b.get("full"))
-    _log(nama_toko, f"Kategori: +{n} diproses ({ada} ada kategori), {gagal} skip-retry", colorama.Fore.LIGHTGREEN_EX)
+    _detak(nama_toko, "kategori", f"Kategori: +{n} diproses ({ada} ada kategori), {gagal} skip-retry")
     return n
 
 

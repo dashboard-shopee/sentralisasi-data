@@ -112,5 +112,17 @@ export async function GET() {
     triggers: Object.values(p.triggers),
   }));
 
-  return NextResponse.json({ programs: [...programs, ...extraPrograms], hargaEvents });
+  // Heartbeat per-MODUL bot harga (17 Jul, permintaan owner): baris event TERBARU per modul
+  // (grab fakta F1 harian + aksi F2) -> kartu "modul ini terakhir jalan kapan & hasilnya apa".
+  // Halaman log ga nampilin tabel event lagi (owner mau clean) -- cukup kartu ini.
+  const modulSeen = new Set<string>();
+  const modulTerakhir: { modul: string; waktu: string; status: string; toko: string | null; aksi: string | null }[] = [];
+  for (const e of hargaEvents) {
+    const m = e.modul || "";
+    if (!m || modulSeen.has(m)) continue;
+    modulSeen.add(m);
+    modulTerakhir.push({ modul: m, waktu: e.waktu, status: e.status, toko: e.toko, aksi: e.aksi ?? e.keterangan });
+  }
+
+  return NextResponse.json({ programs: [...programs, ...extraPrograms], modulTerakhir });
 }

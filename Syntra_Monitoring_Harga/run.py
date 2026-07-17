@@ -37,7 +37,7 @@ from modules.session import grab_session, close_session, buka_login
 from modules import jam_siklus
 from modules import fakta
 from modules.sql_harga import isi_harga_diskon_kosong, tulis_alasan
-from modules.log_siklus import catat_fase, log, prune_log
+from modules.log_siklus import catat, catat_fase, log, prune_log
 
 
 def _t():
@@ -66,7 +66,7 @@ def _grab_fakta(username, nama, session, due_harian, due_mingguan, aktif, fase_t
     """Grab SEMUA modul fakta 1 toko sesuai tier (dipakai Fase 1 DAN Fase 3 grab-ulang).
     Return (n_variasi, n_konteks). READ-ONLY."""
     n, nk = fakta.fakta_produk(username, nama, session)   # TIER JAM: produk (WAJIB) + base
-    log(f"Produk: {n} variasi, {nk} promo→konteks", level="detail", fase=fase_tag, toko=nama)
+    catat(f"Produk: {n} variasi, {nk} promo→konteks", status="ok", fase=fase_tag, toko=nama, modul="produk")
     if aktif("promo_toko"):
         _aman(nama, "promo_toko", lambda: fakta.fakta_promo_toko(username, nama, session))
     if due_harian:                                          # TIER HARIAN

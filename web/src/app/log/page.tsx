@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type DetailItem = { sku?: string; market?: string; serupa?: number; acuan?: number };
 type Entry = { status: string; keterangan: string | null; waktu: string; detail?: DetailItem[] | null };
 type Trigger = { key: string; label: string; last: Entry | null; history: Entry[] };
 type Program = { key: string; label: string; triggers: Trigger[] };
-type HargaEvent = {
-  waktu: string; status: string; keterangan: string | null;
-  fase: string | null; toko: string | null; modul: string | null; aksi: string | null;
-  detail: Record<string, unknown> | null;
+type ModulTerakhir = {
+  modul: string; waktu: string; status: string; toko: string | null; aksi: string | null;
 };
 
 function DetailProduk({ detail }: { detail: DetailItem[] }) {
@@ -71,111 +69,39 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Seksi EVENT bot harga: apa yang BERUBAH (harga dibenerin, promo dipasang/dicabut) ──
 const MODUL_LABEL: Record<string, string> = {
-  harga: "Harga", promo_toko: "Promo Toko", voucher: "Voucher", paket: "Paket",
-  garansi: "Garansi", campaign: "Campaign", flash: "Flash",
+  produk: "Produk (harga+stok)", harga: "Harga", promo_toko: "Promo Toko", voucher: "Voucher",
+  paket: "Paket", garansi: "Garansi", campaign: "Campaign", flash: "Flash", kategori: "Kategori",
 };
 
-function AktivitasHarga({ events }: { events: HargaEvent[] }) {
-  const [fToko, setFToko] = useState<string>("");
-  const [fModul, setFModul] = useState<string>("");
-  const [fStatus, setFStatus] = useState<string>("");
-
-  const tokoOpts = useMemo(() => [...new Set(events.map((e) => e.toko).filter(Boolean) as string[])].sort(), [events]);
-  const modulOpts = useMemo(() => [...new Set(events.map((e) => e.modul).filter(Boolean) as string[])].sort(), [events]);
-  const statusOpts = useMemo(() => [...new Set(events.map((e) => (e.status || "ok").toLowerCase()))].sort(), [events]);
-
-  const tampil = useMemo(
-    () => events.filter((e) =>
-      (!fToko || e.toko === fToko) &&
-      (!fModul || e.modul === fModul) &&
-      (!fStatus || (e.status || "ok").toLowerCase() === fStatus)
-    ),
-    [events, fToko, fModul, fStatus]
-  );
-
-  const Chip = ({ val, cur, set, label }: { val: string; cur: string; set: (v: string) => void; label: string }) => (
-    <button
-      onClick={() => set(cur === val ? "" : val)}
-      className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-all ${
-        cur === val
-          ? "bg-[#ee4d2d] text-white border-[#ee4d2d]"
-          : "bg-white text-slate-600 border-[#e6e9f0] hover:bg-slate-50"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
+function FaktaPerModul({ items }: { items: ModulTerakhir[] }) {
+  if (items.length === 0) return null;
   return (
     <div className="card p-5">
       <h2 className="font-bold text-[15px] mb-1 flex items-center gap-2">
         <span className="w-1.5 h-4 rounded bg-[#ee4d2d] inline-block" />
-        ⚡ Aktivitas Monitoring Harga
+        Fakta & Aksi per Modul — Monitoring Harga
       </h2>
-      <p className="text-[12px] text-[#8a90a2] mb-3">Cuma yang BERUBAH — harga dibenerin, promo dipasang/dicabut. Terbaru di atas.</p>
-
-      {events.length === 0 ? (
-        <div className="text-[12.5px] text-[#c4c8d4] py-6 text-center">Belum ada aktivitas. Event muncul begitu bot jalan (Fase 2).</div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-2 mb-3">
-            {tokoOpts.length > 1 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-[#b4b9c6] font-semibold w-12">Toko</span>
-                {tokoOpts.map((t) => <Chip key={t} val={t} cur={fToko} set={setFToko} label={t} />)}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] text-[#b4b9c6] font-semibold w-12">Modul</span>
-              {modulOpts.map((m) => <Chip key={m} val={m} cur={fModul} set={setFModul} label={MODUL_LABEL[m] || m} />)}
+      <p className="text-[12px] text-[#8a90a2] mb-3">Kapan terakhir tiap modul jalan + hasil terakhirnya.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        {items.map((m) => (
+          <div key={m.modul} className="border border-[#eef0f6] rounded-xl p-3.5 bg-[#fafbfd]">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="font-semibold text-[13px] text-slate-800">{MODUL_LABEL[m.modul] || m.modul}</span>
+              <StatusBadge status={m.status} />
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] text-[#b4b9c6] font-semibold w-12">Status</span>
-              {statusOpts.map((s) => <Chip key={s} val={s} cur={fStatus} set={setFStatus} label={s} />)}
-            </div>
+            <div className="text-[15px] font-bold text-slate-800 tabular-nums">{waktuRelatif(m.waktu)}</div>
+            <div className="text-[11.5px] text-[#8a90a2]">{waktuAbsolut(m.waktu)}{m.toko ? ` · ${m.toko}` : ""}</div>
+            {m.aksi && <div className="text-[11.5px] text-[#9aa0b2] mt-0.5">{m.aksi}</div>}
           </div>
-
-          <div className="border border-[#eef0f6] rounded-lg overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead className="bg-[#f7f8fb] text-[#8a90a2]">
-                <tr className="text-left">
-                  <th className="px-2.5 py-2 font-semibold whitespace-nowrap">Waktu</th>
-                  <th className="px-2.5 py-2 font-semibold">Toko</th>
-                  <th className="px-2.5 py-2 font-semibold">Modul</th>
-                  <th className="px-2.5 py-2 font-semibold">Aksi</th>
-                  <th className="px-2.5 py-2 font-semibold text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tampil.slice(0, 300).map((e, i) => (
-                  <tr key={i} className="border-t border-[#f3f4f8] align-top">
-                    <td className="px-2.5 py-2 whitespace-nowrap">
-                      <div className="text-slate-700 font-medium">{waktuRelatif(e.waktu)}</div>
-                      <div className="text-[10.5px] text-[#b4b9c6]">{waktuAbsolut(e.waktu)}</div>
-                    </td>
-                    <td className="px-2.5 py-2 font-semibold text-slate-700 whitespace-nowrap">{e.toko || "—"}</td>
-                    <td className="px-2.5 py-2 whitespace-nowrap">
-                      <span className="text-[11px] font-semibold text-slate-600">{e.fase ? `${e.fase}·` : ""}{MODUL_LABEL[e.modul || ""] || e.modul || "—"}</span>
-                    </td>
-                    <td className="px-2.5 py-2 text-slate-700">{e.aksi || e.keterangan || "—"}</td>
-                    <td className="px-2.5 py-2 text-center"><StatusBadge status={e.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-[#b4b9c6] mt-2">
-            {tampil.length} event{tampil.length !== events.length ? ` (dari ${events.length})` : ""}{tampil.length > 300 ? " · 300 teratas ditampilkan" : ""}
-          </p>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
 
 export default function LogPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
-  const [hargaEvents, setHargaEvents] = useState<HargaEvent[]>([]);
+  const [modulTerakhir, setModulTerakhir] = useState<ModulTerakhir[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -185,7 +111,7 @@ export default function LogPage() {
       const r = await fetch("/api/log", { cache: "no-store" });
       const j = await r.json();
       setPrograms(j.programs || []);
-      setHargaEvents(j.hargaEvents || []);
+      setModulTerakhir(j.modulTerakhir || []);
       setUpdatedAt(Date.now());
     } catch {
       /* abaikan */
@@ -221,7 +147,7 @@ export default function LogPage() {
         <div className="card p-8 text-center text-[#8a90a2] text-[13px]">Memuat…</div>
       ) : (
         <div className="flex flex-col gap-6">
-          <AktivitasHarga events={hargaEvents} />
+          <FaktaPerModul items={modulTerakhir} />
           {programs.map((p) => (
             <div key={p.key} className="card p-5">
               <h2 className="font-bold text-[15px] mb-3 flex items-center gap-2">
