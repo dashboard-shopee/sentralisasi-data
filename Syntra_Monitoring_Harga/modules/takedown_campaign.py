@@ -55,11 +55,21 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
             if not sid:
                 continue
             nominated = SQL.baca_campaign_item(nama_toko, sid)  # {(iid_int,mid_int)->info} dari DB
-            nom_ids, pairs = [], []
+            # ⚠️ (17 Jul, bukti hidup) opt_out cuma MEMPAN buat nominate_status 30 (committed/
+            # approved). Status 10 (pending review): response bisa code=0 TAPI item ga kecabut
+            # (FAKE SUCCESS, kebukti verif full-map) — jadi yg 10 DISKIP (baris DB dipertahanin,
+            # dicabut siklus berikutnya begitu grab nyatet status 30).
+            nom_ids, pairs, tunda = [], [], 0
             for (iid, mid), info in nominated.items():
                 if (iid, mid) in kunci_set and info.get("nomination_id"):
-                    nom_ids.append(info["nomination_id"])
-                    pairs.append((iid, mid))
+                    if info.get("nominate_status") == 30 or info.get("nominate_status") is None:
+                        nom_ids.append(info["nomination_id"])
+                        pairs.append((iid, mid))
+                    else:
+                        tunda += 1
+            if tunda:
+                log(f"sesi {s.get('session_name','')}: {tunda} nominasi masih pending-review (status<30) — "
+                    f"ditunda, dicabut begitu approved", level="warning", toko=shop, modul="campaign")
             if not nom_ids:
                 continue
             if config.DRY_RUN:

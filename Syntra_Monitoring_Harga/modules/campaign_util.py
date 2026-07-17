@@ -486,33 +486,21 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
 
-    # skip-bersih model gate-fail: opt_out langsung + hapus baris DB (biar diagnosa ga nge-flag zombie).
-    # ⚠️ (16 Jul, verif live sesi 957874) abis submit, nominasi bisa NAHAN di status 10 (review
-    # Shopee, sesi tipe tertentu mis. "Koleksi Ingatkan Diskon") -> opt_out ditolak 329400012
-    # "current status does not support". Fallback: baris DB SENGAJA DIBIARIN -> harga committed
-    # (= ceiling) < target×0.985 -> diagnosa per-jam nge-flag -> takedown nyabut begitu status 30.
-    gate_skip = 0
-    if langgar and committed:
-        time.sleep(2)   # kasih napas transisi staged(10)->committed(30) di sisi Shopee
-        ids = [i["nomination_id"] for i in langgar.values()]
-        if takedown_products(session, shop, session_id, ids):
-            gate_skip = len(ids)
-            try:
-                from modules import sql_harga as SQL
-                SQL.hapus_campaign_item(_nama_display(shop), session_id,
-                                        [(int(iid), int(mid)) for (iid, mid) in langgar])
-            except Exception as e:
-                log(f"gagal hapus baris gate-skip dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
-        else:
-            log(f"sesi {session_id}: opt_out inline {len(ids)} model gate-fail DITOLAK (kemungkinan "
-                f"masih status review/10) — baris DB dibiarin, takedown per-jam bakal nyabut pas status 30",
-                level="warning", toko=shop, modul="campaign")
+    # Model gate-fail: GA di-opt-out inline (17 Jul, bukti hidup): abis submit, nominasi
+    # NAHAN di status 10 (pending review) — opt_out di fase itu antara DITOLAK 329400012
+    # ATAU lebih bahaya: code=0 TAPI item ga kecabut (FAKE SUCCESS, kebukti verif full-map).
+    # Jalur benar: baris DB DIBIARIN → harga committed (= ceiling) < target×0.985 → diagnosa
+    # per-jam nge-flag → takedown_dari_campaign nyabut begitu status 30 (approved).
+    if langgar:
+        log(f"sesi {session_id}: {len(langgar)} model gate-fail dibiarin ke-commit di harga ceiling — "
+            f"takedown per-jam bakal nyabut begitu status 30 (opt_out ga mempan selama pending-review)",
+            level="warning", toko=shop, modul="campaign")
 
     log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal, "
-        f"{len(langgar)} gate-fail, {gate_skip} langsung ke-cabut)",
+        f"{len(langgar)} gate-fail nunggu cabut per-jam)",
         level="live", toko=shop, modul="campaign")
     return {"staged": staged, "committed_model": committed, "failed_model": failed,
-            "gate_skip": gate_skip, "gate_langgar": len(langgar)}
+            "gate_langgar": len(langgar)}
 
 
 def takedown_products(session, shop, session_id, nomination_ids):
