@@ -139,35 +139,49 @@ def fakta_campaign(nama_toko, session, shop):
 
     idx = (config.SHOP_DATABASE.get(shop) or {}).get("i", 0)
     baris_sesi, baris_item = [], []
-    try:
-        buka_page_toko(shop, idx)
-        sesi_list = C.get_open_sessions(session, shop)   # window="nominasi" (default)
-        for s in sesi_list:
-            sid = str(s.get("session_id"))
-            baris_sesi.append({
-                "campaign_id": str(s.get("campaign_id", "")),
-                "session_id": sid,
-                "campaign_name": s.get("campaign_name") or None,
-                "session_name": s.get("session_name") or None,
-                "session_start": _iso(s.get("session_start_time")),
-                "session_end": _iso(s.get("session_end_time")),
-                "nomination_end": _iso(s.get("nomination_end_time")),
-            })
-            nominasi = C.get_nominated_products(session, shop, s.get("campaign_id"), sid)   # {(item_str,model_str): {...}}
-            for (iid, mid), v in nominasi.items():
-                try:
-                    item, model = int(iid), int(mid)
-                except (TypeError, ValueError):
-                    continue
-                baris_item.append({
-                    "session_id": sid, "item_id": item, "model_id": model,
-                    "nomination_id": str(v.get("nomination_id") or "") or None,
-                    "nominate_status": v.get("nominate_status"),
-                    "campaign_price": v.get("campaign_price", 0) or 0,
-                })
-    finally:
-        tutup_page()
-        segarkan_abis_browser_context(session, nama_toko)
+    # ⚡ (17 Jul, efisiensi — keluhan owner "buka-tutup browser berkali-kali"):
+    # sesi + statistik nominasi dibaca POLOS dulu (tanpa browser). Browser CUMA kebuka
+    # buat sesi yg statistiknya nunjukin ADA nominasi (biasanya 2 dari 7). Statistik
+    # GAGAL kebaca → FAIL-OPEN (tetep dibaca via browser, jangan sampe false-clean).
+    sesi_list = C.get_open_sessions(session, shop)   # window="nominasi" (default) — POLOS
+    perlu = []
+    for s in sesi_list:
+        sid = str(s.get("session_id"))
+        baris_sesi.append({
+            "campaign_id": str(s.get("campaign_id", "")),
+            "session_id": sid,
+            "campaign_name": s.get("campaign_name") or None,
+            "session_name": s.get("session_name") or None,
+            "session_start": _iso(s.get("session_start_time")),
+            "session_end": _iso(s.get("session_end_time")),
+            "nomination_end": _iso(s.get("nomination_end_time")),
+        })
+        st = C.get_nomination_statistics(session, sid)   # POLOS
+        n_nom = sum(int(st.get(k) or 0) for k in
+                    ("nominated_count", "pending_submission_count", "pending_seller_count"))
+        if not st or n_nom > 0:
+            perlu.append(s)
+    if perlu:
+        _log(nama_toko, f"campaign: {len(perlu)}/{len(sesi_list)} sesi ada nominasi → baca detail via browser")
+        try:
+            buka_page_toko(shop, idx)
+            for s in perlu:
+                sid = str(s.get("session_id"))
+                nominasi = C.get_nominated_products(session, shop, s.get("campaign_id"), sid)   # {(item_str,model_str): {...}}
+                for (iid, mid), v in nominasi.items():
+                    try:
+                        item, model = int(iid), int(mid)
+                    except (TypeError, ValueError):
+                        continue
+                    baris_item.append({
+                        "session_id": sid, "item_id": item, "model_id": model,
+                        "nomination_id": str(v.get("nomination_id") or "") or None,
+                        "nominate_status": v.get("nominate_status"),
+                        "campaign_price": v.get("campaign_price", 0) or 0,
+                    })
+        finally:
+            tutup_page()
+            segarkan_abis_browser_context(session, nama_toko)
     ns = SQL.simpan_fakta_campaign_sesi(nama_toko, baris_sesi)
     ni = SQL.simpan_fakta_campaign_item(nama_toko, baris_item)
     _detak(nama_toko, "campaign", f"Campaign: {ns} sesi buka-nominasi (tanggal kembar), {ni} produk ternominasi")
