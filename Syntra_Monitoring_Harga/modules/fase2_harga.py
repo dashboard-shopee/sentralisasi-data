@@ -37,6 +37,27 @@ def _margin(harga, cost):
     return 1.0 - cost["pct"] - (cost["hpp"] + cost["biaya"]) / harga
 
 
+def _cek_campaign(target, stok, pjh, by_jenis):
+    """Poin 3⑤ — audit nominasi CAMPAIGN (dipisah dari _cek_koreksi_turun 17 Jul):
+    nominasi campaign nempel SEBELUM sesinya mulai (harga tampil belum berubah → kasus
+    'sesuai'), jadi cek ini HARUS jalan juga buat item yg harganya sesuai — kalau nunggu
+    koreksi_turun, pelanggaran baru ketauan pas sesi udah live (telat, diskon dalem
+    kelanjur tayang). Kriteria: harga < target×0.985 / stok < 30 / stok < pjh."""
+    cp = by_jenis.get("Campaign")
+    if cp is None:
+        return []
+    sebab = []
+    if cp["harga_promo"] and cp["harga_promo"] < target * CAMPAIGN_FAKTOR:
+        sebab.append(f"campaign {cp['harga_promo']} < target*{CAMPAIGN_FAKTOR}")
+    if stok < CAMPAIGN_STOK_MIN:
+        sebab.append(f"stok {stok} < {CAMPAIGN_STOK_MIN}")
+    if pjh and stok < pjh:
+        sebab.append(f"stok {stok} < penjualan/hari {pjh:.1f}")
+    if sebab:
+        return [{"promo": "Campaign", "aksi": "takedown", "sebab": " & ".join(sebab)}]
+    return []
+
+
 def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
     """Target < Harga Awal. Cek Promo Toko (set/daftar) + takedown per-promo (garansi/flash/campaign).
     Return list aksi (dict). promos = list {jenis, harga_promo, status, stok} dari konteks.
@@ -80,17 +101,7 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
             aksi.append({"promo": "Flash Sale", "aksi": "takedown", "sebab": " & ".join(sebab)})
 
     # 3d — CAMPAIGN
-    cp = by_jenis.get("Campaign")
-    if cp is not None:
-        sebab = []
-        if cp["harga_promo"] and cp["harga_promo"] < target * CAMPAIGN_FAKTOR:
-            sebab.append(f"campaign {cp['harga_promo']} < target*{CAMPAIGN_FAKTOR}")
-        if stok < CAMPAIGN_STOK_MIN:
-            sebab.append(f"stok {stok} < {CAMPAIGN_STOK_MIN}")
-        if pjh and stok < pjh:
-            sebab.append(f"stok {stok} < penjualan/hari {pjh:.1f}")
-        if sebab:
-            aksi.append({"promo": "Campaign", "aksi": "takedown", "sebab": " & ".join(sebab)})
+    aksi.extend(_cek_campaign(target, stok, pjh, by_jenis))
 
     # PROMO TAK DIKENAL yg nindih harga tampil (mis. "Tipe 1"). Aturan user (sama garansi):
     #   - HOLD (biarin) kalau harga >= target-500 DAN margin >= 7% -> gak apa-apa.
@@ -155,7 +166,11 @@ def diagnosa_toko(nama_toko):
         elif shopee_hold:
             kasus, aksi = "komisi_hold", []
         elif real == target:
-            kasus, aksi = "sesuai", []
+            # 'sesuai' TETAP diaudit nominasi campaign-nya (17 Jul): nominasi nempel pas
+            # harga masih on-target — pelanggaran KPI campaign harus kecabut SEBELUM sesi live.
+            kasus = "sesuai"
+            aksi = _cek_campaign(target, stok, pjh,
+                                 {p["jenis"]: p for p in promo.get(key, [])})
         elif hd > 0 and target < hd * (1 - REM_MAKS_TURUN):
             # REM 40% (per-produk): target di bawah 60% Harga Diskon = curiga pancing/komisi salah
             # input → JANGAN diubah (jaring pengaman, keputusan owner). Komisi ≥ Diskon jd ga bakal

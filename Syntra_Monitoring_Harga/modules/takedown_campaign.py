@@ -41,7 +41,15 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
     nama_toko = nama_toko or shop
     total = 0
     try:
-        sesi = C.get_open_sessions(session, shop, window="sesi")   # sesi BERJALAN (buat takedown)
+        # ⚠️ (17 Jul) GABUNG dua window: "sesi" (lagi BERJALAN) + "nominasi" (belum mulai tapi
+        # nominasi kebuka). Kebukti DRY 17 Jul: item ternominasi di sesi yg BELUM mulai (25 Jul)
+        # ke-flag diagnosa tapi ga pernah kesentuh karena window="sesi" doang → cabut harus
+        # bisa SEBELUM sesi live (opt_out valid begitu nominate_status 30).
+        sesi = C.get_open_sessions(session, shop, window="sesi")
+        ada = {s.get("session_id") for s in sesi}
+        for s in C.get_open_sessions(session, shop, window="nominasi"):
+            if s.get("session_id") not in ada:
+                sesi.append(s)
         for s in sesi:
             sid = s.get("session_id")
             if not sid:
