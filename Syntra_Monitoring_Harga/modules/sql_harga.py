@@ -609,6 +609,16 @@ def simpan_fakta_paket(toko, baris):
         pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers", "items"))
 
 
+def baca_kategori_item(toko):
+    """{item_id: kategori_leaf} dari harga_produk_kategori (grab mingguan). Buat pemecahan
+    voucher per-kategori (spec owner 17 Jul). Item tanpa kategori ga ada di map."""
+    with get_engine().connect() as c:
+        rows = c.execute(text(
+            "select item_id, kategori_leaf from harga_produk_kategori where toko = :t"),
+            {"t": toko}).fetchall()
+    return {int(r.item_id): (r.kategori_leaf or "") for r in rows}
+
+
 def baca_item_tanpa_kategori(toko, limit):
     """item_id (unik) di 1 toko yg BELUM punya kategori (incremental grab). Return list int."""
     with get_engine().connect() as c:

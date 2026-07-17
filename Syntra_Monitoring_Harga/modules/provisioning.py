@@ -186,18 +186,11 @@ def voucher(shop, nama_toko, session):
             level="detail", fase="F2", toko=nama_toko, modul="voucher")
 
     # 2) band → SLOT: item > KPI_VOUCHER_MAKS_ITEM dipecah (Shopee tolak voucher >~570 item).
-    #    1 slot = 1 voucher. Band gede jadi >1 voucher (min belanja & diskon SAMA, item dibagi).
-    #    Nama: "UPSELL <toko> B<low>" (chunk 0, kompat lama) · "...B<low>#2/#3.." (chunk lanjut).
+    #    ✅ (17 Jul, spec owner) pecahan PER-KATEGORI UTUH — lihat _slot_voucher_per_band.
     awalan = f"{config.NAMA_UPSELL} {nama_toko} B"
     MAKS = config.KPI_VOUCHER_MAKS_ITEM
-    slots = []                                  # (nama_slot, min_b, ids_chunk)
-    for low, high, ids in bands:
-        min_b = high + 1
-        ids_sorted = sorted(ids)
-        for k in range(0, max(len(ids_sorted), 1), MAKS):
-            chunk = ids_sorted[k:k + MAKS]
-            nama = f"{awalan}{low}" + (f"#{k // MAKS + 1}" if k else "")
-            slots.append((nama, min_b, chunk))
+    kat = SQL.baca_kategori_item(nama_toko)
+    slots = _slot_voucher_per_band(bands, kat, awalan, MAKS)
 
     # voucher UPSELL existing → petakan by NAMA persis (biar cocok per slot)
     vouchers = V.list_vouchers(session, promotion_type=0) or []
@@ -283,6 +276,50 @@ def voucher(shop, nama_toko, session):
                   "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal})
     return {"produk": len(harga), "band": len(bands), "slot": len(slots), "buat": buat,
             "tambah": tambah_n, "keluar": keluar_n, "diakhiri": diakhiri, "gagal": gagal}
+
+
+def _slot_voucher_per_band(bands, kat, awalan, maks):
+    """Bagi band jadi slot voucher. Band ≤ maks → 1 slot. Band OVERFLOW (spec owner 17 Jul):
+    kategori TERBESAR dipindah keluar satu-satu sampe voucher UTAMA ≤ maks; kategori
+    pindahan di-bin-pack ke voucher #2/#3.. — tiap voucher ≤ maks, boleh >1 kategori
+    ASAL tiap kategori UTUH di 1 voucher (kategori tunggal > maks kepaksa dipotong).
+    Contoh owner: 529 produk, kategori terbesar 20-an → #1 sisa <500, #2 isi kumpulan
+    kategori utuh; 1100 produk → 3 voucher.
+    bands = [(low, high, ids)] · kat = {item_id: kategori_leaf} · Return [(nama, min_b, ids)]."""
+    slots = []
+    for low, high, ids in bands:
+        min_b = high + 1
+        ids_sorted = sorted(ids)
+        if len(ids_sorted) <= maks:
+            slots.append((f"{awalan}{low}", min_b, ids_sorted))
+            continue
+        per_kat = {}
+        for i in ids_sorted:
+            per_kat.setdefault(kat.get(int(i)) or "(tanpa kategori)", []).append(i)
+        urut = sorted(per_kat.items(), key=lambda kv: (len(kv[1]), kv[0]), reverse=True)
+        utama, pindah = list(ids_sorted), []
+        for nama_k, ids_k in urut:
+            if len(utama) <= maks:
+                break
+            pindah.append((nama_k, ids_k))
+            buang = set(ids_k)
+            utama = [i for i in utama if i not in buang]
+        slots.append((f"{awalan}{low}", min_b, utama))
+        n_ov, isi = 2, []
+        for nama_k, ids_k in pindah:
+            if len(ids_k) > maks:            # kategori raksasa: potong paksa per maks
+                for k2 in range(0, len(ids_k), maks):
+                    slots.append((f"{awalan}{low}#{n_ov}", min_b, ids_k[k2:k2 + maks]))
+                    n_ov += 1
+                continue
+            if isi and len(isi) + len(ids_k) > maks:
+                slots.append((f"{awalan}{low}#{n_ov}", min_b, isi))
+                n_ov += 1
+                isi = []
+            isi = isi + ids_k
+        if isi:
+            slots.append((f"{awalan}{low}#{n_ov}", min_b, isi))
+    return slots
 
 
 def _stok_campaign(stok_asli):
