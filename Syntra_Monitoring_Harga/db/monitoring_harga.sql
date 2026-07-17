@@ -182,7 +182,9 @@ create table if not exists harga_fakta_campaign_item (
     model_id         bigint not null,
     nomination_id    text,
     nominate_status  integer,
-    campaign_price   numeric default 0,
+    campaign_price   numeric default 0,      -- harga TAMPIL campaign (micro, sudah incl. subsidi)
+    seller_offer_price numeric default 0,    -- harga NET PENJUAL (micro) — acuan KPI takedown (17 Jul)
+    rebate_price     numeric default 0,      -- SUBSIDI SHOPEE (micro); >0 = display murah tapi net aman
     diperbarui_pada  timestamptz default now(),
     primary key (toko, session_id, item_id, model_id)
 );

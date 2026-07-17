@@ -55,21 +55,35 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
             if not sid:
                 continue
             nominated = SQL.baca_campaign_item(nama_toko, sid)  # {(iid_int,mid_int)->info} dari DB
-            # ⚠️ (17 Jul, bukti hidup) opt_out cuma MEMPAN buat nominate_status 30 (committed/
-            # approved). Status 10 (pending review): response bisa code=0 TAPI item ga kecabut
-            # (FAKE SUCCESS, kebukti verif full-map) — jadi yg 10 DISKIP (baris DB dipertahanin,
-            # dicabut siklus berikutnya begitu grab nyatet status 30).
-            nom_ids, pairs, tunda = [], [], 0
+            # (17 Jul mlm, rekaman owner) DUA jalur cabut: status 30 (approved) -> opt_out
+            # batch; status <30 (pending review) -> withdraw_entity per-id (endpoint tombol
+            # batalkan UI -- opt_out di status pending = fake-success). Status DB bisa BASI
+            # (approve diem2 antara grab): pending yg gagal withdraw ikut jalur opt_out.
+            nom_ids, pairs, pending = [], [], []
             for (iid, mid), info in nominated.items():
                 if (iid, mid) in kunci_set and info.get("nomination_id"):
                     if info.get("nominate_status") == 30 or info.get("nominate_status") is None:
                         nom_ids.append(info["nomination_id"])
                         pairs.append((iid, mid))
                     else:
-                        tunda += 1
-            if tunda:
-                log(f"sesi {s.get('session_name','')}: {tunda} nominasi masih pending-review (status<30) — "
-                    f"ditunda, dicabut begitu approved", level="warning", toko=shop, modul="campaign")
+                        pending.append(((iid, mid), info["nomination_id"]))
+            if pending and not config.DRY_RUN:
+                for (iid, mid), nomid in pending:
+                    if C.withdraw_entity(session, shop, sid, nomid):
+                        total += 1
+                        try:
+                            SQL.hapus_campaign_item(nama_toko, sid, [(iid, mid)])
+                        except Exception:
+                            pass
+                        log(f"withdraw (pending) {nomid} OK", level="live", toko=shop, modul="campaign")
+                    else:
+                        # mungkin keburu APPROVED (status DB basi) -> ikutin jalur opt_out
+                        nom_ids.append(nomid)
+                        pairs.append((iid, mid))
+            elif pending:
+                log(f"(DRY) {len(pending)} nominasi pending akan di-withdraw dari sesi '{s.get('session_name','')}'",
+                    level="warning", toko=shop, modul="campaign")
+                total += len(pending)
             if not nom_ids:
                 continue
             if config.DRY_RUN:

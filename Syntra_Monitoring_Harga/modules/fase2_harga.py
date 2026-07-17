@@ -143,7 +143,10 @@ def diagnosa_toko(nama_toko):
     promo = SQL.baca_promo_detail(nama_toko)
     camp = SQL.baca_campaign_item(nama_toko)   # {(item,model): {campaign_price micro, ...}}
     for (iid, mid), cv in camp.items():
-        harga = int((cv.get("campaign_price") or 0)) // config.FAKTOR_HARGA
+        # (17 Jul mlm, spec owner) KPI pakai harga NET PENJUAL (seller_offer_price) --
+        # display bisa lebih murah gara2 SUBSIDI SHOPEE (rebate_price); itu AMAN (ditanggung
+        # Shopee), JANGAN dicabut. Fallback campaign_price kalau net belum kegrab (baris lama).
+        harga = int((cv.get("seller_offer_price") or cv.get("campaign_price") or 0)) // config.FAKTOR_HARGA
         if harga <= 0:
             continue
         promo.setdefault((iid, mid), []).append({

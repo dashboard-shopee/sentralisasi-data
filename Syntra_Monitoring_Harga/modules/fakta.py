@@ -185,6 +185,8 @@ def fakta_campaign(nama_toko, session, shop):
                         "nomination_id": str(v.get("nomination_id") or "") or None,
                         "nominate_status": v.get("nominate_status"),
                         "campaign_price": v.get("campaign_price", 0) or 0,
+                        "seller_offer_price": v.get("seller_offer_price", 0) or 0,
+                        "rebate_price": v.get("rebate_price", 0) or 0,
                     })
         finally:
             tutup_page()

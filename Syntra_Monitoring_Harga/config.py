@@ -285,6 +285,7 @@ URL_PREVIEW_LIST = "https://seller.shopee.co.id/api/mkt/cmt/preview/preview_list
 URL_SUBMIT_NOMINATION = "https://seller.shopee.co.id/api/mkt/cmt/preview/submit_entity_online"
 URL_OPT_OUT_NOMINATION = "https://seller.shopee.co.id/api/mkt/cmt/nominated/opt_out"
 URL_STAT_NOMINASI = "https://seller.shopee.co.id/api/mkt/cmt/session/get_session_nomination_statistics"
+URL_WITHDRAW_ENTITY = "https://seller.shopee.co.id/api/mkt/cmt/nominated/withdraw_entity"   # cabut nominasi PENDING (rekaman owner 17 Jul)
 URL_SESSION_NOMINATION_STATS = "https://seller.shopee.co.id/api/mkt/cmt/session/get_session_nomination_statistics"
 URL_PRODUCT_SELECTOR_VERIFY = "https://seller.shopee.co.id/api/mkt/cmt/product/online/selector/verify"
 CAMPAIGN_KEYWORDS = ["gajian", "double", "kembar", "6.6", "7.7", "8.8", "9.9", "10.10", "11.11", "12.12"]

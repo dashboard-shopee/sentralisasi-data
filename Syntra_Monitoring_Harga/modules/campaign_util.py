@@ -314,6 +314,10 @@ def get_nominated_products(session, shop, campaign_id, session_id, tunggu=8):
                     "nomination_id": nomination_id,
                     "nominate_status": nominate_status,
                     "campaign_price": campaign_price,
+                    # (17 Jul, spec owner) harga NET PENJUAL + SUBSIDI SHOPEE: KPI takedown pakai
+                    # NET — display murah gara2 subsidi Shopee itu AMAN, jangan dicabut.
+                    "seller_offer_price": m.get("seller_offer_price"),
+                    "rebate_price": m.get("rebate_price"),
                     "original_price": m.get("original_price"),
                     "max_entry_price": (m.get("pricing_application_info") or {}).get("max_campaign_entry_price"),
                 }
@@ -389,6 +393,8 @@ def get_preview_nomination_ids(shop, campaign_id, session_id, tunggu=8):
                     "nomination_id": str(m.get("nomination_id", "")),
                     "nominate_status": m.get("nominate_status"),
                     "campaign_price": m.get("campaign_price"),
+                    "seller_offer_price": m.get("seller_offer_price"),
+                    "rebate_price": m.get("rebate_price"),
                     "max_entry_price": (m.get("pricing_application_info") or {}).get("max_campaign_entry_price"),
                 }
     return hasil
@@ -509,21 +515,47 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
 
-    # Model gate-fail: GA di-opt-out inline (17 Jul, bukti hidup): abis submit, nominasi
-    # NAHAN di status 10 (pending review) — opt_out di fase itu antara DITOLAK 329400012
-    # ATAU lebih bahaya: code=0 TAPI item ga kecabut (FAKE SUCCESS, kebukti verif full-map).
-    # Jalur benar: baris DB DIBIARIN → harga committed (= ceiling) < target×0.985 → diagnosa
-    # per-jam nge-flag → takedown_dari_campaign nyabut begitu status 30 (approved).
-    if langgar:
-        log(f"sesi {session_id}: {len(langgar)} model gate-fail dibiarin ke-commit di harga ceiling — "
-            f"takedown per-jam bakal nyabut begitu status 30 (opt_out ga mempan selama pending-review)",
-            level="warning", toko=shop, modul="campaign")
+    # Model gate-fail: cabut LANGSUNG via withdraw_entity (17 Jul mlm -- endpoint tombol
+    # batalkan UI dari rekaman owner; mempan buat nominasi PENDING, beda dari opt_out yg
+    # fake-success di status <30). Gagal withdraw -> baris DB dibiarin, takedown per-jam
+    # yg nyabut (withdraw dulu, fallback opt_out pas approved).
+    gate_skip = 0
+    if langgar and committed:
+        time.sleep(2)
+        for (iid, mid), info in langgar.items():
+            if withdraw_entity(session, shop, session_id, info["nomination_id"]):
+                gate_skip += 1
+                try:
+                    from modules import sql_harga as SQL
+                    SQL.hapus_campaign_item(_nama_display(shop), session_id, [(int(iid), int(mid))])
+                except Exception:
+                    pass
+        if gate_skip < len(langgar):
+            log(f"sesi {session_id}: {len(langgar) - gate_skip} model gate-fail belum kecabut — "
+                f"takedown per-jam yg bakal nyabut", level="warning", toko=shop, modul="campaign")
 
     log(f"sesi {session_id}: stage {staged} produk → commit {committed} model ({failed} gagal, "
-        f"{len(langgar)} gate-fail nunggu cabut per-jam)",
+        f"{len(langgar)} gate-fail, {gate_skip} langsung ke-withdraw)",
         level="live", toko=shop, modul="campaign")
     return {"staged": staged, "committed_model": committed, "failed_model": failed,
-            "gate_langgar": len(langgar)}
+            "gate_langgar": len(langgar), "gate_skip": gate_skip}
+
+
+def withdraw_entity(session, shop, session_id, nomination_id):
+    """Cabut 1 nominasi yg masih PENDING REVIEW (nominate_status < 30) — endpoint yg dipake
+    UI tombol batalkan (rekaman manual owner 17 Jul mlm: {session_id, nomination_id} SINGULAR,
+    resp product_result.success_model_num=1). opt_out cuma mempan buat yg APPROVED (30);
+    buat pending, opt_out = fake-success. Return True kalau sukses."""
+    try:
+        r = _api_post(session, config.URL_WITHDRAW_ENTITY,
+                      {"session_id": str(session_id), "nomination_id": str(nomination_id)},
+                      kunci="data", attempts=2)
+        n = int(((r.get("data") or {}).get("product_result") or {}).get("success_model_num") or 0)
+        return n > 0
+    except Exception as e:
+        log(f"withdraw_entity {nomination_id} gagal: {type(e).__name__}: {str(e)[:100]}",
+            level="warning", toko=shop, modul="campaign")
+        return False
 
 
 def takedown_products(session, shop, session_id, nomination_ids):
