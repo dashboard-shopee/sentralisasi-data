@@ -115,7 +115,10 @@ def _api_post(session, url, payload, kunci="data", attempts=4):
     if get_page():
         return api_post_browser(url, session["params"], payload, kunci=kunci, attempts=attempts)
     from modules.api_util import api_post
-    return api_post(url, session["headers"], session["params"], payload, kunci=kunci, attempts=attempts)
+    # ⚠️ jangan lempar session["headers"] mentah — hasil panen ngandung pseudo-header
+    # HTTP/2 (":authority" dst) yg ditolak requests (InvalidHeader). Pakai header bersih
+    # standar repo (config.grab_headers), sama kaya paket/voucher/garansi.
+    return api_post(url, config.grab_headers(session), session["params"], payload, kunci=kunci, attempts=attempts)
 
 
 def get_open_sessions(session, shop, window="nominasi"):
