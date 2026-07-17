@@ -40,7 +40,7 @@ TOKO_AKTIF = []
 # M4: full modul buat verif DRY semua provisioning. Kecilin lagi kalau mau fokus 1 modul.
 
 # MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]
-MODUL_AKTIF = ["komisi", "promo_toko", "paket", "voucher",  "kategori"]
+MODUL_AKTIF = ["komisi", "promo_toko", "garansi", "paket", "voucher", "campaign", "flash", "kategori"]   # FULL (owner 17 Jul: jalan 24 jam semua modul)
 
 # ✅ "campaign" DINYALAIN LAGI (15 Jul) — 3 bug ke-fix: (1) token-rotasi abis browser-context
 # ditambal via segarkan_abis_browser_context(), (2) api_post_browser ganti JSON.stringify,
