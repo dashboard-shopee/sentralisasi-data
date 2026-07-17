@@ -21,7 +21,7 @@ load_dotenv()
 # 1) 🔴 SAKLAR LIVE — SATU-SATUNYA switch simulasi vs beneran. SEMUA modul & fase ikut ini.
 #    False = DRY-RUN (SIMULASI, AMAN): ngitung + catat rencana, TIDAK ngubah Shopee.
 #    True  = LIVE: SEMUA modul (harga poin 1-4 + provisioning poin 5) BENERAN ubah Shopee.
-MODE_LIVE = False   # 🔴 M4 LIVE (14 Jul): scope kimmioshop. Sementara DRY (16 Jul) buat verif Task 1 plan takedown. Balikin True pas mau live per-task.
+MODE_LIVE = True   # 🔴 LIVE kimmioshop (ACC owner 17 Jul): fase2+fase3 live-verified, takedown campaign/flash/garansi live-verified. Rollout 9 toko lain = keputusan owner berikutnya (TOKO_AKTIF=[]).
 
 # 2) FASE yang dijalankan (arsitektur 3 FASE, orkestrasi `siklus_terpadu` 1-sesi/toko):
 #      1 = FAKTA          (grab data, READ-ONLY)
