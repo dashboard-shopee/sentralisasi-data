@@ -176,9 +176,19 @@ Analoginya: pas tes mobil di jalan, ketahuan ada 1 kabel rem kurang nyolok. Itu 
 
 ## 📎 11. CATATAN TEKNIS (buat dev / sesi baru)
 
-### 📋 PLAN AKTIF (16 Jul) → `docs/plans/2026-07-16-perbaikan-takedown-fase2.md`
-> Hasil grilling 16 Jul. **8 task**, urut aman→berisiko, tiap yg nyentuh Shopee: DRY → owner ACC → live.
-> Eksekusi via subagent per-task (pilihan owner). BELUM dieksekusi. Detail lengkap di file plan.
+### ✅ PLAN TAKEDOWN 16 Jul — KELAR SEMUA (17 Jul) → `docs/plans/2026-07-16-perbaikan-takedown-fase2.md`
+> Task 0-8 + S1-S8 **SELESAI & live-verified** (detail + temuan di file plan). Program **SIAP RUNNING
+> 10 toko** — status akhir + sisa PR kecil di STATUS.md "PROGRES SEKARANG".
+
+**Temuan teknis penting 17 Jul (buat sesi baru — jangan diulang nyari):**
+- **Full-API campaign = 90%**: write (add/edit/submit/opt_out) + sesi + COUNT nominasi (`get_session_list` bawa nominated/approved/rejected per sesi · `get_session_nomination_statistics` payload wajib `campaign_scene`) = requests POLOS. Baca DETAIL nominasi (nomination_id) = **signature-locked PERMANEN** — 3 endpoint (nominated_entity_list, preview_list, selector/verify) direplay payload 100% identik page → 90309999. Jalur satu-satunya: navigate-listen otomatis, dan cuma buat sesi ber-count>0.
+- **opt_out FAKE-SUCCESS**: status pending-review (10) → response code=0 TAPI item ga kecabut. Takedown cuma boleh cabut `nominate_status==30`.
+- **Ceiling campaign** (`max_campaign_entry_price` = reference Shopee) dinamis 0,85-0,98×harga tampil → KPI diskon 1,5% ga pernah lolos → pasang skip semua (by design). Lead: jalur upload massal Excel (klaim owner bisa 1,5%) belum di-sniff.
+- **Body paket listen wajib dibaca BEGITU DATENG** (telat = kosong, buffer CDP kebuang) — akar bug komisi "0 item", pola drain berkala skrg dipake di komisi.
+- **Paket**: cap Shopee 2000 item/paket (temuan owner) · ZIO/BEVERRA list error 1400101507 permanen → fallback: kapasitas 0 = anggap kosong, lanjut buat.
+- **Voucher**: overflow >500 dipecah per-KATEGORI utuh (`_slot_voucher_per_band` + `harga_produk_kategori`).
+
+### 📋 (arsip) isi plan 16 Jul
 
 Akar masalah: grab (Fase 1) NYAMBUNG ke tabel fakta + dashboard (route `pusat-promosi`, filter nama
 display), TAPI aksi cabut Fase 2 belum jalan buat flash/campaign/garansi.

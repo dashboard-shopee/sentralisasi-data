@@ -102,23 +102,29 @@ memuat `3`. Heartbeat `laporan` → dashboard /log.
 
 ---
 
-## 📍 PROGRES SEKARANG (update 13 Jul)
-Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_terpadu` (1 sesi/toko, semua fase). Verifikasi live bertahap per-modul.
+## 📍 PROGRES SEKARANG (update 17 Jul mlm) — SIAP RUNNING 10 TOKO
+**Status: production-ready** (`MODE_LIVE=True` · `TOKO_AKTIF=[]` 10 toko). Tinggal `RUN.bat`.
+⚠️ `MODUL_AKTIF` skrg TANPA garansi/campaign/flash (pilihan owner buat run awal) — modul itu +
+CABUT-nya mati sampe dimasukin lagi (termasuk cabut 6 item tes pending-review + item lama di 957815).
 - 🔧 **Config = control panel** — double-klik `RUN.bat` → scheduler · **`tes_harga.bat`** → tes 1 siklus SEKARANG (`JAM_TES=FULL` = semua tier dipaksa). Atur di `config.py`: `FASE_AKTIF` · `TOKO_AKTIF` · `MODUL_AKTIF` · jam trigger.
-- ✅ **Paket** verified live (command manual) — logika beres + refinement 12 Jul (buat-baru, 1 paket, cap dilepas)
-- ✅ **Voucher per-BAND + cap 2×AOV** verified live 13 Jul kimmioshop + **17 Jul BEVERRA (bisect-on-ERROR_PARAM LIVE: poison 6007354859 kebuang, 10 voucher fe_status=1)** — sisa: rollout 8 toko lain
+- ✅ **Paket** verified live + 17 Jul: **cap 2000/paket** (temuan owner, overflow → paket #2) · **ZIO/BEVERRA UNBLOCKED** (list error 1400101507 + kapasitas 0 → anggap kosong, lanjut buat; DRY: ZIO bakal enroll 935)
+- ✅ **Voucher per-BAND + cap 2×AOV** verified live 13 Jul kimmioshop + 17 Jul BEVERRA (bisect poison LIVE) · **overflow >500 dipecah PER-KATEGORI UTUH** (spec owner 17 Jul; NOMIDE: B1 424 campur + B1#2 105 full 1 kategori) · produk mahal (band > cap 2×AOV) tetep TANPA voucher (keputusan owner 17 Jul)
+- ✅ **Komisi grab** — FIXED 17 Jul (akar: body gql telat dibaca = kosong → drain berkala; live-verified YARRA 10 item kesimpen)
 - ✅ Promo Toko — nyambung (Shopee kasih ct=8 di API produk)
 - ✅ **Flash CABUT** — wire (ct=7) + self-heal stop→hapus→recreate produk sama TERVERIFIKASI LIVE 16 Jul (sesi 481492786769946→481954642538724 slot sama) · 17 Jul: sesi AKAN DATANG ikut diaudit (inject fakta flash ke diagnosa, 259 item DRY, exclude pelanggar pas daftar ulang)
 - 🆕 **17 Jul (spec owner):** campaign daftar pakai **aturan Senin** (>1 hari: Senin minggu mulai · 1 hari: Senin terakhir sebelum tutup nominasi · kelewat=skip) · halaman /log clean (tabel event dibuang, ganti heartbeat per-modul) · keterangan fase 3 = kolom Alasan di halaman olah data (udah ada)
 - ✅ **Garansi CABUT** — wire + withdraw TERVERIFIKASI LIVE 16 Jul di Alialia (count 168→167, bid ilang, lalu restore)
-- ✅ **Campaign CABUT** — verified live 16 Jul (sesi bersih) + S2: jalur per-jam FULL requests polos (tanpa browser). Lihat docs/plans/2026-07-16-perbaikan-takedown-fase2.md
-- 🔧 **Campaign PASANG** — gate KPI vs ceiling Shopee LIVE-PROVEN 16 Jul mlm, TAPI 🔴 temuan bisnis: ceiling ≈ 0.95×harga tampil → KPI diskon 1,5%/0,15% GA AKAN lolos di sesi skrg → bot skip semua (sesuai spec "ga bisa daftar → skip"). KEPUTUSAN OWNER: relax KPI ≥5% / biarin skip / naikin harga pre-campaign. Detail di plan S1.
+- ✅ **Campaign CABUT** — verified live 16-17 Jul: jalur per-jam FULL requests polos · cuma cabut status 30 (pending-review DITUNDA — opt_out fake-success kalo status 10) · liat sesi belum-mulai juga · bukti hidup via statistik polos (count sebelum→sesudah)
+- 🔧 **Campaign PASANG** — gate KPI vs ceiling LIVE-PROVEN + aturan Senin. 🔴 Ceiling Shopee (0,85-0,98×tampil, dinamis) < KPI 0,985 di semua tes → bot skip semua (SESUAI spec "ga bisa daftar → skip"). Lead belum diuji: owner bisa daftar 1,5% via upload massal Excel — jalur Excel belum di-sniff.
+- 📡 **Kesimpulan full-API (17 Jul, konklusif):** write + sesi + COUNT nominasi (get_session_list/statistics) = polos semua; baca DETAIL nominasi (nomination_id) = signature-locked PERMANEN (3 endpoint direplay payload identik → 90309999) → navigate-listen otomatis, dan cuma buat sesi ber-count>0. Alur bot = identik alur manual owner (rekaman 17 Jul).
 - ✅ **Fase 3 (laporan)** — LIVE 17 Jul: siklus penuh fase 1→2→3 kimmioshop, 1217 alasan terkini ketulis DB (verified)
 - ✅ **Poin 1–4 harga** — fase2 LIVE 17 Jul (ACC owner): promo toko 2 entri 0 gagal + campaign cabut (item lama 49909255539 dicabut SEMUA sesi, verified re-read). ⚠️ kasus `harga_dasar` (ubah harga awal) belum ada kejadian → jalur itu belum keuji live. ⚠️ opt_out FAKE-SUCCESS di status pending-review (10) → takedown skrg cuma cabut status 30, sisanya ditunda otomatis
 
 **⚠️ NEXT SESSION:** baca PANDUAN §11 "HANDOFF" — **RENCANA BESAR 7 MILESTONE** (grilling 13–14 Jul, 29 keputusan). Progres: M−1 ✅ · M0 ✅ (log terpusat `log()`+`catat()` event, jalur siklus + semua modul low-level via `log()` CMD seragam, dashboard `/log` tabel event, prune log >30hr) · M1 ✅ (garansi 2-kolom · voucher fe_status · stok-habis→0 = akar voucher poison KELAR · auto-isi harga diskon) · M2 ✅ (Loop A→B · Fase 3 grab-ulang · alasan per-produk ke DB) · M3 ✅ logika (rem 30/40% gate · komisi peg +trigger Shopee `komisi_hold` · garansi takedown jam 2-kolom margin@Program · poin 4 re-attach→provisioning harian) — ⚠️ **BELUM LIVE, tes scope 1 toko + DRY dulu** ·
 **M4 🔧 LIVE-tested 15 Jul (scope kimmioshop):** garansi/voucher/paket ✅ (1171/1174 harga sesuai, voucher `fe_status=2` BERLANGSUNG terverifikasi) · flash ✅ — ketauan bug per-model (harga model murah ke-max-in ke harga model mahal, fix `siapkan_produk`/`_entri`) + self-heal real-time ditambah (sniff 15 Jul: `set_shop_flash_sale` status=0 = HAPUS sesi, beda dari status=2=stop; alur skrg stop→hapus→bikin sesi baru di slot sama→daftar ulang produk sehat, TERVERIFIKASI slot beneran kebuka lagi abis dihapus — 23 sesi lama dihapus, provisioning ulang berhasil isi 23 sesi baru) ·
-**campaign 🔧 (16 Jul):** nominate sisi Shopee JALAN (count naik-turun kebukti live), TAPI
-pencatatan DB rusak — nulis pakai username 'kimmioshop', baca pakai display 'Kimmioshop' →
-takedown ga pernah ketemu. Plus get_open_sessions cuma baca 3/7 sesi. Fix di plan 16 Jul.
-⚠️ Open lain: 3 toko flaky deal-numpuk (M5) · voucher bisect-on-fail (M5) · config.py MASIH `MODE_LIVE=True` scope kimmioshop (belum di-revert ke DRY default) · sesi 978067/978125 ada 1 draft lama nyangkut (item 24148110949, harga Rp0, `preview_no` sama tiap submit) — perlu dibersihin manual dari UI Shopee, gak ganggu fungsi (cuma nyumbang "1 gagal" tiap submit di sesi itu).
+**⚠️ SISA PR (17 Jul mlm — kecil, bukan blocker running):**
+1. `MODUL_AKTIF` masukin lagi `garansi`+`campaign`+`flash` pas run awal udah lancar (biar full + cabut 6 item pending & item lama 957815 jalan otomatis)
+2. Campaign pasang: bakal skip semua selama KPI 1,5% < diskon minta Shopee — lead: sniff jalur upload massal Excel (owner klaim bisa 1,5% lewat situ)
+3. Kasus `harga_dasar` (ubah harga awal) belum pernah kejadian live — pantau pas pertama muncul
+4. Komisi SET/CABUT ke Shopee = manual owner (anti-bot; patokan harga komisi udah otomatis kepake)
+5. Rem paket "list kosong palsu" belum ketemu kejadian nyata (standby, mock-verified)
