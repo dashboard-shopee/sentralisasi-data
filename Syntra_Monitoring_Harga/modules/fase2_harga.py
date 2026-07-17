@@ -37,6 +37,24 @@ def _margin(harga, cost):
     return 1.0 - cost["pct"] - (cost["hpp"] + cost["biaya"]) / harga
 
 
+def _cek_flash(target, by_jenis):
+    """Poin 3④ — audit FLASH (dipisah 17 Jul, alasan sama _cek_campaign): entri flash di
+    sesi AKAN DATANG nempel pas harga tampil masih on-target (kasus 'sesuai') — kalau cuma
+    dicek di koreksi_turun, pelanggaran baru ketauan pas sesinya jalan (telat). Kriteria:
+    harga < target−FLASH_SELISIH / stok 0."""
+    fs = by_jenis.get("Flash Sale")
+    if fs is None:
+        return []
+    sebab = []
+    if fs["harga_promo"] and fs["harga_promo"] < target - FLASH_SELISIH:
+        sebab.append(f"flash {fs['harga_promo']} < target-{FLASH_SELISIH}")
+    if fs["stok"] == 0:
+        sebab.append("stok real 0")
+    if sebab:
+        return [{"promo": "Flash Sale", "aksi": "takedown", "sebab": " & ".join(sebab)}]
+    return []
+
+
 def _cek_campaign(target, stok, pjh, by_jenis):
     """Poin 3⑤ — audit nominasi CAMPAIGN (dipisah dari _cek_koreksi_turun 17 Jul):
     nominasi campaign nempel SEBELUM sesinya mulai (harga tampil belum berubah → kasus
@@ -90,15 +108,7 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
                          "bid_id": (gar or {}).get("bid_id")})
 
     # 3c — FLASH SALE
-    fs = by_jenis.get("Flash Sale")
-    if fs is not None:
-        sebab = []
-        if fs["harga_promo"] and fs["harga_promo"] < target - FLASH_SELISIH:
-            sebab.append(f"flash {fs['harga_promo']} < target-{FLASH_SELISIH}")
-        if fs["stok"] == 0:
-            sebab.append("stok real 0")
-        if sebab:
-            aksi.append({"promo": "Flash Sale", "aksi": "takedown", "sebab": " & ".join(sebab)})
+    aksi.extend(_cek_flash(target, by_jenis))
 
     # 3d — CAMPAIGN
     aksi.extend(_cek_campaign(target, stok, pjh, by_jenis))
@@ -140,6 +150,18 @@ def diagnosa_toko(nama_toko):
             "jenis": "Campaign", "harga_promo": harga, "status": "aktif",
             "stok": 0,   # stok diisi dari baris di loop bawah (b["stok"])
         })
+    # FLASH sesi AKAN DATANG (17 Jul, owner): konteks ct=7 cuma flash yg LAGI jalan.
+    # Item di sesi upcoming di-inject sbg "Flash Sale" juga → 3c bisa nge-flag → executor
+    # self-heal (akhiri→hapus→daftar ulang exclude pelanggar) udah support sesi upcoming.
+    flash_up = SQL.baca_flash_item_aktif(nama_toko)
+    for (iid, mid), fv in flash_up.items():
+        sudah = any(p.get("jenis") == "Flash Sale" for p in promo.get((iid, mid), []))
+        if sudah:
+            continue   # udah kebaca dari konteks (sesi lagi jalan) — jangan dobel
+        promo.setdefault((iid, mid), []).append({
+            "jenis": "Flash Sale", "harga_promo": int(fv.get("promotion_price") or 0),
+            "status": "aktif", "stok": int(fv.get("stock") or 0),
+        })
     garansi = SQL.baca_garansi_best(nama_toko)
     penjualan = SQL.baca_penjualan_per_hari([b["item_id"] for b in baris])
     biaya = SQL.baca_biaya_sku([b["sku"] for b in baris])
@@ -166,11 +188,11 @@ def diagnosa_toko(nama_toko):
         elif shopee_hold:
             kasus, aksi = "komisi_hold", []
         elif real == target:
-            # 'sesuai' TETAP diaudit nominasi campaign-nya (17 Jul): nominasi nempel pas
-            # harga masih on-target — pelanggaran KPI campaign harus kecabut SEBELUM sesi live.
+            # 'sesuai' TETAP diaudit campaign + flash-nya (17 Jul): keduanya bisa nempel di
+            # sesi yg BELUM mulai pas harga masih on-target — harus kecabut SEBELUM sesi live.
             kasus = "sesuai"
-            aksi = _cek_campaign(target, stok, pjh,
-                                 {p["jenis"]: p for p in promo.get(key, [])})
+            bj = {p["jenis"]: p for p in promo.get(key, [])}
+            aksi = _cek_campaign(target, stok, pjh, bj) + _cek_flash(target, bj)
         elif hd > 0 and target < hd * (1 - REM_MAKS_TURUN):
             # REM 40% (per-produk): target di bawah 60% Harga Diskon = curiga pancing/komisi salah
             # input → JANGAN diubah (jaring pengaman, keputusan owner). Komisi ≥ Diskon jd ga bakal

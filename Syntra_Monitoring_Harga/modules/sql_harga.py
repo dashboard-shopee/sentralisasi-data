@@ -529,6 +529,32 @@ def simpan_fakta_flash_item(toko, baris):
         pk=("toko", "flash_sale_id", "item_id", "model_id"))
 
 
+def baca_flash_item_aktif(toko):
+    """{(item_id, model_id): {"promotion_price", "stock"}} — item flash di sesi BERJALAN
+    + AKAN DATANG (end_time >= now). Sumber diagnosa 3c buat sesi yg BELUM mulai (17 Jul,
+    owner): konteks ct=7 cuma nangkep flash yg LAGI jalan, jadi pelanggaran di sesi
+    upcoming ga pernah ke-flag padahal executor (takedown_items self-heal stop→hapus→
+    ganti exclude pelanggar) udah bisa nanganin sesi upcoming. Data dari grab harian."""
+    q = text("""
+        select i.item_id, i.model_id, i.promotion_price, i.stock
+          from harga_fakta_flash_item i
+          join harga_fakta_flash_sesi s
+            on s.toko = i.toko and s.flash_sale_id = i.flash_sale_id
+         where i.toko = :t and (i.status is null or i.status = 1)
+           and s.end_time >= now()""")
+    with get_engine().connect() as c:
+        rows = c.execute(q, {"t": toko}).fetchall()
+    hasil = {}
+    for r in rows:
+        key = (int(r.item_id), int(r.model_id))
+        harga = int(r.promotion_price or 0)
+        lama = hasil.get(key)
+        # kalau 1 variasi ikut >1 sesi, simpen yg harganya PALING RENDAH (kasus terburuk)
+        if lama is None or (harga and harga < lama["promotion_price"]):
+            hasil[key] = {"promotion_price": harga, "stock": int(r.stock or 0)}
+    return hasil
+
+
 def simpan_fakta_voucher(toko, baris):
     """baris = list {voucher_id, code, name, discount, min_price, tipe,
     start_time, end_time, status, fe_status, item_scope(list/None)}. item_scope -> jsonb."""
