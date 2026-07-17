@@ -70,7 +70,7 @@ function StatusBadge({ status }: { status: string }) {
 // ── Seksi EVENT bot harga: apa yang BERUBAH (harga dibenerin, promo dipasang/dicabut) ──
 const MODUL_LABEL: Record<string, string> = {
   produk: "Produk (harga+stok)", harga: "Harga", promo_toko: "Promo Toko", voucher: "Voucher",
-  paket: "Paket", garansi: "Garansi", campaign: "Campaign", flash: "Flash", kategori: "Kategori",
+  paket: "Paket", garansi: "Garansi", campaign: "Campaign", flash: "Flash", kategori: "Kategori", komisi: "Komisi",
 };
 
 function FaktaPerModul({ items }: { items: ModulTerakhir[] }) {

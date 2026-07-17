@@ -22,15 +22,15 @@ const KATALOG = [
   {
     key: "harga",
     label: "Syntra Monitoring Harga",
+    // 17 Jul (owner: "kebanyakan, ada fungsi sama — rapihin"): 4 kartu FASE (detak siklus,
+    // buat mastiin program jalan tiap jam) + grid per-MODUL (di bawah, dari modulTerakhir).
+    // fakta_harian/mingguan/bulanan & kategori DIBUANG dari kartu — infonya udah ke-cover
+    // grid per-modul (kapan tiap modul terakhir jalan).
     pemicu: [
-      { key: "grab", label: "Log Ambil Produk & Konteks (Fase 1 — tiap jam)" },
-      { key: "kategori", label: "Log Ambil Kategori Produk" },
-      { key: "fakta_harian", label: "Log Fakta Harian (Garansi + Campaign)" },
-      { key: "fakta_mingguan", label: "Log Fakta Mingguan (Flash + Voucher + Paket)" },
-      { key: "fakta_bulanan", label: "Log Housekeeping Bulanan" },
-      { key: "rubah_harga", label: "Log Rubah Harga" },
-      { key: "provisioning", label: "Log Provisioning (Pasang Promo)" },
-      { key: "laporan", label: "Log Fase 3 (Laporan — Grab Ulang Status Terkini)" },
+      { key: "grab", label: "Fase 1 — Grab Data (tiap jam)" },
+      { key: "rubah_harga", label: "Fase 2 — Aksi Harga + Cabut Promo (tiap jam)" },
+      { key: "provisioning", label: "Fase 2 — Pasang Promo (harian/mingguan)" },
+      { key: "laporan", label: "Fase 3 — Laporan (tiap jam)" },
     ],
   },
   {

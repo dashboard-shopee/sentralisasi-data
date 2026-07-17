@@ -582,8 +582,11 @@ def grab_komisi_browser(interaktif=True):
             if items:
                 from modules.sql_harga import simpan_fakta_komisi
                 n = simpan_fakta_komisi(nama, list(items.values()))
+                # heartbeat modul komisi ke siklus_log (17 Jul — grid per-modul dashboard /log)
+                catat(f"Komisi: {n} item aktif kegrab (browser gql)", status="ok", fase="F1", toko=nama, modul="komisi", cmd=False)
                 print(colorama.Fore.CYAN + f"[komisi grab] [{nama}] {n} item komisi disimpan ke harga_fakta_komisi" + colorama.Style.RESET_ALL)
             else:
+                catat("Komisi: 0 item kegrab — TIDAK disimpan (cek halaman/scroll)", status="warning", fase="F1", toko=nama, modul="komisi", cmd=False)
                 print(colorama.Fore.YELLOW + f"[komisi grab] [{nama}] 0 item -> TIDAK disimpan (tabel fakta dibiarin, cek URL/scroll)" + colorama.Style.RESET_ALL)
         except Exception as e:
             print(colorama.Fore.RED + f"[komisi grab] [{nama}] GAGAL: {type(e).__name__}: {e}" + colorama.Style.RESET_ALL)
