@@ -108,7 +108,8 @@ Fase 1 (grab) jalan **semua toko** (kebukti, 0 anti-bot). Orkestrasi = `siklus_t
 - ✅ **Paket** verified live (command manual) — logika beres + refinement 12 Jul (buat-baru, 1 paket, cap dilepas)
 - ✅ **Voucher per-BAND + cap 2×AOV** verified live 13 Jul kimmioshop + **17 Jul BEVERRA (bisect-on-ERROR_PARAM LIVE: poison 6007354859 kebuang, 10 voucher fe_status=1)** — sisa: rollout 8 toko lain
 - ✅ Promo Toko — nyambung (Shopee kasih ct=8 di API produk)
-- ✅ **Flash CABUT** — wire (ct=7) + self-heal stop→hapus→recreate produk sama TERVERIFIKASI LIVE 16 Jul (sesi 481492786769946→481954642538724 slot sama)
+- ✅ **Flash CABUT** — wire (ct=7) + self-heal stop→hapus→recreate produk sama TERVERIFIKASI LIVE 16 Jul (sesi 481492786769946→481954642538724 slot sama) · 17 Jul: sesi AKAN DATANG ikut diaudit (inject fakta flash ke diagnosa, 259 item DRY, exclude pelanggar pas daftar ulang)
+- 🆕 **17 Jul (spec owner):** campaign daftar pakai **aturan Senin** (>1 hari: Senin minggu mulai · 1 hari: Senin terakhir sebelum tutup nominasi · kelewat=skip) · halaman /log clean (tabel event dibuang, ganti heartbeat per-modul) · keterangan fase 3 = kolom Alasan di halaman olah data (udah ada)
 - ✅ **Garansi CABUT** — wire + withdraw TERVERIFIKASI LIVE 16 Jul di Alialia (count 168→167, bid ilang, lalu restore)
 - ✅ **Campaign CABUT** — verified live 16 Jul (sesi bersih) + S2: jalur per-jam FULL requests polos (tanpa browser). Lihat docs/plans/2026-07-16-perbaikan-takedown-fase2.md
 - 🔧 **Campaign PASANG** — gate KPI vs ceiling Shopee LIVE-PROVEN 16 Jul mlm, TAPI 🔴 temuan bisnis: ceiling ≈ 0.95×harga tampil → KPI diskon 1,5%/0,15% GA AKAN lolos di sesi skrg → bot skip semua (sesuai spec "ga bisa daftar → skip"). KEPUTUSAN OWNER: relax KPI ≥5% / biarin skip / naikin harga pre-campaign. Detail di plan S1.
