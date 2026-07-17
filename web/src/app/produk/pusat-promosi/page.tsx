@@ -385,9 +385,9 @@ export default function PusatPromosiPage() {
 
       {/* Tabel */}
       <div className="bg-white rounded-2xl border border-[#eef0f6] overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-[12.5px]">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-[#f6f7fb]">
               <tr className="bg-[#f6f7fb] text-[#6b7180] text-left">
                 {cols.map((c) => (
                   <th key={c.k} className="px-3 py-2.5 font-semibold whitespace-nowrap">{c.t}</th>

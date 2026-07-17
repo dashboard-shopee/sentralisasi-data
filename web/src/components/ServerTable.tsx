@@ -561,7 +561,7 @@ export default function ServerTable({
         <span className="text-[12px] text-[#9aa0b2] ml-auto">{total.toLocaleString("id-ID")} produk</span>
       </div>
 
-      <div className="card p-0 overflow-x-auto relative">
+      <div className="card p-0 overflow-auto relative max-h-[75vh]">
         {loading && (
           <div className="absolute inset-0 bg-white/60 grid place-items-center z-20 text-[13px] text-[#8a90a2]">Memuat…</div>
         )}

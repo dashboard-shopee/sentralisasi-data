@@ -438,9 +438,9 @@ export default function RisetKompetitorPage() {
           </div>
 
           {/* Table Container */}
-          <div className="overflow-x-auto min-w-0">
+          <div className="overflow-auto max-h-[75vh] min-w-0">
             <table className="w-full text-left border-collapse text-[13px]">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-[#f0f2f7] text-[#8a90a2] font-semibold">
                   <th className="py-3 px-2 w-[40px] text-center">No</th>
                   <th className="py-3 px-2 w-[80px]">Gambar</th>

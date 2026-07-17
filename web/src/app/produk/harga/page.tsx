@@ -472,9 +472,9 @@ export default function HargaPage() {
   const renderAllProdukTable = () => {
     const list = rows as AllProdukRow[];
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[75vh]">
         <table className="w-full text-left border-collapse" style={{ minWidth: "1900px" }}>
-          <thead>
+          <thead className="sticky top-0 z-10 bg-[#f6f7fb]">
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
               <th className="px-2 py-2 text-[11px] font-bold text-[#6b7180] w-[50px] text-center">No</th>
               <th onClick={() => handleSort("sku")} className="px-2 py-2 text-[11px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[110px]">
@@ -701,9 +701,9 @@ export default function HargaPage() {
   const renderOlahDataTable = () => {
     const list = rows as OlahDataRow[];
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[75vh]">
         <table className="w-full text-left border-collapse" style={{ minWidth: "1500px" }}>
-          <thead>
+          <thead className="sticky top-0 z-10 bg-[#f6f7fb]">
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
               <th className="p-3.5 text-[12px] font-bold text-[#6b7180] w-[50px] text-center">No</th>
               <th onClick={() => handleSort("toko")} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[100px]">
@@ -837,9 +837,9 @@ export default function HargaPage() {
   const renderKomisiTable = () => {
     const list = rows as KomisiRow[];
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[75vh]">
         <table className="w-full text-left border-collapse" style={{ minWidth: "1400px" }}>
-          <thead>
+          <thead className="sticky top-0 z-10 bg-[#f6f7fb]">
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
               <th style={{ left: 0, width: 50, minWidth: 50 }} className="p-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider sticky z-20 bg-[#f6f7fb] text-center">
                 No
@@ -950,9 +950,9 @@ export default function HargaPage() {
   const renderRiwayatTable = () => {
     const list = rows as RiwayatRow[];
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[75vh]">
         <table className="w-full text-left border-collapse" style={{ minWidth: "1000px" }}>
-          <thead>
+          <thead className="sticky top-0 z-10 bg-[#f6f7fb]">
             <tr className="border-b border-[#eef0f6] bg-[#f6f7fb]">
               <th onClick={() => handleSort("waktu_update")} className="px-4 py-3.5 text-[12px] font-bold text-[#6b7180] tracking-wider cursor-pointer hover:bg-[#eaecef] transition-colors w-[180px]">
                 Waktu {sortCol === "waktu_update" ? (sortDir === "asc" ? "▲" : "▼") : ""}
