@@ -493,7 +493,10 @@ export async function POST(req: Request) {
       
       const oldData = await q<any>(`select custom_harga_diskon from harga_all_produk where sku = $1`, [sku]);
       const oldVal = oldData.length > 0 ? oldData[0].custom_harga_diskon : null;
-
+      // no-op guard (spec owner 18 Jul): nilai sama → jangan update / jangan catat riwayat
+      if (Number(oldVal ?? NaN) === Number(val ?? NaN) || ((oldVal ?? null) === null && (val ?? null) === null)) {
+        return NextResponse.json({ ok: true, message: "Nilai sama — tidak ada perubahan.", noop: true });
+      }
       await q(`update harga_all_produk set custom_harga_diskon = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
       await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5, $6)`, [sku, 'Edit Harga Diskon', oldVal, val, username, userId]);
 
@@ -506,7 +509,9 @@ export async function POST(req: Request) {
       
       const oldData = await q<any>(`select custom_harga_pancing from harga_all_produk where sku = $1`, [sku]);
       const oldVal = oldData.length > 0 ? oldData[0].custom_harga_pancing : null;
-
+      if (Number(oldVal ?? NaN) === Number(val ?? NaN) || ((oldVal ?? null) === null && (val ?? null) === null)) {
+        return NextResponse.json({ ok: true, message: "Nilai sama — tidak ada perubahan.", noop: true });
+      }
       await q(`update harga_all_produk set custom_harga_pancing = $1, diperbarui_pada = now() where sku = $2`, [val, sku]);
       await q(`insert into harga_riwayat_update (sku, aksi, nilai_lama, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5, $6)`, [sku, 'Edit Harga Pancing', oldVal, val, username, userId]);
 
@@ -565,17 +570,25 @@ export async function POST(req: Request) {
 
     if (action === "update-komisi-toko") {
       const { sku, toko, komisi_persen, harga_jual } = body;
+      // no-op guard (spec owner 18 Jul): bandingin ke nilai lama, sama → skip (ga masuk riwayat)
+      const oldK = await q<any>(`select komisi_persen, harga_jual from harga_komisi_toko where sku = $1 and username_toko = $2`, [sku, toko]);
+      const oldRow = oldK[0] || {};
+      const baru = komisi_persen !== undefined ? Number(komisi_persen) : Number(harga_jual);
+      const lama = komisi_persen !== undefined ? Number(oldRow.komisi_persen ?? NaN) : Number(oldRow.harga_jual ?? NaN);
+      if (baru === lama) {
+        return NextResponse.json({ ok: true, message: "Nilai sama — tidak ada perubahan.", noop: true });
+      }
       await q(`
         insert into harga_komisi_toko (sku, username_toko, komisi_persen, harga_jual, diperbarui_pada)
         values ($1, $2, $3, $4, now())
-        on conflict (sku, username_toko) do update 
-        set komisi_persen = coalesce(excluded.komisi_persen, harga_komisi_toko.komisi_persen), 
-            harga_jual = coalesce(excluded.harga_jual, harga_komisi_toko.harga_jual), 
+        on conflict (sku, username_toko) do update
+        set komisi_persen = coalesce(excluded.komisi_persen, harga_komisi_toko.komisi_persen),
+            harga_jual = coalesce(excluded.harga_jual, harga_komisi_toko.harga_jual),
             diperbarui_pada = now()
       `, [sku, toko, komisi_persen !== undefined ? komisi_persen : null, harga_jual !== undefined ? harga_jual : null]);
-      
+
        const aksiName = komisi_persen !== undefined ? 'Edit Komisi Persen' : 'Edit Harga Jual Manual';
-      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`, 
+      await q(`insert into harga_riwayat_update (sku, aksi, nilai_baru, username, user_id) values ($1, $2, $3, $4, $5)`,
         [sku, `${aksiName} (${toko})`, komisi_persen !== undefined ? komisi_persen : harga_jual, username, userId]);
 
       return NextResponse.json({ ok: true, message: `Komisi toko ${toko} SKU ${sku} diperbarui.` });

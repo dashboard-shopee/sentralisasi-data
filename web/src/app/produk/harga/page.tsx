@@ -138,9 +138,11 @@ export default function HargaPage() {
   // Inline edit state for Custom Harga Diskon
   const [editingDiskonSku, setEditingDiskonSku] = useState<string | null>(null);
   const [editDiskonVal, setEditDiskonVal] = useState("");
+  const [origDiskonVal, setOrigDiskonVal] = useState("");   // nilai awal saat mulai edit (deteksi no-op)
   // Inline edit state for Custom Harga Pancing
   const [editingPancingSku, setEditingPancingSku] = useState<string | null>(null);
   const [editPancingVal, setEditPancingVal] = useState("");
+  const [origPancingVal, setOrigPancingVal] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   // Inline edit state for Komisi
@@ -249,6 +251,8 @@ export default function HargaPage() {
   }, [fetchData]);
 
   const saveCustomDiskon = async (sku: string) => {
+    // no-op guard (spec owner 18 Jul): nilai sama dgn kondisi awal → JANGAN simpan (ga masuk riwayat)
+    if (editDiskonVal.trim() === origDiskonVal.trim()) { setEditingDiskonSku(null); return; }
     try {
       setIsSaving(true);
       const res = await fetch("/api/produk/harga", {
@@ -275,6 +279,7 @@ export default function HargaPage() {
   };
 
   const saveCustomPancing = async (sku: string) => {
+    if (editPancingVal.trim() === origPancingVal.trim()) { setEditingPancingSku(null); return; }
     try {
       setIsSaving(true);
       const res = await fetch("/api/produk/harga", {
@@ -571,15 +576,16 @@ export default function HargaPage() {
                           if (e.key === "Enter") saveCustomDiskon(r.sku);
                           if (e.key === "Escape") setEditingDiskonSku(null);
                         }}
+                        onBlur={() => saveCustomDiskon(r.sku)}
                       />
-                      <button onClick={() => saveCustomDiskon(r.sku)} disabled={isSaving} className="text-[#ee4d2d] hover:text-[#c4361e] cursor-pointer" title="Simpan">
+                      <button onMouseDown={(e) => { e.preventDefault(); saveCustomDiskon(r.sku); }} disabled={isSaving} className="text-[#ee4d2d] hover:text-[#c4361e] cursor-pointer" title="Simpan">
                         {isSaving ? "⏳" : "✔️"}
                       </button>
                     </div>
                   ) : (
-                    <div 
+                    <div
                       className="cursor-pointer group flex items-center justify-end gap-1 hover:bg-[#fff1ed] hover:text-[#ee4d2d] rounded px-1 -mx-1 transition-colors"
-                      onClick={() => { setEditingDiskonSku(r.sku); setEditDiskonVal(r.custom_harga_diskon !== null ? String(r.custom_harga_diskon) : ""); }}
+                      onClick={() => { setEditingDiskonSku(r.sku); const v = r.custom_harga_diskon !== null ? String(r.custom_harga_diskon) : ""; setEditDiskonVal(v); setOrigDiskonVal(v); }}
                       title={r.custom_harga_diskon !== null ? "Harga kustom aktif. Klik untuk mengubah" : "Harga default. Klik untuk menimpa"}
                     >
                       <span className={r.custom_harga_diskon !== null ? "text-[#ee4d2d] font-bold" : "text-[#161a27] font-semibold"}>
@@ -604,15 +610,16 @@ export default function HargaPage() {
                           if (e.key === "Enter") saveCustomPancing(r.sku);
                           if (e.key === "Escape") setEditingPancingSku(null);
                         }}
+                        onBlur={() => saveCustomPancing(r.sku)}
                       />
-                      <button onClick={() => saveCustomPancing(r.sku)} disabled={isSaving} className="text-[#0ea5e9] hover:text-[#0284c7] cursor-pointer" title="Simpan">
+                      <button onMouseDown={(e) => { e.preventDefault(); saveCustomPancing(r.sku); }} disabled={isSaving} className="text-[#0ea5e9] hover:text-[#0284c7] cursor-pointer" title="Simpan">
                         {isSaving ? "⏳" : "✔️"}
                       </button>
                     </div>
                   ) : (
-                    <div 
+                    <div
                       className="cursor-pointer group flex items-center justify-end gap-1 hover:bg-[#f0f9ff] hover:text-[#0ea5e9] rounded px-1 -mx-1 transition-colors"
-                      onClick={() => { setEditingPancingSku(r.sku); setEditPancingVal(r.custom_harga_pancing !== null ? String(r.custom_harga_pancing) : ""); }}
+                      onClick={() => { setEditingPancingSku(r.sku); const v = r.custom_harga_pancing !== null ? String(r.custom_harga_pancing) : ""; setEditPancingVal(v); setOrigPancingVal(v); }}
                       title={r.custom_harga_pancing !== null ? "Pancing kustom aktif. Klik untuk mengubah" : "Pancing default. Klik untuk menimpa"}
                     >
                       <span className={r.custom_harga_pancing !== null ? "text-[#0ea5e9] font-bold" : "text-[#6b7180] font-medium"}>
@@ -1014,10 +1021,19 @@ export default function HargaPage() {
                 </td>
                 <td className="px-4 py-3 font-bold text-[#161a27] align-middle">{r.sku}</td>
                 <td className="px-4 py-3 text-right text-[#9aa0b2] line-through align-middle">
-                  {r.nilai_lama !== null && r.nilai_lama !== undefined ? formatRp(r.nilai_lama) : "-"}
+                  {(() => {
+                    // komisi persen → satuan %, sisanya Rp (spec owner 18 Jul)
+                    const isKomisiPct = /komisi persen/i.test(r.aksi || "");
+                    if (r.nilai_lama === null || r.nilai_lama === undefined) return "-";
+                    return isKomisiPct ? `${r.nilai_lama}%` : formatRp(r.nilai_lama);
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-right font-bold text-[#047857] align-middle bg-[#ecfdf5]/20">
-                  {r.nilai_baru !== null && r.nilai_baru !== undefined ? formatRp(r.nilai_baru) : "-"}
+                  {(() => {
+                    const isKomisiPct = /komisi persen/i.test(r.aksi || "");
+                    if (r.nilai_baru === null || r.nilai_baru === undefined) return "-";
+                    return isKomisiPct ? `${r.nilai_baru}%` : formatRp(r.nilai_baru);
+                  })()}
                 </td>
               </tr>
             ))}
