@@ -42,6 +42,19 @@ export async function GET(req: Request) {
         params.push(`%${search}%`);
         W += ` and (h.sku ilike $1 or h.sku_induk ilike $1 or h.nama_produk ilike $1)`;
       }
+      // Filter rentang (spec owner 18 Jul): margin & harga diskon. Diterapkan di outer query
+      // (kolom hasil kalkulasi CTE `final`) — bukan di base W. Param nyusul setelah `params`.
+      const fMarginMin = p.get("margin_min");   // persen (mis. "8" = 8%)
+      const fMarginMax = p.get("margin_max");
+      const fHargaMin = p.get("harga_min");
+      const fHargaMax = p.get("harga_max");
+      const outerConds: string[] = [];
+      const outerVals: number[] = [];
+      const pushOuter = (expr: string, val: number) => { outerVals.push(val); outerConds.push(expr); };
+      if (fMarginMin) pushOuter("margin_persen >= ?", Number(fMarginMin) / 100);
+      if (fMarginMax) pushOuter("margin_persen <= ?", Number(fMarginMax) / 100);
+      if (fHargaMin) pushOuter("harga_diskon >= ?", Number(fHargaMin));
+      if (fHargaMax) pushOuter("harga_diskon <= ?", Number(fHargaMax));
 
       let order = "h.sku asc";
       if (sortCol) {
@@ -120,15 +133,28 @@ export async function GET(req: Request) {
         )
       `;
 
+      // outer WHERE: renumber "?" jadi $N mulai setelah `params` (base params)
+      let idx = params.length;
+      const outerWhere = outerConds.length
+        ? "where " + outerConds.map((c) => c.replace("?", `$${++idx}`)).join(" and ")
+        : "";
+      const sortSafe = sortCol
+        ? (["sku", "sku_induk", "nama_produk", "category", "harga_awal", "harga_pancing", "diperbarui_pada"].includes(sortCol) ? sortCol : `"${sortCol}"`)
+        : "parent_total_qty";
+      const sortDirSql = sortCol ? (sortDir === "asc" ? "asc" : "desc") : "desc";
+
       const rowsSql = `
         ${sqlBase}
-        select * from final 
-        order by ${sortCol ? (["sku", "sku_induk", "nama_produk", "category", "harga_awal", "harga_pancing", "diperbarui_pada"].includes(sortCol) ? sortCol : `"${sortCol}"`) : 'parent_total_qty'} ${sortCol ? (sortDir === "asc" ? "asc" : "desc") : 'desc'}, sku_induk asc, sku asc 
-        limit $${params.length + 1} offset $${params.length + 2}
+        select * from final
+        ${outerWhere}
+        order by ${sortSafe} ${sortDirSql}, sku_induk asc, sku asc
+        limit $${idx + 1} offset $${idx + 2}
       `;
-      
-      let rows = await q<any>(rowsSql, [...params, size, offset]);
-      const total = await q<{ count: string }>(`select count(*) from harga_all_produk h where ${W}`, params);
+
+      let rows = await q<any>(rowsSql, [...params, ...outerVals, size, offset]);
+      const total = outerConds.length
+        ? await q<{ count: string }>(`${sqlBase} select count(*)::text as count from final ${outerWhere}`, [...params, ...outerVals])
+        : await q<{ count: string }>(`select count(*) from harga_all_produk h where ${W}`, params);
       if (!perm.netPrice) rows = maskFields(rows, ["net_price_awal", "net_price_detail"]);
       if (!perm.margin) rows = maskFields(rows, ["margin_persen"]);
 

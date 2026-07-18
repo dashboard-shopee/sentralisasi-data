@@ -1,5 +1,7 @@
 "use client";
 
+import { SHOP_ID_BY_NAME } from "@/lib/shopee";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fmtVal, VARS_JUAL, VARS_IKLAN } from "@/lib/variables";
 import type { Fmt, VarDef } from "@/lib/variables";
@@ -239,19 +241,6 @@ const VARS_ANALISA: VarDef[] = [
   { key: "roas", label: "ROAS", fmt: "ratio", ikon: "📈" },
   { key: "acos", label: "ACOS", fmt: "pct", ikon: "📊" },
 ];
-
-const SHOP_ID_BY_NAME: Record<string, string> = {
-  "Kimmioshop": "1772452045",
-  "lollysweet": "1770737480",
-  "Ravella Shop": "1482379795",
-  "Topikece Store": "1086654958",
-  "Alialia Store": "1083692044",
-  "OLIOLIO.ID": "552378634",
-  "NOMIDE STORE": "416053468",
-  "YARRA STORE": "144416606",
-  "ZIOSCARF SUPPLIER HIJAB IMPORT": "93819147",
-  "BEVERRA OFFICIAL STORE": "13556329"
-};
 
 export type SCol = {
   key: string;

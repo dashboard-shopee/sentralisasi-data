@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { tsWIB } from "@/lib/format";
 import CustomSelect from "@/components/CustomSelect";
+import { urlProdukShopee, warnaMargin, warnaHargaVs } from "@/lib/shopee";
 
 interface AllProdukRow {
   sku: string;
@@ -92,6 +93,11 @@ export default function HargaPage() {
   // Tab-specific filters
   const [selectedToko, setSelectedToko] = useState("");
   const [selectedSumber, setSelectedSumber] = useState("");
+  // Filter rentang All Produk (spec owner 18 Jul): margin (%) & harga diskon (Rp)
+  const [marginMin, setMarginMin] = useState("");
+  const [marginMax, setMarginMax] = useState("");
+  const [hargaMin, setHargaMin] = useState("");
+  const [hargaMax, setHargaMax] = useState("");
 
   // Expand-row: detail fakta promo per variasi (tab Olah Data)
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -200,6 +206,12 @@ export default function HargaPage() {
         if (selectedToko) params.append("toko", selectedToko);
         if (selectedSumber) params.append("sumber", selectedSumber);
       }
+      if (tab === "all") {
+        if (marginMin) params.append("margin_min", marginMin);
+        if (marginMax) params.append("margin_max", marginMax);
+        if (hargaMin) params.append("harga_min", hargaMin);
+        if (hargaMax) params.append("harga_max", hargaMax);
+      }
 
       const res = await fetch(`/api/produk/harga?${params.toString()}`, { cache: "no-store" });
       const d = await res.json();
@@ -230,7 +242,7 @@ export default function HargaPage() {
     } finally {
       if (myReq === reqId.current) setLoading(false);
     }
-  }, [tab, q, page, size, sortCol, sortDir, selectedToko, selectedSumber]);
+  }, [tab, q, page, size, sortCol, sortDir, selectedToko, selectedSumber, marginMin, marginMax, hargaMin, hargaMax]);
 
   useEffect(() => {
     fetchData();
@@ -537,7 +549,7 @@ export default function HargaPage() {
                   {!perm.margin ? (
                     <span className="text-[#c3c6d1]" title="Akses data sensitif dikunci">🔒</span>
                   ) : r.margin_persen !== null && r.margin_persen !== undefined ? (
-                    <span className={r.margin_persen >= 0.12 ? "text-[#047857]" : r.margin_persen >= 0 ? "text-[#eab308]" : "text-[#e11d48]"}>
+                    <span className={warnaMargin(r.margin_persen)}>
                       {(r.margin_persen * 100).toFixed(1)}%
                     </span>
                   ) : "-"}
@@ -620,14 +632,17 @@ export default function HargaPage() {
                         <div className="flex flex-col gap-1 items-center justify-center">
                           {storeCats.map((c: any, idx: number) => {
                             const price = c.harga;
-                            const isRugi = r.harga_diskon !== null && r.harga_diskon > 0 && price > 0 && price < r.harga_diskon;
+                            // warna 3-level vs Harga Diskon induk (spec owner 18 Jul): bawah=merah · sama=hitam · atas=biru
+                            const warna = warnaHargaVs(price, r.harga_diskon);
+                            const link = urlProdukShopee(tk.nama, c.itemId);
+                            const isi = <span className={`font-bold ${warna}`}>{formatRp(price)}</span>;
                             return (
-                              <div 
-                                key={idx} 
-                                className={`px-1.5 py-0.5 rounded font-bold w-max ${isRugi ? 'bg-[#fff1ed] text-[#ee4d2d]' : 'bg-[#f8f9fa] text-[#4b5563]'} border ${isRugi ? 'border-[#ffddcc]' : 'border-transparent'}`}
-                                title={`Item ID: ${c.itemId}`}
-                              >
-                                {formatRp(price)}
+                              <div key={idx} className="px-1.5 py-0.5 rounded w-max bg-[#f8f9fa] border border-transparent" title={`Item ID: ${c.itemId}`}>
+                                {link ? (
+                                  <a href={link} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Buka produk di Shopee">
+                                    {isi}
+                                  </a>
+                                ) : isi}
                               </div>
                             );
                           })}
@@ -1167,14 +1182,41 @@ export default function HargaPage() {
                 { value: "", label: "Semua Sumber" },
                 { value: "Harga Awal", label: "Harga Awal" },
                 { value: "Promo Toko", label: "Promo Toko" },
-                { value: "Paket Diskon", label: "Paket Diskon" },
                 { value: "Garansi Harga Terbaik", label: "Garansi Harga Terbaik" },
+                { value: "Campaign", label: "Campaign" },
+                { value: "Flash Sale", label: "Flash Sale" },
                 { value: "Komisi Aktif", label: "Komisi Aktif" }
               ]}
               placeholder="Semua Sumber"
               size="sm"
             />
           </div>
+        </div>
+      )}
+
+      {/* Filter rentang All Produk (spec owner 18 Jul): margin % & harga diskon Rp */}
+      {tab === "all" && (
+        <div className="flex flex-wrap gap-4 mb-5 items-center bg-[#fdfdfd] p-3 rounded-xl border border-[#eef0f6]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[12px] font-bold text-[#6b7180]">Margin %:</span>
+            <input type="number" value={marginMin} onChange={(e) => { setMarginMin(e.target.value); setPage(1); }}
+              placeholder="min" className="w-[70px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+            <span className="text-[#c4c8d4]">–</span>
+            <input type="number" value={marginMax} onChange={(e) => { setMarginMax(e.target.value); setPage(1); }}
+              placeholder="max" className="w-[70px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[12px] font-bold text-[#6b7180]">Harga Diskon:</span>
+            <input type="number" value={hargaMin} onChange={(e) => { setHargaMin(e.target.value); setPage(1); }}
+              placeholder="min" className="w-[90px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+            <span className="text-[#c4c8d4]">–</span>
+            <input type="number" value={hargaMax} onChange={(e) => { setHargaMax(e.target.value); setPage(1); }}
+              placeholder="max" className="w-[90px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+          </div>
+          {(marginMin || marginMax || hargaMin || hargaMax) && (
+            <button onClick={() => { setMarginMin(""); setMarginMax(""); setHargaMin(""); setHargaMax(""); setPage(1); }}
+              className="text-[12px] font-semibold text-[#ee4d2d] hover:underline">Reset filter</button>
+          )}
         </div>
       )}
 
