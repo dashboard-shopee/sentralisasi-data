@@ -390,10 +390,13 @@ def eksekusi_promo_toko(shop, nama_toko, session, diagnosa):
                 gagal += len(ch)
                 log(f"chunk {pid} gagal ({len(ch)}): {type(e).__name__}", level="error", fase="F2", toko=nama_toko, modul="promo_toko")
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
+    # daftar SKU per aksi (spec owner 18 Jul — log per-modul bisa drill: toko+sku+aksi)
+    sku_detail = [{"sku": d.get("sku") or f'{d["item_id"]}/{d["model_id"]}', "aksi": a["aksi"], "ke": d.get("target")}
+                  for d, a in aksi_pt][:50]
     catat(f"({mode}) set={n_set} daftar={n_daftar} → {terkirim} entri terkirim, {gagal} gagal",
           status="gagal" if gagal else (("live" if terkirim else "ok") if not config.DRY_RUN else "ok"),
           fase="F2", toko=nama_toko, modul="promo_toko",
-          detail={"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "dry": config.DRY_RUN})
+          detail={"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "dry": config.DRY_RUN, "sku": sku_detail})
     return {"set": n_set, "daftar": n_daftar, "terkirim": terkirim, "gagal": gagal, "promo_toko": len(pids)}
 
 
@@ -492,6 +495,16 @@ def _kunci_takedown(diagnosa, promo):
             for a in d["aksi"] if a.get("promo") == promo and a.get("aksi") == "takedown"}
 
 
+def _sku_takedown(diagnosa, promo):
+    """daftar {sku, sebab} variasi yg di-takedown utk `promo` (buat detail log per-modul, cap 50)."""
+    out = []
+    for d in diagnosa:
+        for a in d["aksi"]:
+            if a.get("promo") == promo and a.get("aksi") == "takedown":
+                out.append({"sku": d.get("sku") or f'{d["item_id"]}/{d["model_id"]}', "aksi": "cabut"})
+    return out[:50]
+
+
 def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
     """SOLUSI poin 3c. Keluarkan variasi 'koreksi_turun' yg flash-nya < target-10 (atau stok
     real 0) dari SEMUA flash sale aktif. flash_sale_id di-resolve on-demand oleh takedown_items
@@ -508,7 +521,7 @@ def eksekusi_takedown_flash(shop, nama_toko, session, diagnosa):
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(kunci)} variasi target → {n} ter-takedown",
           status=("live" if (not config.DRY_RUN and n) else "ok"),
-          fase="F2", toko=nama_toko, modul="flash", detail={"target": len(kunci), "takedown": n, "dry": config.DRY_RUN})
+          fase="F2", toko=nama_toko, modul="flash", detail={"target": len(kunci), "takedown": n, "dry": config.DRY_RUN, "sku": _sku_takedown(diagnosa, "Flash Sale")})
     return {"flash_takedown": n, "flash_target": len(kunci)}
 
 
@@ -531,7 +544,7 @@ def eksekusi_takedown_campaign(shop, nama_toko, session, diagnosa):
     catat(f"({mode}) {len(kunci)} variasi target → {total} ter-takedown",
           status=("live" if (not config.DRY_RUN and total) else "ok"),
           fase="F2", toko=nama_toko, modul="campaign",
-          detail={"target": len(kunci), "takedown": total, "dry": config.DRY_RUN})
+          detail={"target": len(kunci), "takedown": total, "dry": config.DRY_RUN, "sku": _sku_takedown(diagnosa, "Campaign")})
     return {"campaign_takedown": total, "campaign_target": len(kunci)}
 
 
@@ -547,5 +560,5 @@ def eksekusi_takedown_garansi(shop, nama_toko, session, diagnosa):
     mode = "DRY-RUN" if config.DRY_RUN else "LIVE"
     catat(f"({mode}) {len(bids)} bid garansi target -> {n} ter-withdraw",
           status=("live" if (not config.DRY_RUN and n) else "ok"),
-          fase="F2", toko=nama_toko, modul="garansi", detail={"target": len(bids), "withdraw": n, "dry": config.DRY_RUN})
+          fase="F2", toko=nama_toko, modul="garansi", detail={"target": len(bids), "withdraw": n, "dry": config.DRY_RUN, "sku": _sku_takedown(diagnosa, "Garansi")})
     return {"garansi_takedown": n, "garansi_target": len(bids)}

@@ -118,14 +118,23 @@ export async function GET() {
   // Heartbeat per-MODUL bot harga (17 Jul, permintaan owner): baris event TERBARU per modul
   // (grab fakta F1 harian + aksi F2) -> kartu "modul ini terakhir jalan kapan & hasilnya apa".
   // Halaman log ga nampilin tabel event lagi (owner mau clean) -- cukup kartu ini.
-  const modulSeen = new Set<string>();
-  const modulTerakhir: { modul: string; waktu: string; status: string; toko: string | null; aksi: string | null }[] = [];
+  // Per modul: event terbaru + riwayat (spec owner 18 Jul: kartu bisa diklik lihat eksekusi).
+  const byModul: Record<string, HargaEvent[]> = {};
   for (const e of hargaEvents) {
     const m = e.modul || "";
-    if (!m || modulSeen.has(m)) continue;
-    modulSeen.add(m);
-    modulTerakhir.push({ modul: m, waktu: e.waktu, status: e.status, toko: e.toko, aksi: e.aksi ?? e.keterangan });
+    if (!m) continue;
+    (byModul[m] ??= []).push(e);
   }
+  const modulTerakhir = Object.entries(byModul).map(([modul, evs]) => ({
+    modul,
+    waktu: evs[0].waktu, status: evs[0].status, toko: evs[0].toko, aksi: evs[0].aksi ?? evs[0].keterangan,
+    history: evs.slice(0, 20).map((e) => ({
+      waktu: e.waktu, status: e.status, toko: e.toko,
+      aksi: e.aksi ?? e.keterangan,
+      // detail SKU (kalau bot nyatet) — array {sku/item, aksi} atau angka ringkasan
+      detail: e.detail && typeof e.detail === "object" ? (e.detail as Record<string, unknown>) : null,
+    })),
+  }));
 
   return NextResponse.json({ programs: [...programs, ...extraPrograms], modulTerakhir });
 }

@@ -6,8 +6,10 @@ type DetailItem = { sku?: string; market?: string; serupa?: number; acuan?: numb
 type Entry = { status: string; keterangan: string | null; waktu: string; detail?: DetailItem[] | null };
 type Trigger = { key: string; label: string; last: Entry | null; history: Entry[] };
 type Program = { key: string; label: string; triggers: Trigger[] };
+type ModulEvent = { waktu: string; status: string; toko: string | null; aksi: string | null; detail: Record<string, unknown> | null };
 type ModulTerakhir = {
   modul: string; waktu: string; status: string; toko: string | null; aksi: string | null;
+  history?: ModulEvent[];
 };
 
 function DetailProduk({ detail }: { detail: DetailItem[] }) {
@@ -73,24 +75,68 @@ const MODUL_LABEL: Record<string, string> = {
   paket: "Paket", garansi: "Garansi", campaign: "Campaign", flash: "Flash", kategori: "Kategori", komisi: "Komisi",
 };
 
+// render detail SKU kalau bot nyatet (detail.sku = array, atau ringkasan angka)
+function DetailSku({ detail }: { detail: Record<string, unknown> | null }) {
+  if (!detail) return null;
+  const sku = detail.sku;
+  if (Array.isArray(sku) && sku.length > 0) {
+    return (
+      <div className="mt-1 flex flex-wrap gap-1">
+        {sku.slice(0, 30).map((s, i) => (
+          <span key={i} className="px-1.5 py-0.5 rounded bg-white border border-[#eef0f6] text-[10px] text-slate-600">
+            {typeof s === "object" && s ? `${(s as Record<string, unknown>).sku ?? (s as Record<string, unknown>).item ?? ""}${(s as Record<string, unknown>).aksi ? " · " + (s as Record<string, unknown>).aksi : ""}` : String(s)}
+          </span>
+        ))}
+        {sku.length > 30 && <span className="text-[10px] text-[#9aa0b2]">+{sku.length - 30} lagi</span>}
+      </div>
+    );
+  }
+  return null;
+}
+
 function FaktaPerModul({ items }: { items: ModulTerakhir[] }) {
+  const [openModul, setOpenModul] = useState<string | null>(null);
   if (items.length === 0) return null;
   return (
     <div className="mt-4 pt-4 border-t border-[#eef0f6]">
       <h3 className="font-bold text-[13px] mb-1 text-slate-700">Fakta & Aksi per Modul</h3>
-      <p className="text-[12px] text-[#8a90a2] mb-3">Kapan terakhir tiap modul jalan + hasil terakhirnya.</p>
+      <p className="text-[12px] text-[#8a90a2] mb-3">Kapan terakhir tiap modul jalan + hasil terakhirnya. Klik buat lihat riwayat eksekusi.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        {items.map((m) => (
-          <div key={m.modul} className="border border-[#eef0f6] rounded-xl p-3.5 bg-[#fafbfd]">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="font-semibold text-[13px] text-slate-800">{MODUL_LABEL[m.modul] || m.modul}</span>
-              <StatusBadge status={m.status} />
+        {items.map((m) => {
+          const isOpen = openModul === m.modul;
+          const hist = m.history || [];
+          return (
+            <div key={m.modul} className="border border-[#eef0f6] rounded-xl p-3.5 bg-[#fafbfd] cursor-pointer hover:border-[#ffddcc] transition-colors"
+              onClick={() => setOpenModul(isOpen ? null : m.modul)}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-semibold text-[13px] text-slate-800 flex items-center gap-1.5">
+                  <span className="text-[#ee4d2d] text-[11px]">{isOpen ? "▾" : "▸"}</span>
+                  {MODUL_LABEL[m.modul] || m.modul}
+                </span>
+                <StatusBadge status={m.status} />
+              </div>
+              <div className="text-[15px] font-bold text-slate-800 tabular-nums">{waktuRelatif(m.waktu)}</div>
+              <div className="text-[11.5px] text-[#8a90a2]">{waktuAbsolut(m.waktu)}{m.toko ? ` · ${m.toko}` : ""}</div>
+              {m.aksi && <div className="text-[11.5px] text-[#9aa0b2] mt-0.5">{m.aksi}</div>}
+              {isOpen && (
+                <div className="mt-2 pt-2 border-t border-[#eef0f6] flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                  {hist.length <= 1 ? (
+                    <div className="text-[11px] text-[#9aa0b2]">Belum ada riwayat eksekusi lain.</div>
+                  ) : hist.map((h, i) => (
+                    <div key={i} className="text-[11px]">
+                      <div className="flex items-center justify-between gap-2 text-[#8a90a2]">
+                        <span>{waktuAbsolut(h.waktu)}{h.toko ? ` · ${h.toko}` : ""}</span>
+                        <StatusBadge status={h.status} />
+                      </div>
+                      {h.aksi && <div className="text-[#6b7180]">{h.aksi}</div>}
+                      <DetailSku detail={h.detail} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="text-[15px] font-bold text-slate-800 tabular-nums">{waktuRelatif(m.waktu)}</div>
-            <div className="text-[11.5px] text-[#8a90a2]">{waktuAbsolut(m.waktu)}{m.toko ? ` · ${m.toko}` : ""}</div>
-            {m.aksi && <div className="text-[11.5px] text-[#9aa0b2] mt-0.5">{m.aksi}</div>}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
