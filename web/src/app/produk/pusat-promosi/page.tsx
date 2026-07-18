@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import CustomSelect from "@/components/CustomSelect";
+import { warnaKatalog } from "@/lib/shopee";
 
 type Row = Record<string, unknown>;
 type Toko = { username: string; nama: string };
@@ -19,7 +20,7 @@ const TABS = [
 ];
 
 // Kolom per tab: [key, judul, tipe]. tipe: text | rp | dt | num | status
-type Col = { k: string; t: string; f?: "rp" | "dt" | "dtt" | "num" | "status" | "margin" | "verdict" };
+type Col = { k: string; t: string; f?: "rp" | "dt" | "dtt" | "num" | "status" | "margin" | "verdict" | "produkSku" | "variasiKode" | "kode" | "diskonVoucher" | "faseFlash" };
 const COLS: Record<string, Col[]> = {
   promo_toko: [
     { k: "toko", t: "Toko" }, { k: "nama", t: "Nama Promo" },
@@ -28,18 +29,19 @@ const COLS: Record<string, Col[]> = {
   ],
   paket: [
     { k: "toko", t: "Toko" }, { k: "bundleDealId", t: "ID" }, { k: "name", t: "Nama" },
-    { k: "status", t: "Status", f: "status" }, { k: "startTime", t: "Mulai", f: "dt" },
-    { k: "endTime", t: "Berakhir", f: "dt" },
+    { k: "status", t: "Status", f: "status" }, { k: "startTime", t: "Mulai", f: "dtt" },
+    { k: "endTime", t: "Berakhir", f: "dtt" },
   ],
   voucher: [
     { k: "toko", t: "Toko" }, { k: "code", t: "Kode" }, { k: "name", t: "Nama" },
-    { k: "discount", t: "Diskon %", f: "num" }, { k: "minPrice", t: "Min Belanja", f: "rp" },
-    { k: "tipe", t: "Tipe" }, { k: "endTime", t: "Berakhir", f: "dt" },
+    { k: "discount", t: "Diskon", f: "diskonVoucher" }, { k: "minPrice", t: "Min Belanja", f: "rp" },
+    { k: "tipe", t: "Tipe" }, { k: "endTime", t: "Berakhir", f: "dtt" },
   ],
   campaign: [
     { k: "toko", t: "Toko" }, { k: "campaignName", t: "Campaign" }, { k: "sessionName", t: "Sesi" },
-    { k: "nominated", t: "Produk Ternominasi", f: "num" }, { k: "sessionStart", t: "Mulai Sesi", f: "dtt" },
+    { k: "nominated", t: "Produk Ternominasi", f: "num" },
     { k: "nominationEnd", t: "Tutup Nominasi", f: "dtt" },
+    { k: "sessionStart", t: "Mulai Sesi", f: "dtt" }, { k: "sessionEnd", t: "Sesi Berakhir", f: "dtt" },
   ],
   garansi: [
     { k: "toko", t: "Toko" }, { k: "sku", t: "SKU" }, { k: "namaProduk", t: "Produk" },
@@ -52,6 +54,7 @@ const COLS: Record<string, Col[]> = {
   ],
   flash: [
     { k: "toko", t: "Toko" }, { k: "flashSaleId", t: "ID Sesi" }, { k: "status", t: "Status", f: "status" },
+    { k: "fase", t: "Berjalan/Mendatang", f: "faseFlash" },
     { k: "itemCount", t: "Jml Item", f: "num" }, { k: "startTime", t: "Mulai", f: "dtt" },
     { k: "endTime", t: "Berakhir", f: "dtt" },
   ],
@@ -63,11 +66,13 @@ const COLS: Record<string, Col[]> = {
     { k: "jmlSku", t: "Jml SKU", f: "num" },
   ],
   garansi_nom: [
-    { k: "toko", t: "Toko" }, { k: "itemName", t: "Produk" }, { k: "modelName", t: "Variasi" },
+    { k: "toko", t: "Toko" },
+    { k: "produkSku", t: "Produk", f: "produkSku" }, { k: "variasiKode", t: "Variasi", f: "variasiKode" },
+    { k: "kode", t: "Kode", f: "kode" },
     { k: "target", t: "Target", f: "rp" }, { k: "marginTarget", t: "Margin Target", f: "margin" },
     { k: "hargaReal", t: "Harga Real", f: "rp" }, { k: "marginReal", t: "Margin Real", f: "margin" },
     { k: "floor", t: "Harga Terbaik", f: "rp" }, { k: "marginBest", t: "Margin Terbaik", f: "margin" },
-    { k: "ceiling", t: "Harga Program", f: "margin" }, { k: "marginProgram", t: "margin" },
+    { k: "ceiling", t: "Harga Program", f: "rp" }, { k: "marginProgram", t: "Margin Program", f: "margin" },
     { k: "stok", t: "Stok", f: "num" },
   ],
 };
@@ -94,6 +99,26 @@ const dtt = (v: unknown) => {
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${day} ${month} ${year} ${hours}:${minutes}`;
+};
+// Diskon voucher: bedain % vs Rp (spec owner 18 Jul). Heuristik: nilai ≤100 = persen, >100 = Rp
+// (kebukti data: UPSELL discount=2 → 2%, SFP discount=1000 → Rp1.000). `tipe` jadi hint tambahan.
+const fmtDiskonVoucher = (row: Record<string, unknown>) => {
+  const d = Number(row.discount) || 0;
+  if (!d) return "-";
+  const tipe = String(row.tipe ?? "").toLowerCase();
+  const isPct = tipe.includes("persen") || tipe.includes("percent") ? true
+    : tipe.includes("nominal") || tipe.includes("rp") ? false
+    : d <= 100;
+  return isPct ? `${d}%` : "Rp " + Math.round(d).toLocaleString("id-ID");
+};
+// Fase flash: bandingin start/end vs sekarang (spec owner 18 Jul)
+const faseFlash = (start: unknown, end: unknown) => {
+  const now = Date.now();
+  const s = start ? new Date(String(start)).getTime() : 0;
+  const e = end ? new Date(String(end)).getTime() : 0;
+  if (e && now > e) return { label: "Berakhir", cls: "bg-gray-100 text-gray-500" };
+  if (s && now < s) return { label: "Mendatang", cls: "bg-blue-50 text-blue-600" };
+  return { label: "Berjalan", cls: "bg-green-50 text-green-600" };
 };
 const fmt = (v: unknown, f?: string) => {
   if (f === "rp") return rp(v);
@@ -207,12 +232,14 @@ export default function PusatPromosiPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, { shopWide?: boolean; produk?: Row[] }>>({});
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailSearch, setDetailSearch] = useState("");   // search SKU dalam ekspansi promo
 
   const toggleRow = async (row: Row) => {
     if (!cfg) return;
     const key = String(row[cfg.idField]);
     if (expanded === key) { setExpanded(null); return; }
     setExpanded(key);
+    setDetailSearch("");   // reset search tiap buka ekspansi baru
     if (!detail[key]) {
       setDetailLoading(true);
       try {
@@ -246,19 +273,51 @@ export default function PusatPromosiPage() {
     const dd = detail[key];
     if (!dd) return <div className="p-3 text-xs text-[#8a90a2]">{detailLoading ? "Memuat produk…" : "—"}</div>;
     if (dd.shopWide) return <div className="p-3 text-[12px] text-[#6b7180]">🏷️ Berlaku untuk <b>semua produk</b> toko.</div>;
-    const produk = dd.produk || [];
+    const produkAll = dd.produk || [];
     const judul = cfg?.judul;
+    // search by SKU (spec owner 18 Jul) — filter client dalam ekspansi
+    const cari = detailSearch.trim().toLowerCase();
+    const produk = cari
+      ? produkAll.filter((pr) => {
+          const r = pr as Record<string, unknown>;
+          return [r.sku, r.skuInduk, r.namaProduk, r.itemId, r.modelId]
+            .some((v) => String(v ?? "").toLowerCase().includes(cari));
+        })
+      : produkAll;
     const n = produk.length;
+    // kolom Kode (produk atas / variasi bawah) + penanda warna per item_id (1 katalog)
+    const kolKode = (r: Record<string, unknown>) => (
+      <span className="w-[120px] shrink-0 flex items-center gap-1.5">
+        <span className="w-1.5 h-8 rounded-sm shrink-0" style={{ background: warnaKatalog(r.itemId as string | number) }} title="Penanda katalog (item sama = warna sama)" />
+        <span className="flex flex-col leading-tight">
+          <span className="text-[11px] font-semibold text-[#3a3f4d]">{String(r.itemId ?? "-")}</span>
+          <span className="text-[10px] text-[#9aa0b2]">{String(r.modelId ?? "-")}</span>
+        </span>
+      </span>
+    );
+    const kolSku = (r: Record<string, unknown>) => (
+      <span className="w-[150px] shrink-0 flex flex-col leading-tight">
+        <span className="font-semibold text-[#4b5563] truncate">{String(r.sku ?? "-")}</span>
+        {r.skuInduk ? <span className="text-[10px] text-[#9aa0b2] truncate">induk: {String(r.skuInduk)}</span> : null}
+      </span>
+    );
+    const searchBar = (
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider">Produk dalam {judul} ({n})</div>
+        <input value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} placeholder="Cari SKU / kode…"
+          className="w-[200px] border border-[#e6e9f0] rounded-lg px-2.5 py-1 text-[11.5px] outline-none focus:border-[#ee4d2d]" />
+      </div>
+    );
     if (cfg?.hasTarget) {
       return (
         <div className="p-3">
-          <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {judul} ({n})</div>
+          {searchBar}
           {n === 0 ? (
-            <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
+            <div className="text-xs text-[#8a90a2]">{cari ? "Ga ada yg cocok pencarian." : "Tidak ada produk cocok di data olah (mungkin stok 0 saat grab)."}</div>
           ) : (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 text-[10.5px] font-bold text-[#9aa0b2] uppercase tracking-wide px-0.5">
-                <span className="w-[130px]">SKU</span><span className="flex-1 min-w-0">Produk</span>
+                <span className="w-[120px]">Kode</span><span className="w-[150px]">SKU</span><span className="flex-1 min-w-0">Produk</span>
                 <span className="w-[90px] text-right">Target</span>
                 <span className="w-[90px] text-right">Posted</span>
                 <span className="w-[110px] text-right">Status</span>
@@ -268,7 +327,8 @@ export default function PusatPromosiPage() {
                 const st = statusTargetPosted(r.target, r.posted);
                 return (
                   <div key={i} className="flex items-center gap-2 text-[12px]">
-                    <span className="font-semibold text-[#4b5563] w-[130px] truncate">{String(r.sku ?? "-")}</span>
+                    {kolKode(r)}
+                    {kolSku(r)}
                     <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(r.namaProduk ?? "")}>{String(r.namaProduk ?? "-")}</span>
                     <span className="w-[90px] text-right text-[#6b7180]">{rp(r.target)}</span>
                     <span className="w-[90px] text-right text-[#16b8a6] font-semibold">{rp(r.posted)}</span>
@@ -281,22 +341,26 @@ export default function PusatPromosiPage() {
         </div>
       );
     }
-    // Komisi (di luar standardisasi): 1 kolom harga custom (priceField), tanpa Target/Status.
+    // Komisi: 1 kolom harga custom (priceField) + Kode variasi/produk (spec owner 18 Jul).
     const pf = cfg?.priceField || "hargaTampil";
     return (
       <div className="p-3">
-        <div className="text-[11px] font-bold text-[#6b7180] uppercase tracking-wider mb-1.5">Produk dalam {judul} ({n})</div>
+        {searchBar}
         {n === 0 ? (
-          <div className="text-xs text-[#8a90a2]">Tidak ada produk cocok di data olah (mungkin stok 0 saat grab).</div>
+          <div className="text-xs text-[#8a90a2]">{cari ? "Ga ada yg cocok pencarian." : "Tidak ada produk cocok di data olah (mungkin stok 0 saat grab)."}</div>
         ) : (
           <div className="flex flex-col gap-1">
-            {produk.map((pr, i) => (
-              <div key={i} className="flex items-center gap-2 text-[12px]">
-                <span className="font-semibold text-[#4b5563] w-[130px] truncate">{String(pr.sku ?? "-")}</span>
-                <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(pr.namaProduk ?? "")}>{String(pr.namaProduk ?? "-")}</span>
-                <span className="text-[#16b8a6] font-semibold shrink-0">{rp((pr as Record<string, unknown>)[pf])}</span>
-              </div>
-            ))}
+            {produk.map((pr, i) => {
+              const r = pr as Record<string, unknown>;
+              return (
+                <div key={i} className="flex items-center gap-2 text-[12px]">
+                  {kolKode(r)}
+                  {kolSku(r)}
+                  <span className="flex-1 min-w-0 truncate text-[#3a3f4d]" title={String(r.namaProduk ?? "")}>{String(r.namaProduk ?? "-")}</span>
+                  <span className="text-[#16b8a6] font-semibold shrink-0">{rp(r[pf])}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -416,7 +480,30 @@ export default function PusatPromosiPage() {
                         {ci === 0 && bisaDetail && (
                           <span className="inline-block w-3 text-[#ee4d2d] mr-1 select-none">{isOpen ? "▾" : "▸"}</span>
                         )}
-                        {c.f === "status" ? (
+                        {c.f === "produkSku" ? (
+                          <span className="flex flex-col leading-tight max-w-[240px]">
+                            <span className="truncate text-[#3a3f4d]" title={String(row.itemName ?? "")}>{String(row.itemName ?? "-")}</span>
+                            {row.skuInduk ? <span className="text-[10px] text-[#9aa0b2] truncate">induk: {String(row.skuInduk)}</span> : null}
+                          </span>
+                        ) : c.f === "variasiKode" ? (
+                          <span className="flex flex-col leading-tight">
+                            <span className="text-[#3a3f4d]">{String(row.modelName ?? row.namaVariasi ?? "-")}</span>
+                            {row.sku ? <span className="text-[10px] text-[#9aa0b2]">{String(row.sku)}</span> : null}
+                          </span>
+                        ) : c.f === "kode" ? (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-8 rounded-sm shrink-0" style={{ background: warnaKatalog(row.itemId as string | number) }} />
+                            <span className="flex flex-col leading-tight">
+                              <span className="text-[11px] font-semibold text-[#3a3f4d]">{String(row.itemId ?? "-")}</span>
+                              <span className="text-[10px] text-[#9aa0b2]">{String(row.modelId ?? "-")}</span>
+                            </span>
+                          </span>
+                        ) : c.f === "diskonVoucher" ? (
+                          <span className="font-semibold text-[#3a3f4d]">{fmtDiskonVoucher(row)}</span>
+                        ) : c.f === "faseFlash" ? (
+                          (() => { const f = faseFlash(row.startTime, row.endTime);
+                            return <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${f.cls}`}>{f.label}</span>; })()
+                        ) : c.f === "status" ? (
                           <span className={
                             "px-2 py-0.5 rounded-full text-[11px] font-semibold " +
                             (/aktif|berjalan/.test(String(row[c.k]).toLowerCase()) || Number(row[c.k]) === 1

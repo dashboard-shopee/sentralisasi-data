@@ -29,6 +29,18 @@ export function warnaMargin(m: number | null | undefined): string {
   return "text-[#2563eb]";                   // gemuk
 }
 
+// Palet penanda katalog (1 item_id = 1 warna) — biar keliatan variasi mana yg 1 katalog.
+const PALET_KATALOG = [
+  "#ee4d2d", "#2563eb", "#047857", "#a21caf", "#d97706",
+  "#0891b2", "#dc2626", "#7c3aed", "#0d9488", "#c026d3",
+];
+export function warnaKatalog(itemId: string | number | null | undefined): string {
+  const s = String(itemId ?? "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PALET_KATALOG[h % PALET_KATALOG.length];
+}
+
 // Warna harga toko vs patokan (Harga Diskon induk): bawah=merah · sama=hitam · atas=biru.
 export function warnaHargaVs(harga: number, patokan: number | null | undefined): string {
   if (!patokan || patokan <= 0 || !harga) return "text-[#4b5563]";

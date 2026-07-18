@@ -90,10 +90,11 @@ export async function GET(req: Request) {
         return NextResponse.json({ shopWide: true, produk: [] });
       }
       const produk = await q<Record<string, unknown>>(
-        `select distinct on (o.item_id) o.item_id "itemId", o.sku, o.nama_produk "namaProduk",
+        `select o.item_id "itemId", o.model_id "modelId", o.sku, ap.sku "skuInduk",
+                o.nama_produk "namaProduk", o.nama_variasi "namaVariasi",
                 o.harga_tampil "posted", ${TARGET_EXPR} "target"
          from harga_olah_data o left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
-         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id`,
+         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id, o.model_id`,
         [tk, scope]
       );
       return NextResponse.json({ shopWide: false, produk });
@@ -113,10 +114,11 @@ export async function GET(req: Request) {
         return NextResponse.json({ produk: [] });
       }
       const produk = await q<Record<string, unknown>>(
-        `select distinct on (o.item_id) o.item_id "itemId", o.sku, o.nama_produk "namaProduk",
+        `select o.item_id "itemId", o.model_id "modelId", o.sku, ap.sku "skuInduk",
+                o.nama_produk "namaProduk", o.nama_variasi "namaVariasi",
                 o.harga_tampil "posted", ${TARGET_EXPR} "target"
          from harga_olah_data o left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
-         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id`,
+         where o.toko=$1 and o.item_id = any($2::bigint[]) order by o.item_id, o.model_id`,
         [tk, scope]
       );
       return NextResponse.json({ produk });
@@ -129,7 +131,7 @@ export async function GET(req: Request) {
       const tk = p.get("toko");
       if (!pid || !tk) return NextResponse.json({ error: "promotion_id & toko wajib" }, { status: 400 });
       const produk = await q<Record<string, unknown>>(
-        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, ap.sku "skuInduk", o.nama_produk "namaProduk",
                 o.nama_variasi "namaVariasi", i.harga_promo "posted", ${TARGET_EXPR} "target"
          from harga_fakta_promo_toko_item i
          left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
@@ -149,7 +151,7 @@ export async function GET(req: Request) {
       const tk = p.get("toko");
       if (!sid || !tk) return NextResponse.json({ error: "session_id & toko wajib" }, { status: 400 });
       const produk = await q<Record<string, unknown>>(
-        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, ap.sku "skuInduk", o.nama_produk "namaProduk",
                 o.nama_variasi "namaVariasi",
                 round(i.campaign_price / 100000.0) "posted", ${TARGET_EXPR} "target"
          from harga_fakta_campaign_item i
@@ -168,7 +170,7 @@ export async function GET(req: Request) {
       const tk = p.get("toko");
       if (!fsid || !tk) return NextResponse.json({ error: "flash_sale_id & toko wajib" }, { status: 400 });
       const produk = await q<Record<string, unknown>>(
-        `select i.item_id "itemId", i.model_id "modelId", o.sku, o.nama_produk "namaProduk",
+        `select i.item_id "itemId", i.model_id "modelId", o.sku, ap.sku "skuInduk", o.nama_produk "namaProduk",
                 o.nama_variasi "namaVariasi", i.promotion_price "posted", ${TARGET_EXPR} "target"
          from harga_fakta_flash_item i
          left join harga_olah_data o on o.toko=i.toko and o.item_id=i.item_id and o.model_id=i.model_id
@@ -186,11 +188,13 @@ export async function GET(req: Request) {
       const tk = p.get("toko");
       if (!item || !tk) return NextResponse.json({ error: "item_id & toko wajib" }, { status: 400 });
       let produk = await q<Record<string, unknown>>(
-        `select o.sku, max(o.nama_produk) "namaProduk",
+        `select o.sku, max(o.model_id) "modelId", $2::bigint "itemId", max(ap.sku) "skuInduk",
+                max(o.nama_produk) "namaProduk", max(o.nama_variasi) "namaVariasi",
                 max(k.komisi_persen) "komisiPersen", max(k.harga_jual) "hargaJual"
          from harga_olah_data o
          join dim_toko d on d.nama = o.toko
          join harga_komisi_toko k on k.username_toko = d.username and upper(k.sku) = upper(o.sku)
+         left join harga_all_produk ap on upper(ap.sku)=upper(o.sku)
          where o.toko=$1 and o.item_id=$2 and coalesce(k.harga_jual,0) > 0
          group by o.sku order by o.sku`,
         [tk, item]
@@ -338,7 +342,7 @@ export async function GET(req: Request) {
       const marginExpr = (priceCol: string) =>
         `(case when ${priceCol} > 0 and sc.sku_u is not null then 1.0 - sc.total_pct_biaya - ((sc.hpp + sc.biaya_tetap_adjusted) / nullif(${priceCol}, 0)) else null end)::numeric`;
       cols = `s.toko, s.item_id "itemId", s.model_id "modelId", s.item_name "itemName",
-              s.model_name "modelName", o.sku, ${TARGET_EXPR} "target",
+              s.model_name "modelName", o.sku, ap.sku "skuInduk", o.nama_variasi "namaVariasi", ${TARGET_EXPR} "target",
               ${marginExpr(TARGET_EXPR)} "marginTarget",
               o.harga_tampil "hargaReal", ${marginExpr("o.harga_tampil")} "marginReal",
               s.floor, ${marginExpr("s.floor")} "marginBest",
