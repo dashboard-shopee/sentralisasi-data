@@ -147,6 +147,7 @@ export default function HargaPage() {
   // Inline edit state for Komisi
   const [editingKomisi, setEditingKomisi] = useState<{sku: string, toko: string, field: 'persen'|'jual'} | null>(null);
   const [editKomisiVal, setEditKomisiVal] = useState("");
+  const [origKomisiVal, setOrigKomisiVal] = useState("");
 
   // Mass Update State
   const [showMassModal, setShowMassModal] = useState(false);
@@ -304,6 +305,8 @@ export default function HargaPage() {
   };
 
   const saveKomisiUpdate = async (sku: string, toko: string, field: 'persen'|'jual') => {
+    // no-op guard (spec owner 18 Jul): batal / nilai sama → ga simpan, ga masuk riwayat
+    if (editKomisiVal.trim() === origKomisiVal.trim()) { setEditingKomisi(null); return; }
     try {
       setIsSaving(true);
       const payload: any = { action: "update-komisi-toko", sku, toko };
@@ -917,15 +920,16 @@ export default function HargaPage() {
                           {editingKomisi?.sku === r.sku && editingKomisi?.toko === tk.username && editingKomisi?.field === 'persen' ? (
                             <div className="flex items-center gap-0.5">
                               <input 
-                                autoFocus type="number" value={editKomisiVal} 
+                                autoFocus type="number" value={editKomisiVal}
                                 onChange={(e) => setEditKomisiVal(e.target.value)}
                                 onKeyDown={(e) => { if(e.key==='Enter') saveKomisiUpdate(r.sku, tk.username, 'persen'); if(e.key==='Escape') setEditingKomisi(null); }}
+                                onBlur={() => saveKomisiUpdate(r.sku, tk.username, 'persen')}
                                 className="w-[35px] border border-[#6b21a8] rounded px-0.5 py-0.5 text-[9px] text-center outline-none bg-white"
                               />
                             </div>
                           ) : (
-                            <span 
-                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'persen'}); setEditKomisiVal(String(tkData.komisiPersen)); }}
+                            <span
+                              onClick={() => { setEditingKomisi({sku: r.sku, toko: tk.username, field: 'persen'}); const v = String(tkData.komisiPersen); setEditKomisiVal(v); setOrigKomisiVal(v); }}
                               className="px-1.5 py-0.5 bg-[#f3e8ff] text-[#6b21a8] hover:bg-[#e9d5ff] cursor-pointer transition-colors text-[10px] font-bold rounded whitespace-nowrap"
                               title={`Edit persentase komisi (Saat ini: ${tkData.komisiPersen}%)`}
                             >
@@ -937,15 +941,16 @@ export default function HargaPage() {
                           {editingKomisi?.sku === r.sku && editingKomisi?.toko === tk.username && editingKomisi?.field === 'jual' ? (
                             <div className="flex items-center gap-0.5">
                               <input 
-                                autoFocus type="number" value={editKomisiVal} 
+                                autoFocus type="number" value={editKomisiVal}
                                 onChange={(e) => setEditKomisiVal(e.target.value)}
                                 onKeyDown={(e) => { if(e.key==='Enter') saveKomisiUpdate(r.sku, tk.username, 'jual'); if(e.key==='Escape') setEditingKomisi(null); }}
+                                onBlur={() => saveKomisiUpdate(r.sku, tk.username, 'jual')}
                                 className="w-[55px] border border-[#ee4d2d] rounded px-0.5 py-0.5 text-[10px] text-right outline-none bg-white"
                               />
                             </div>
                           ) : (
-                            <span 
-                              onClick={() => { if (!perm.hargaJualKomisi) return; setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); setEditKomisiVal(tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : (perm.netPrice ? String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : "")); }}
+                            <span
+                              onClick={() => { if (!perm.hargaJualKomisi) return; setEditingKomisi({sku: r.sku, toko: tk.username, field: 'jual'}); const v = tkData.manualHargaJual > 0 ? String(tkData.manualHargaJual) : (perm.netPrice ? String(Math.ceil(r.netPrice / (1 - tkData.komisiPersen / 100))) : ""); setEditKomisiVal(v); setOrigKomisiVal(v); }}
                               className={`font-bold whitespace-nowrap ${!perm.hargaJualKomisi ? 'text-[#c3c6d1] cursor-default' : tkData.manualHargaJual > 0 ? 'text-[#0ea5e9] hover:underline cursor-pointer' : 'text-[#c3c6d1] hover:text-[#0ea5e9] cursor-pointer'}`}
                               title={!perm.hargaJualKomisi ? "Akses data sensitif dikunci" : tkData.manualHargaJual > 0 ? "Harga manual. Klik untuk edit" : "Belum diset manual. Klik untuk set"}
                             >
@@ -1068,15 +1073,15 @@ export default function HargaPage() {
             <div className="flex gap-2">
               <button
                 onClick={handleAddParentSku}
-                className="px-3.5 py-1.5 text-xs font-semibold bg-[#8b5cf6] text-white rounded hover:bg-[#7c3aed] transition-colors shadow-sm flex items-center gap-1.5"
+                className="bg-[#161a27] text-white px-4 py-2 rounded-xl text-[13px] font-bold hover:bg-[#2c3245] transition-colors whitespace-nowrap shadow-sm flex items-center gap-2"
               >
-                <span>➕ Tambah by Parent SKU</span>
+                <span>➕</span> Tambah by Parent SKU
               </button>
               <button
                 onClick={handleDeleteParentSku}
-                className="px-3.5 py-1.5 text-xs font-semibold bg-white border border-[#e11d48] text-[#e11d48] rounded hover:bg-[#fff1f2] transition-colors shadow-sm flex items-center gap-1.5"
+                className="bg-white border border-[#e11d48] text-[#e11d48] px-4 py-2 rounded-xl text-[13px] font-bold hover:bg-[#fff1f2] transition-colors whitespace-nowrap shadow-sm flex items-center gap-2"
               >
-                <span>🗑️ Hapus by Parent SKU</span>
+                <span>🗑️</span> Hapus by Parent SKU
               </button>
             </div>
           )}
@@ -1385,6 +1390,12 @@ export default function HargaPage() {
                             <span className="font-bold text-[#161a27]">{r.sku}</span>
                             <span className="text-[#8a90a2] text-[10px] truncate" title={r.nama_produk}>{r.nama_produk}</span>
                           </div>
+                          {/* info keadaan terakhir (spec owner 18 Jul): net, margin, harga diskon skrg */}
+                          <div className="flex items-center gap-3 text-[10.5px] shrink-0 tabular-nums">
+                            <span className="text-[#6b7180]" title="Harga Net">Net <b className="text-[#0369a1]">{r.net_price_detail != null ? formatRp(r.net_price_detail) : "-"}</b></span>
+                            <span title="Margin">M <b className={warnaMargin(r.margin_persen)}>{r.margin_persen != null ? `${(r.margin_persen * 100).toFixed(0)}%` : "-"}</b></span>
+                            <span className="text-[#6b7180]" title="Harga Diskon sekarang">Dis <b className="text-[#ee4d2d]">{r.harga_diskon != null ? formatRp(r.harga_diskon) : "-"}</b></span>
+                          </div>
                         </label>
                       ))}
                     </div>
@@ -1485,14 +1496,42 @@ export default function HargaPage() {
                       className="w-full border border-[#eef0f6] bg-white rounded-lg px-3 py-2 text-[12px] font-medium outline-none focus:border-[#6b21a8] transition-all" 
                     />
                   </div>
+                  {/* Preview harga saat ini + rekomendasi per varian (spec owner 18 Jul) */}
+                  {jualParentSku.trim() && (() => {
+                    const uname = selectedJualToko?.username;
+                    const varian = (rows as KomisiRow[]).filter((r) =>
+                      (r.parentSku || "").toLowerCase() === jualParentSku.trim().toLowerCase() && r.tokos?.[uname]);
+                    if (varian.length === 0) return (
+                      <div className="text-[11px] text-[#8a90a2] bg-white border border-[#eef0f6] rounded-lg px-3 py-2">
+                        Ga ada varian cocok SKU Induk ini di {selectedJualToko?.nama} (buka via tab Komisi biar datanya kebaca).
+                      </div>
+                    );
+                    return (
+                      <div className="border border-[#e9d5ff] rounded-lg max-h-[140px] overflow-auto divide-y divide-[#f3e8ff] bg-white">
+                        {varian.map((r) => {
+                          const t = r.tokos[uname];
+                          const rekom = perm.netPrice ? Math.ceil(r.netPrice / (1 - t.komisiPersen / 100)) : 0;
+                          return (
+                            <div key={r.sku} className="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px]">
+                              <span className="font-bold text-[#161a27] truncate">{r.sku}</span>
+                              <span className="flex items-center gap-3 shrink-0 tabular-nums">
+                                <span className="text-[#6b7180]">Skrg <b className="text-[#0ea5e9]">{t.manualHargaJual > 0 ? formatRp(t.manualHargaJual) : "-"}</b></span>
+                                <span className="text-[#6b7180]">Rekom <b className="text-[#6b21a8]">{rekom > 0 ? formatRp(rekom) : "🔒"}</b> ({t.komisiPersen}%)</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                   <div>
                     <label className="block text-[11px] font-semibold text-[#4b5563] mb-1">Harga Jual Baru (Rp)</label>
-                    <input 
-                      type="number" 
-                      value={jualParentPrice} 
-                      onChange={e => setJualParentPrice(e.target.value)} 
-                      placeholder="Masukkan nominal harga jual..." 
-                      className="w-full border border-[#eef0f6] bg-white rounded-lg px-3 py-2 text-[12px] font-medium outline-none focus:border-[#6b21a8] transition-all" 
+                    <input
+                      type="number"
+                      value={jualParentPrice}
+                      onChange={e => setJualParentPrice(e.target.value)}
+                      placeholder="Masukkan nominal harga jual..."
+                      className="w-full border border-[#eef0f6] bg-white rounded-lg px-3 py-2 text-[12px] font-medium outline-none focus:border-[#6b21a8] transition-all"
                     />
                   </div>
                   <button
