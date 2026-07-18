@@ -702,12 +702,28 @@ export default function HargaPage() {
             </div>
           )}
         </div>
-        {garansi.length > 0 && (
-          <div className="text-[11px] text-[#047857]">🛡️ Garansi Harga Terbaik — Harga Kini {formatRp(garansi[0].currentPrice)} · Harga Terbaik {formatRp(garansi[0].bestPrice)} · Harga Program {formatRp(garansi[0].bidPrice)}</div>
+        {/* Kelengkapan 8 promo (spec owner 18 Jul) — yg kosong ga dirender */}
+        {dd.hargaAwal && (
+          <div className="text-[11px] text-[#4b5563]">🏷️ <b>Harga Awal</b> {formatRp(dd.hargaAwal.hargaAwal)} · tampil {formatRp(dd.hargaAwal.hargaTampil)}{dd.hargaAwal.sumberHarga ? ` · sumber ${dd.hargaAwal.sumberHarga}` : ""}</div>
         )}
+        {garansi.length > 0 && (
+          <div className="text-[11px] text-[#047857]">🛡️ <b>Garansi Harga Terbaik</b> — Harga Kini {formatRp(garansi[0].currentPrice)} · Harga Terbaik {formatRp(garansi[0].bestPrice)} · Harga Program {formatRp(garansi[0].bidPrice)}</div>
+        )}
+        {(dd.campaign || []).length > 0 && (dd.campaign as any[]).map((c: any, i: number) => (
+          <div key={`c${i}`} className="text-[11px] text-[#92400e]">🎪 <b>Campaign</b> {c.sessionName || c.sessionId} — harga {formatRp(c.hargaCampaign)} · net penjual {formatRp(c.netPenjual)}{c.subsidiShopee > 0 ? ` · subsidi Shopee ${formatRp(c.subsidiShopee)}` : ""} · status {c.nominateStatus === 30 ? "disetujui" : "review"}</div>
+        ))}
+        {(dd.flash || []).length > 0 && (dd.flash as any[]).map((f: any, i: number) => (
+          <div key={`f${i}`} className="text-[11px] text-[#a21caf]">⚡ <b>Flash Sale</b> #{f.flashSaleId} — harga {formatRp(f.hargaFlash)} · stok {f.stok}{f.startTime ? ` · ${new Date(f.startTime).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}` : ""}</div>
+        ))}
+        {(dd.paket || []).length > 0 && (dd.paket as any[]).map((pk: any, i: number) => (
+          <div key={`p${i}`} className="text-[11px] text-[#0369a1]">📦 <b>Paket Diskon</b> {pk.name || pk.bundleDealId}</div>
+        ))}
+        {(dd.voucher || []).length > 0 && (dd.voucher as any[]).map((v: any, i: number) => (
+          <div key={`v${i}`} className="text-[11px] text-[#b45309]">🎟️ <b>Voucher</b> {v.code} — {Number(v.discount) <= 100 ? `${v.discount}%` : formatRp(v.discount)} · min {formatRp(v.minPrice)}</div>
+        ))}
         {komisi.length > 0 && (
           <div>
-            <div className="text-[11px] font-bold text-[#6b21a8] uppercase tracking-wider mb-1">Komisi Affiliate Aktif</div>
+            <div className="text-[11px] font-bold text-[#6b21a8] uppercase tracking-wider mb-1">💜 Komisi Affiliate Aktif</div>
             <div className="flex flex-wrap gap-2">
               {komisi.map((k, i) => (
                 <span key={i} className="px-2 py-1 rounded-lg bg-[#f3e8ff] text-[#6b21a8] border border-[#e9d5ff] text-[11px]">

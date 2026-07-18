@@ -53,15 +53,16 @@ export async function GET(req: Request) {
       const tk = p.get("toko");
       const sku = p.get("sku") || "";
       if (!item || !tk) return NextResponse.json({ error: "item & toko wajib" }, { status: 400 });
+      const md = model || 0;
       const promos = await q<Record<string, unknown>>(
         `select jenis, harga_promo "hargaPromo", status, mulai, berakhir
          from harga_promo_konteks where toko=$1 and item_id=$2 and model_id=$3 order by jenis`,
-        [tk, item, model || 0]
+        [tk, item, md]
       );
       const garansi = await q<Record<string, unknown>>(
         `select current_price "currentPrice", bid_price "bidPrice", best_price "bestPrice"
          from harga_fakta_garansi where toko=$1 and item_id=$2 and model_id=$3`,
-        [tk, item, model || 0]
+        [tk, item, md]
       );
       let komisi = sku
         ? await q<Record<string, unknown>>(
@@ -72,7 +73,30 @@ export async function GET(req: Request) {
           )
         : [];
       if (!perm.hargaJualKomisi) komisi = maskFields(komisi, ["hargaJual"]);
-      return NextResponse.json({ promos, garansi, komisi });
+      // Kelengkapan 8 promo (spec owner 18 Jul) — tarik eksplisit per jenis, yg kosong ga dirender.
+      const hargaAwal = await q<Record<string, unknown>>(
+        `select harga_awal "hargaAwal", harga_tampil "hargaTampil", sumber_harga "sumberHarga"
+         from harga_olah_data where toko=$1 and item_id=$2 and model_id=$3`, [tk, item, md]);
+      const campaign = await q<Record<string, unknown>>(
+        `select i.session_id "sessionId", s.session_name "sessionName", i.nominate_status "nominateStatus",
+                round(i.campaign_price/100000.0) "hargaCampaign", round(i.seller_offer_price/100000.0) "netPenjual",
+                round(i.rebate_price/100000.0) "subsidiShopee"
+         from harga_fakta_campaign_item i
+         left join harga_fakta_campaign_sesi s on s.toko=i.toko and s.session_id=i.session_id
+         where i.toko=$1 and i.item_id=$2 and i.model_id=$3`, [tk, item, md]);
+      const flash = await q<Record<string, unknown>>(
+        `select i.flash_sale_id "flashSaleId", i.promotion_price "hargaFlash", i.stock "stok",
+                s.start_time "startTime", s.end_time "endTime"
+         from harga_fakta_flash_item i
+         left join harga_fakta_flash_sesi s on s.toko=i.toko and s.flash_sale_id=i.flash_sale_id
+         where i.toko=$1 and i.item_id=$2 and i.model_id=$3`, [tk, item, md]);
+      const voucher = await q<Record<string, unknown>>(
+        `select code, name, discount, min_price "minPrice", tipe, end_time "endTime"
+         from harga_fakta_voucher where toko=$1 and item_scope @> to_jsonb($2::bigint)`, [tk, Number(item)]);
+      const paket = await q<Record<string, unknown>>(
+        `select bundle_deal_id "bundleDealId", name, status, start_time "startTime", end_time "endTime"
+         from harga_fakta_paket where toko=$1 and items @> to_jsonb($2::bigint)`, [tk, Number(item)]);
+      return NextResponse.json({ promos, garansi, komisi, hargaAwal: hargaAwal[0] || null, campaign, flash, voucher, paket });
     }
 
     // PRODUK dalam 1 voucher (buat expand-row tab Voucher). item_scope jsonb = daftar itemid
