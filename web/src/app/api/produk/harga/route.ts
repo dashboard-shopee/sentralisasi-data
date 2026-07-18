@@ -46,15 +46,16 @@ export async function GET(req: Request) {
       // (kolom hasil kalkulasi CTE `final`) — bukan di base W. Param nyusul setelah `params`.
       const fMarginMin = p.get("margin_min");   // persen (mis. "8" = 8%)
       const fMarginMax = p.get("margin_max");
-      const fHargaMin = p.get("harga_min");
-      const fHargaMax = p.get("harga_max");
+      const fPosHarga = p.get("pos_harga");      // bawah | sama | atas — harga toko vs Harga Diskon induk
       const outerConds: string[] = [];
       const outerVals: number[] = [];
       const pushOuter = (expr: string, val: number) => { outerVals.push(val); outerConds.push(expr); };
       if (fMarginMin) pushOuter("margin_persen >= ?", Number(fMarginMin) / 100);
       if (fMarginMax) pushOuter("margin_persen <= ?", Number(fMarginMax) / 100);
-      if (fHargaMin) pushOuter("harga_diskon >= ?", Number(fHargaMin));
-      if (fHargaMax) pushOuter("harga_diskon <= ?", Number(fHargaMax));
+      // posisi harga: bandingin min/max harga toko (dari catalogs) ke harga_diskon final
+      if (fPosHarga === "bawah") outerConds.push("min_harga_toko > 0 and min_harga_toko < harga_diskon");
+      else if (fPosHarga === "atas") outerConds.push("max_harga_toko > harga_diskon");
+      else if (fPosHarga === "sama") outerConds.push("min_harga_toko = harga_diskon and max_harga_toko = harga_diskon");
 
       let order = "h.sku asc";
       if (sortCol) {
@@ -110,7 +111,8 @@ export async function GET(req: Request) {
           from calc2 c2
         ),
         olah_toko as (
-          select sku, jsonb_agg(jsonb_build_object('toko', toko, 'itemId', item_id, 'harga', harga_tampil)) as catalogs
+          select sku, jsonb_agg(jsonb_build_object('toko', toko, 'itemId', item_id, 'harga', harga_tampil)) as catalogs,
+            min(nullif(harga_tampil, 0)) as min_harga_toko, max(harga_tampil) as max_harga_toko
           from harga_olah_data group by sku
         ),
         final as (
@@ -127,6 +129,8 @@ export async function GET(req: Request) {
                then 1.0 - c3.total_pct_biaya - ((c3.hpp + c3.biaya_tetap_adjusted) / nullif((case when c3.custom_harga_diskon is not null then c3.custom_harga_diskon else coalesce(nullif(c3.harga_diskon, 0), c3.net_price_detail) end), 0))
                else 0.0 end)::numeric as margin_persen,
             coalesce(ot.catalogs, '[]'::jsonb) as catalogs,
+            coalesce(ot.min_harga_toko, 0) as min_harga_toko,
+            coalesce(ot.max_harga_toko, 0) as max_harga_toko,
             c3.parent_total_qty
           from calc3 c3
           left join olah_toko ot on c3.sku = ot.sku

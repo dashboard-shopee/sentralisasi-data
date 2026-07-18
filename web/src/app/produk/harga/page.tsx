@@ -96,8 +96,7 @@ export default function HargaPage() {
   // Filter rentang All Produk (spec owner 18 Jul): margin (%) & harga diskon (Rp)
   const [marginMin, setMarginMin] = useState("");
   const [marginMax, setMarginMax] = useState("");
-  const [hargaMin, setHargaMin] = useState("");
-  const [hargaMax, setHargaMax] = useState("");
+  const [posHarga, setPosHarga] = useState("");   // "" | bawah | sama | atas (harga toko vs Diskon induk)
 
   // Expand-row: detail fakta promo per variasi (tab Olah Data)
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -211,8 +210,7 @@ export default function HargaPage() {
       if (tab === "all") {
         if (marginMin) params.append("margin_min", marginMin);
         if (marginMax) params.append("margin_max", marginMax);
-        if (hargaMin) params.append("harga_min", hargaMin);
-        if (hargaMax) params.append("harga_max", hargaMax);
+        if (posHarga) params.append("pos_harga", posHarga);
       }
 
       const res = await fetch(`/api/produk/harga?${params.toString()}`, { cache: "no-store" });
@@ -244,7 +242,7 @@ export default function HargaPage() {
     } finally {
       if (myReq === reqId.current) setLoading(false);
     }
-  }, [tab, q, page, size, sortCol, sortDir, selectedToko, selectedSumber, marginMin, marginMax, hargaMin, hargaMax]);
+  }, [tab, q, page, size, sortCol, sortDir, selectedToko, selectedSumber, marginMin, marginMax, posHarga]);
 
   useEffect(() => {
     fetchData();
@@ -1195,7 +1193,6 @@ export default function HargaPage() {
               value={selectedSumber}
               onChange={(val) => { setSelectedSumber(val); setPage(1); }}
               options={[
-                { value: "", label: "Semua Sumber" },
                 { value: "Harga Awal", label: "Harga Awal" },
                 { value: "Promo Toko", label: "Promo Toko" },
                 { value: "Garansi Harga Terbaik", label: "Garansi Harga Terbaik" },
@@ -1210,28 +1207,47 @@ export default function HargaPage() {
         </div>
       )}
 
-      {/* Filter rentang All Produk (spec owner 18 Jul): margin % & harga diskon Rp */}
+      {/* Filter cepat All Produk (spec owner 18 Jul): chip rekomendasi margin & posisi harga vs Diskon induk */}
       {tab === "all" && (
-        <div className="flex flex-wrap gap-4 mb-5 items-center bg-[#fdfdfd] p-3 rounded-xl border border-[#eef0f6]">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[12px] font-bold text-[#6b7180]">Margin %:</span>
-            <input type="number" value={marginMin} onChange={(e) => { setMarginMin(e.target.value); setPage(1); }}
-              placeholder="min" className="w-[70px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
-            <span className="text-[#c4c8d4]">–</span>
-            <input type="number" value={marginMax} onChange={(e) => { setMarginMax(e.target.value); setPage(1); }}
-              placeholder="max" className="w-[70px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+        <div className="flex flex-wrap gap-x-6 gap-y-2 mb-5 items-center bg-[#fdfdfd] p-3 rounded-xl border border-[#eef0f6]">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[12px] font-bold text-[#6b7180] mr-1">Margin</span>
+            {([
+              { k: "rugi", label: "Rugi <0%", mn: "", mx: "0" },
+              { k: "tipis", label: "0–7%", mn: "0", mx: "7" },
+              { k: "sehat", label: "7–20%", mn: "7", mx: "20" },
+              { k: "gemuk", label: ">20%", mn: "20", mx: "" },
+            ] as { k: string; label: string; mn: string; mx: string }[]).map((f) => {
+              const active = marginMin === f.mn && marginMax === f.mx && (f.mn !== "" || f.mx !== "");
+              return (
+                <button key={f.k}
+                  onClick={() => { if (active) { setMarginMin(""); setMarginMax(""); } else { setMarginMin(f.mn); setMarginMax(f.mx); } setPage(1); }}
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-all ${active ? "bg-[#ee4d2d] text-white border-[#ee4d2d]" : "bg-white text-[#6b7180] border-[#e6e9f0] hover:bg-slate-50"}`}>
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[12px] font-bold text-[#6b7180]">Harga Diskon:</span>
-            <input type="number" value={hargaMin} onChange={(e) => { setHargaMin(e.target.value); setPage(1); }}
-              placeholder="min" className="w-[90px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
-            <span className="text-[#c4c8d4]">–</span>
-            <input type="number" value={hargaMax} onChange={(e) => { setHargaMax(e.target.value); setPage(1); }}
-              placeholder="max" className="w-[90px] border border-[#e6e9f0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#ee4d2d]" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[12px] font-bold text-[#6b7180] mr-1">Harga toko vs Diskon</span>
+            {([
+              { k: "bawah", label: "Di bawah", v: "bawah" },
+              { k: "sama", label: "Sama", v: "sama" },
+              { k: "atas", label: "Di atas", v: "atas" },
+            ] as { k: string; label: string; v: string }[]).map((f) => {
+              const active = posHarga === f.v;
+              return (
+                <button key={f.k}
+                  onClick={() => { setPosHarga(active ? "" : f.v); setPage(1); }}
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-all ${active ? "bg-[#ee4d2d] text-white border-[#ee4d2d]" : "bg-white text-[#6b7180] border-[#e6e9f0] hover:bg-slate-50"}`}>
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
-          {(marginMin || marginMax || hargaMin || hargaMax) && (
-            <button onClick={() => { setMarginMin(""); setMarginMax(""); setHargaMin(""); setHargaMax(""); setPage(1); }}
-              className="text-[12px] font-semibold text-[#ee4d2d] hover:underline">Reset filter</button>
+          {(marginMin || marginMax || posHarga) && (
+            <button onClick={() => { setMarginMin(""); setMarginMax(""); setPosHarga(""); setPage(1); }}
+              className="text-[12px] font-semibold text-[#ee4d2d] hover:underline">Reset</button>
           )}
         </div>
       )}
