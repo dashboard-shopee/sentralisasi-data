@@ -11,6 +11,7 @@ import time
 import config
 from modules import paket_diskon as PD
 from modules import voucher as V
+from modules import sql_harga as SQL
 from modules.log_siklus import log, catat
 
 
@@ -84,6 +85,17 @@ def paket(shop, nama_toko, session):
         baru = True
 
     r = PD.enroll_dengan_overflow(session, belum, bid, nama_toko, start, end, prefix)
+    # WRITE-THROUGH ke fakta (18 Jul, owner: paket ZIO/BEVERRA/Topikece ga nongol di dashboard) —
+    # grab-list harian bisa gagal (endpoint bundle_deal/list flaky), tapi item endpoint reliable,
+    # jadi tulis langsung tiap paket yg dikelola bot biar dashboard selalu keisi. Aman-gagal.
+    if not config.DRY_RUN:
+        for pbid in (r.get("paket") or [bid]):
+            try:
+                items = PD.baca_item_deal(session, int(pbid))
+                nm = f"{prefix} {nama_toko}" if pbid == bid else f"{prefix} {nama_toko} #{(r.get('paket') or []).index(pbid)+1}"
+                SQL.upsert_fakta_paket(nama_toko, pbid, nm, start, end, config.KPI_PAKET_TIER, items)
+            except Exception as e:
+                log(f"write-through fakta paket {pbid} gagal: {type(e).__name__}", level="warning", fase="F2", toko=nama_toko, modul="paket")
     catat(f"paket {'BARU' if baru else 'reuse'} {bid} → {r}",
           status="live", fase="F2", toko=nama_toko, modul="paket", detail={"baru": baru, "paket": bid, **r})
     return {"paket": bid, "baru": baru, **r}

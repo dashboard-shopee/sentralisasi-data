@@ -619,6 +619,36 @@ def simpan_fakta_paket(toko, baris):
         pk=("toko", "bundle_deal_id"), jsonb_cols=("tiers", "items"))
 
 
+_SQL_UPSERT_PAKET = text("""
+    insert into harga_fakta_paket
+        (toko, bundle_deal_id, name, status, start_time, end_time, tiers, items, item_count, diperbarui_pada)
+    values
+        (:toko, :bundle_deal_id, :name, :status, to_timestamp(:start_time), to_timestamp(:end_time),
+         cast(:tiers as jsonb), cast(:items as jsonb), :item_count, now())
+    on conflict (toko, bundle_deal_id) do update set
+        name=excluded.name, status=excluded.status, start_time=excluded.start_time,
+        end_time=excluded.end_time, tiers=excluded.tiers, items=excluded.items,
+        item_count=excluded.item_count, diperbarui_pada=now()
+""")
+
+
+def upsert_fakta_paket(toko, bundle_deal_id, name, start_time, end_time, tiers, items):
+    """UPSERT 1 paket (bukan snapshot) — dipanggil provisioning WRITE-THROUGH begitu bikin/
+    enroll deal, biar dashboard nongol walau grab-list harian lagi down (endpoint bundle_deal/
+    list flaky 1400101507 di ZIO/BEVERRA/Topikece). item endpoint reliable → items dari situ."""
+    if not config.is_toko_resmi(toko) or not bundle_deal_id:
+        return 0
+    with get_engine().begin() as c:
+        c.execute(_SQL_UPSERT_PAKET, {
+            "toko": toko, "bundle_deal_id": int(bundle_deal_id), "name": name, "status": 2,
+            "start_time": int(start_time), "end_time": int(end_time),
+            "tiers": json.dumps(tiers) if tiers else None,
+            "items": json.dumps(items) if items else None,
+            "item_count": len(items) if items else 0,
+        })
+    return 1
+
+
 def baca_kategori_item(toko):
     """{item_id: kategori_leaf} dari harga_produk_kategori (grab mingguan). Buat pemecahan
     voucher per-kategori (spec owner 17 Jul). Item tanpa kategori ga ada di map."""
