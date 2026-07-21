@@ -859,7 +859,7 @@ export default function RisetKompetitorPage() {
                         </button>
                       </div>
                       
-                      {activeDetailTab === "manual" && !!(profile?.canEditCompetitor || profile?.role === "owner") && (
+                      {!!(profile?.canEditCompetitor || profile?.role === "owner") && (
                         <button
                           onClick={() => setShowEditModal(true)}
                           className="text-[12px] bg-[#ee4d2d]/10 hover:bg-[#ee4d2d]/25 text-[#ee4d2d] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"

@@ -64,7 +64,7 @@ DRY_RUN = not MODE_LIVE
 # ║   nembak 1×/jam di menit MENIT_RUNNING. (Tier BULANAN dihapus.)    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
-JAM_FAKTA_HARIAN    = "8"        # tier HARIAN jalan sekali sehari jam ini (08:00)
+JAM_FAKTA_HARIAN    = "10"        # tier HARIAN jalan sekali sehari jam ini (08:00)
 HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari
 JAM_FAKTA_MINGGUAN  = "9"        # tier MINGGUAN: jam (09:00 di hari itu)
 # (Buat TES tier harian/mingguan pakai tes_harga.bat — JAM_TES harus SAMA dgn

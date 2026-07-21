@@ -71,7 +71,7 @@ export async function GET(
         }
         
         for (const linkItem of additionalLinks) {
-          const shopId = linkItem.toko_id === 1 ? "1772452045" : "1770737480";
+          const shopId = linkItem.toko_id === 1 ? "124115456" : "260408542";
           const storeKey = linkItem.toko_id === 1 ? "KIMMIO" : "LOLLYSWEET";
           const itemId = String(linkItem.produk_id);
           dbLink.links[storeKey] = {
