@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+
 
 interface ProductAcuan {
   id: number;
@@ -43,7 +43,6 @@ interface DatabaseLink {
 }
 
 export default function RisetKompetitorPage() {
-  const router = useRouter();
   
   // User Profile permissions
   const [profile, setProfile] = useState<{ role: string; canEditCompetitor: boolean } | null>(null);
@@ -277,6 +276,43 @@ export default function RisetKompetitorPage() {
     }
   };
 
+  const handleResetStatusUpdate = async (id: number, sku: string) => {
+    const confirmReset = window.confirm(
+      `Apakah Anda yakin ingin menghapus status update untuk SKU "${sku}"? Tanggal update akan di-reset menjadi "Antrean" agar produk ini di-scrape ulang.`
+    );
+    if (!confirmReset) return;
+
+    try {
+      const res = await fetch(`/api/riset-kompetitor/${id}/reset`, {
+        method: "POST"
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message || "Status update berhasil di-reset.");
+        
+        // Refresh products list in-place
+        setProducts(prev => 
+          prev.map(p => p.id === id ? { ...p, tanggal_update: null } : p)
+        );
+        
+        // If the selected product details is showing this product, refresh details too
+        if (selectedId === id) {
+          const detailsRes = await fetch(`/api/riset-kompetitor/${id}`);
+          const detailsJson = await detailsRes.json();
+          if (detailsJson.success) {
+            setDetailProduct(detailsJson.data.product);
+            setCompetitors(detailsJson.data.competitors);
+            setExcludedCompetitors(detailsJson.data.excluded || []);
+          }
+        }
+      } else {
+        alert(json.error || "Gagal me-reset status update.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
   const handleExcludeCompetitor = async (e: React.MouseEvent, comp: CompetitorDetail) => {
     e.preventDefault();
     if (!selectedId) return;
@@ -360,7 +396,7 @@ export default function RisetKompetitorPage() {
     try {
       const date = new Date(dateStr);
       return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-    } catch (e) {
+    } catch {
       return String(dateStr);
     }
   };
@@ -485,10 +521,9 @@ export default function RisetKompetitorPage() {
                         <td className="py-3.5 px-2 text-[#9aa0b2] text-center align-middle font-medium">
                           {(page - 1) * limit + index + 1}
                         </td>
-                        {/* Image */}
+                         {/* Image */}
                         <td className="py-3.5 px-2">
                           <div className="w-[54px] h-[54px] rounded-xl overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
                               src={getImageUrl(p.gambar_produk)} 
                               alt={p.sku} 
@@ -539,6 +574,18 @@ export default function RisetKompetitorPage() {
                               background: !p.tanggal_update ? "#ef4444" : dateOld ? "#f59e0b" : "#10b981"
                             }} />
                             {p.tanggal_update ? formatDate(p.tanggal_update) : "Antrean"}
+                            {p.tanggal_update && (!profile || profile.canEditCompetitor || profile.role === "owner") && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleResetStatusUpdate(p.id, p.sku);
+                                }}
+                                title="Hapus Status Update (Kembali ke Antrean)"
+                                className="ml-1.5 text-slate-400 hover:text-red-500 font-extrabold cursor-pointer transition-colors"
+                              >
+                                ✕
+                              </button>
+                            )}
                           </span>
                         </td>
                         
@@ -625,7 +672,6 @@ export default function RisetKompetitorPage() {
                   {/* Product Acuan Summary Header */}
                   <div className="flex flex-col md:flex-row gap-5 pb-5 border-b border-[#f0f2f7] mb-5">
                     <div className="w-[84px] h-[84px] rounded-2xl overflow-hidden bg-gray-50 border border-[#eef0f6] shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
                         src={getImageUrl(detailProduct.gambar_produk)} 
                         alt={detailProduct.sku} 
