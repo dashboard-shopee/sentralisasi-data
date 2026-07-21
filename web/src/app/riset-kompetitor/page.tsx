@@ -407,6 +407,44 @@ export default function RisetKompetitorPage() {
     return url;
   };
 
+  // Helper to parse Shopee product URL and construct similar products search URL
+  const getSimilarProductUrl = (url: string) => {
+    if (!url) return "";
+    try {
+      let cleanUrl = url.split("?")[0].trim();
+      let shopId = "";
+      let itemId = "";
+      
+      if (cleanUrl.includes("/product/")) {
+        const parts = cleanUrl.split("/product/")[1].split("/");
+        if (parts.length >= 2) {
+          shopId = parts[0];
+          itemId = parts[1];
+        }
+      } else {
+        const match = cleanUrl.match(/-i\.(\d+)\.(\d+)/);
+        if (match && match[1] && match[2]) {
+          shopId = match[1];
+          itemId = match[2];
+        } else {
+          // Fallback parsing by dots
+          const parts = cleanUrl.split(".");
+          if (parts.length >= 2) {
+            itemId = parts[parts.length - 1];
+            shopId = parts[parts.length - 2];
+          }
+        }
+      }
+      
+      if (shopId && itemId && /^\d+$/.test(shopId) && /^\d+$/.test(itemId)) {
+        return `https://shopee.co.id/find_similar_products?itemid=${itemId}&shopid=${shopId}`;
+      }
+    } catch (e) {
+      console.error("Error parsing shopee url for similar link:", e);
+    }
+    return url; // fallback to original link if parsing fails
+  };
+
   return (
     <div className="max-w-[1400px] xl:max-w-[1600px] w-full mx-auto p-1 text-[#3a3f4d]">
       
@@ -720,7 +758,7 @@ export default function RisetKompetitorPage() {
                     <div className="flex flex-wrap gap-2">
                       {/* 1. Alialia primary link */}
                       <a 
-                        href={detailProduct.link_produk} 
+                        href={getSimilarProductUrl(detailProduct.link_produk)} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="px-3.5 py-2 bg-white hover:bg-[#fff1ed]/20 border border-[#eef0f6] rounded-xl text-[12px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer hover:border-[#ee4d2d] hover:text-[#ee4d2d]"
@@ -730,7 +768,8 @@ export default function RisetKompetitorPage() {
 
                       {/* 2. Database links for other stores */}
                       {dbLink && dbLink.links && Object.entries(dbLink.links).map(([storeName, info]: [string, any]) => {
-                        if (!info.url || storeName.toUpperCase() === "ALIALIA") return null;
+                        if (!info.url && !info.search_similar_url) return null;
+                        if (storeName.toUpperCase() === "ALIALIA") return null;
                         
                         // Map store icon prefix
                         let prefix = "⭐";
@@ -747,7 +786,7 @@ export default function RisetKompetitorPage() {
                         return (
                           <a 
                             key={storeName}
-                            href={info.url} 
+                            href={info.search_similar_url || getSimilarProductUrl(info.url)} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="px-3.5 py-2 bg-white hover:bg-[#fff1ed]/20 border border-[#eef0f6] rounded-xl text-[12px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer hover:border-[#ee4d2d] hover:text-[#ee4d2d]"
