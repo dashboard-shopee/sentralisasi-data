@@ -55,57 +55,13 @@ def takedown_dari_campaign(session, shop, i, kunci_set, nama_toko=None):
             if not sid:
                 continue
             nominated = SQL.baca_campaign_item(nama_toko, sid)  # {(iid_int,mid_int)->info} dari DB
-            # (17 Jul mlm, rekaman owner) DUA jalur cabut: status 30 (approved) -> opt_out
-            # batch; status <30 (pending review) -> withdraw_entity per-id (endpoint tombol
-            # batalkan UI -- opt_out di status pending = fake-success). Status DB bisa BASI
-            # (approve diem2 antara grab): pending yg gagal withdraw ikut jalur opt_out.
-            nom_ids, pairs, pending = [], [], []
-            for (iid, mid), info in nominated.items():
-                if (iid, mid) in kunci_set and info.get("nomination_id"):
-                    if info.get("nominate_status") == 30 or info.get("nominate_status") is None:
-                        nom_ids.append(info["nomination_id"])
-                        pairs.append((iid, mid))
-                    else:
-                        pending.append(((iid, mid), info["nomination_id"]))
-            if pending and not config.DRY_RUN:
-                for (iid, mid), nomid in pending:
-                    if C.withdraw_entity(session, shop, sid, nomid):
-                        total += 1
-                        try:
-                            SQL.hapus_campaign_item(nama_toko, sid, [(iid, mid)])
-                        except Exception:
-                            pass
-                        log(f"withdraw (pending) {nomid} OK", level="live", toko=shop, modul="campaign")
-                    else:
-                        # mungkin keburu APPROVED (status DB basi) -> ikutin jalur opt_out
-                        nom_ids.append(nomid)
-                        pairs.append((iid, mid))
-            elif pending:
-                log(f"(DRY) {len(pending)} nominasi pending akan di-withdraw dari sesi '{s.get('session_name','')}'",
-                    level="warning", toko=shop, modul="campaign")
-                total += len(pending)
-            if not nom_ids:
-                continue
-            if config.DRY_RUN:
-                log(f"(DRY) {len(nom_ids)} nominasi akan di-takedown dari sesi '{s.get('session_name','')}'",
-                    level="warning", toko=shop, modul="campaign")
-                total += len(nom_ids)
-            else:
-                stat0 = C.get_nomination_statistics(session, sid)
-                if C.takedown_products(session, shop, sid, nom_ids):
-                    total += len(nom_ids)
-                    # bersihin baris DB biar diagnosa jam berikutnya ga nge-flag zombie
-                    try:
-                        SQL.hapus_campaign_item(nama_toko, sid, pairs)
-                    except Exception as e:
-                        log(f"gagal hapus baris takedown dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
-                    # BUKTI HIDUP murah (statistik polos, 17 Jul): count nominasi harus turun
-                    stat1 = C.get_nomination_statistics(session, sid)
-                    if stat0 and stat1:
-                        n0 = int(stat0.get("nominated_count") or 0)
-                        n1 = int(stat1.get("nominated_count") or 0)
-                        log(f"sesi {sid}: nominated_count {n0} → {n1} (cabut {len(nom_ids)})",
-                            level=("ok" if n1 < n0 else "warning"), toko=shop, modul="campaign")
+            # (17 Jul mlm, rekaman owner) DUA jalur cabut per status: 30 (approved)→opt_out
+            # batch; <30 (pending)→withdraw per-id, fallback opt_out. Logika ini sekarang
+            # 1 sumber di campaign_util.cabut_nominasi (23 Jul, dipakai bareng jalur inline).
+            items = [((iid, mid), info) for (iid, mid), info in nominated.items()
+                     if (iid, mid) in kunci_set and info.get("nomination_id")]
+            total += C.cabut_nominasi(session, shop, sid, items, nama_toko=nama_toko,
+                                      session_name=s.get("session_name", ""))
     except Exception as e:
         log(f"takedown campaign gagal: {type(e).__name__}: {str(e)[:120]}", level="error", toko=shop, modul="campaign")
     return total

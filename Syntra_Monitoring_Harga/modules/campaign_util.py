@@ -515,21 +515,16 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
 
-    # Model gate-fail: cabut LANGSUNG via withdraw_entity (17 Jul mlm -- endpoint tombol
-    # batalkan UI dari rekaman owner; mempan buat nominasi PENDING, beda dari opt_out yg
-    # fake-success di status <30). Gagal withdraw -> baris DB dibiarin, takedown per-jam
-    # yg nyabut (withdraw dulu, fallback opt_out pas approved).
+    # Model gate-fail: cabut LANGSUNG lewat cabut_nominasi (routing per status). LANGGAR
+    # ga bawa nominate_status (draf pra-submit) → diperlakuin None → opt_out BATCH, endpoint
+    # yg BENAR buat model committed abis submit (23 Jul: dulu withdraw per-id BUTA di sini →
+    # banjir error 6). Sisa yg gagal → takedown per-jam yg nyabut.
     gate_skip = 0
     if langgar and committed:
         time.sleep(2)
-        for (iid, mid), info in langgar.items():
-            if withdraw_entity(session, shop, session_id, info["nomination_id"]):
-                gate_skip += 1
-                try:
-                    from modules import sql_harga as SQL
-                    SQL.hapus_campaign_item(_nama_display(shop), session_id, [(int(iid), int(mid))])
-                except Exception:
-                    pass
+        gate_skip = cabut_nominasi(session, shop, session_id,
+                                   [((int(iid), int(mid)), info) for (iid, mid), info in langgar.items()],
+                                   nama_toko=_nama_display(shop))
         if gate_skip < len(langgar):
             log(f"sesi {session_id}: {len(langgar) - gate_skip} model gate-fail belum kecabut — "
                 f"takedown per-jam yg bakal nyabut", level="warning", toko=shop, modul="campaign")
@@ -584,5 +579,79 @@ def takedown_products(session, shop, session_id, nomination_ids):
         except Exception as e:
             log(f"gagal opt-out chunk {i//chunk_size + 1}: {e}", level="error", toko=shop, modul="campaign")
             success = False
-            
+
     return success
+
+
+def cabut_nominasi(session, shop, session_id, items, nama_toko=None, session_name=""):
+    """SUMBER KEBENARAN TUNGGAL buat cabut nominasi campaign — dipakai jalur inline
+    gate-fail (nominate) DAN takedown per-jam (takedown_campaign). ROUTING PER STATUS:
+      · nominate_status == 30 (approved) ATAU None (tak diketahui, mis. LANGSUNG abis
+        submit) → opt_out BATCH (chunk 50) — endpoint yg BENAR buat status committed.
+      · nominate_status < 30 (pending review) → withdraw_entity per-id; gagal (mungkin
+        udah keburu approved / status DB basi) → fallback ke jalur opt_out batch.
+
+    Latar (23 Jul, grilling owner): jalur inline lama nembak withdraw_entity per-id BUTA
+    (tanpa cek status) buat SEMUA gate-fail → abis submit mayoritas udah status-30 →
+    banjir 'error 6 current status does not support this operation' (752× ~2 dtk = ~25
+    menit hammer + micu anti-bot 175). opt_out batch cabut 752 dalam ~15 panggilan.
+
+    `items` = iterable of ((iid, mid), info); info wajib punya 'nomination_id', opsional
+    'nominate_status'. Hapus baris DB tiap yg sukses cabut. DRY_RUN: cuma log rencana.
+    Return jumlah nominasi ter-cabut."""
+    from modules import sql_harga as SQL
+    nama_toko = nama_toko or shop
+    label_sesi = session_name or session_id
+
+    nom_ids, pairs, pending = [], [], []
+    for (iid, mid), info in items:
+        nomid = info.get("nomination_id")
+        if not nomid:
+            continue
+        st = info.get("nominate_status")
+        if st == 30 or st is None:
+            nom_ids.append(nomid); pairs.append((iid, mid))
+        else:
+            pending.append(((iid, mid), nomid))
+
+    total = 0
+    # 1) PENDING (<30) → withdraw per-id; gagal → lempar ke jalur opt_out batch
+    if pending and not config.DRY_RUN:
+        for (iid, mid), nomid in pending:
+            if withdraw_entity(session, shop, session_id, nomid):
+                total += 1
+                try:
+                    SQL.hapus_campaign_item(nama_toko, session_id, [(iid, mid)])
+                except Exception:
+                    pass
+                log(f"withdraw (pending) {nomid} OK", level="live", toko=shop, modul="campaign")
+            else:
+                nom_ids.append(nomid); pairs.append((iid, mid))
+    elif pending:
+        log(f"(DRY) {len(pending)} nominasi pending akan di-withdraw dari sesi '{label_sesi}'",
+            level="warning", toko=shop, modul="campaign")
+        total += len(pending)
+
+    # 2) APPROVED/UNKNOWN (30/None) → opt_out BATCH (chunk 50)
+    if nom_ids:
+        if config.DRY_RUN:
+            log(f"(DRY) {len(nom_ids)} nominasi akan di-opt_out (batch) dari sesi '{label_sesi}'",
+                level="warning", toko=shop, modul="campaign")
+            total += len(nom_ids)
+        else:
+            stat0 = get_nomination_statistics(session, session_id)
+            if takedown_products(session, shop, session_id, nom_ids):
+                total += len(nom_ids)
+                # bersihin baris DB biar diagnosa jam berikutnya ga nge-flag zombie
+                try:
+                    SQL.hapus_campaign_item(nama_toko, session_id, pairs)
+                except Exception as e:
+                    log(f"gagal hapus baris takedown dari DB: {type(e).__name__}", level="error", toko=shop, modul="campaign")
+                # BUKTI HIDUP murah (statistik polos): count nominasi harus turun
+                stat1 = get_nomination_statistics(session, session_id)
+                if stat0 and stat1:
+                    n0 = int(stat0.get("nominated_count") or 0)
+                    n1 = int(stat1.get("nominated_count") or 0)
+                    log(f"sesi {session_id}: nominated_count {n0} → {n1} (cabut {len(nom_ids)})",
+                        level=("ok" if n1 < n0 else "warning"), toko=shop, modul="campaign")
+    return total
