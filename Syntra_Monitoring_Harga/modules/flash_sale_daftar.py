@@ -193,13 +193,25 @@ def bagi_rotasi(produk, jumlah_sesi, per_sesi=MAKS_PRODUK_PER_SESI):
     return [chunks[i % len(chunks)] for i in range(jumlah_sesi)]
 
 
+def _stok_flash(stok_asli):
+    """Stok yg ditaro ke flash = TIERED kayak campaign (permintaan owner 24 Jul). DULU full
+    stock min(stok, MAKS_STOK=350) → stok kekunci di sesi MENDATANG, ga bisa jualan sampai
+    sesi mulai (FATAL, kejadian 24 Jul). Sekarang pakai tier campaign (KPI_CAMPAIGN_STOK_TIER):
+    stok>1000→100 · >500→50 · >250→25 · sisa→5. MAKS_STOK tetep jadi jaring pengaman."""
+    for batas, ajukan in config.KPI_CAMPAIGN_STOK_TIER:
+        if stok_asli > batas:
+            return min(ajukan, stok_asli, MAKS_STOK)   # cap stok_asli: cegah oversell per-model
+    return min(config.KPI_CAMPAIGN_STOK_TIER[-1][1], stok_asli, MAKS_STOK)
+
+
 def _entri(produk_item):
     """Bangun entri set_items per model dari 1 produk. harga flash = harga_diskon MODEL itu
-    sendiri − POTONG_HARGA (PER-MODEL, bukan disamain ke semua model dalam 1 item)."""
+    sendiri − POTONG_HARGA (PER-MODEL, bukan disamain ke semua model dalam 1 item). Stok =
+    tiered kayak campaign (_stok_flash), BUKAN full stock (owner 24 Jul, cegah stok kekunci)."""
     return [{
         "item_id": produk_item["item_id"], "model_id": m["model_id"], "status": STATUS_MASUK,
         "input_promo_price": max(m["harga_diskon"] - POTONG_HARGA, 1),
-        "stock": min(m["stok"], MAKS_STOK),
+        "stock": _stok_flash(m["stok"]),
         "item_display_image": produk_item["img"], "purchase_limit": 0,
     } for m in produk_item["models"]]
 
