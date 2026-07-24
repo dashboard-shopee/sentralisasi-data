@@ -515,16 +515,17 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
     except Exception as e:
         log(f"submit gagal: {type(e).__name__}", level="error", toko=shop, modul="campaign")
 
-    # Model gate-fail: cabut LANGSUNG lewat cabut_nominasi (routing per status). LANGGAR
-    # ga bawa nominate_status (draf pra-submit) → diperlakuin None → opt_out BATCH, endpoint
-    # yg BENAR buat model committed abis submit (23 Jul: dulu withdraw per-id BUTA di sini →
-    # banjir error 6). Sisa yg gagal → takedown per-jam yg nyabut.
+    # Model gate-fail: cabut LANGSUNG lewat cabut_nominasi dg PAKSA_OPTOUT (24 Jul). LANGGAR
+    # bawa nominate_status=10 (foto PRA-submit dari preview_list), TAPI di sini udah ABIS
+    # submit = semua 30 (committed) → opt_out BATCH yg bener. Tanpa paksa_optout, routing
+    # kebaca status 10 basi → withdraw per-id → error 6 + rate-limit 175 (kejadian live 24
+    # Jul). Sisa yg gagal → takedown per-jam yg nyabut.
     gate_skip = 0
     if langgar and committed:
         time.sleep(2)
         gate_skip = cabut_nominasi(session, shop, session_id,
                                    [((int(iid), int(mid)), info) for (iid, mid), info in langgar.items()],
-                                   nama_toko=_nama_display(shop))
+                                   nama_toko=_nama_display(shop), paksa_optout=True)
         if gate_skip < len(langgar):
             log(f"sesi {session_id}: {len(langgar) - gate_skip} model gate-fail belum kecabut — "
                 f"takedown per-jam yg bakal nyabut", level="warning", toko=shop, modul="campaign")
@@ -583,18 +584,19 @@ def takedown_products(session, shop, session_id, nomination_ids):
     return success
 
 
-def cabut_nominasi(session, shop, session_id, items, nama_toko=None, session_name=""):
+def cabut_nominasi(session, shop, session_id, items, nama_toko=None, session_name="", paksa_optout=False):
     """SUMBER KEBENARAN TUNGGAL buat cabut nominasi campaign — dipakai jalur inline
     gate-fail (nominate) DAN takedown per-jam (takedown_campaign). ROUTING PER STATUS:
-      · nominate_status == 30 (approved) ATAU None (tak diketahui, mis. LANGSUNG abis
-        submit) → opt_out BATCH (chunk 50) — endpoint yg BENAR buat status committed.
+      · nominate_status == 30 (approved) ATAU None (tak diketahui) → opt_out BATCH
+        (chunk 50) — endpoint yg BENAR buat status committed.
       · nominate_status < 30 (pending review) → withdraw_entity per-id; gagal (mungkin
         udah keburu approved / status DB basi) → fallback ke jalur opt_out batch.
 
-    Latar (23 Jul, grilling owner): jalur inline lama nembak withdraw_entity per-id BUTA
-    (tanpa cek status) buat SEMUA gate-fail → abis submit mayoritas udah status-30 →
-    banjir 'error 6 current status does not support this operation' (752× ~2 dtk = ~25
-    menit hammer + micu anti-bot 175). opt_out batch cabut 752 dalam ~15 panggilan.
+    paksa_optout=True → SEMUA item ke opt_out BATCH, ABAIKAN nominate_status. WAJIB buat
+    jalur inline gate-fail (24 Jul): status di draf = foto PRA-submit (10=staged), tapi
+    cabut_nominasi dipanggil ABIS submit → semua udah 30=committed. Routing by status basi
+    (10) salah kirim ke withdraw per-id → error 6 'current status does not support' +
+    banjir 609× ~2dtk + rate-limit 175. opt_out batch cabut semua dalam ~15 panggilan.
 
     `items` = iterable of ((iid, mid), info); info wajib punya 'nomination_id', opsional
     'nominate_status'. Hapus baris DB tiap yg sukses cabut. DRY_RUN: cuma log rencana.
@@ -609,7 +611,7 @@ def cabut_nominasi(session, shop, session_id, items, nama_toko=None, session_nam
         if not nomid:
             continue
         st = info.get("nominate_status")
-        if st == 30 or st is None:
+        if paksa_optout or st == 30 or st is None:
             nom_ids.append(nomid); pairs.append((iid, mid))
         else:
             pending.append(((iid, mid), nomid))
