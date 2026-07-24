@@ -343,16 +343,21 @@ def _stok_campaign(stok_asli):
     return config.KPI_CAMPAIGN_STOK_TIER[-1][1]
 
 
-def _senin_daftar(s, hari_ini=None):
-    """Timing daftar campaign (spec owner 17 Jul): daftarin CUMA pas Senin yg tepat,
-    biar ga kedinian. Kelewat Senin-nya -> SKIP (bukan susulan).
-      - Sesi >1 hari  -> Senin di MINGGU sesi MULAI (26=Minggu -> Senin 20 · 26=Rabu ->
-        Senin 24 · 26=Senin -> hari itu).
-      - Sesi ≤1 hari  -> Senin TERAKHIR sebelum/pas TUTUP NOMINASI.
-    Return True kalau hari_ini = Senin yg dimaksud buat sesi ini."""
+def _hari_daftar(s, hari_ini=None):
+    """Timing daftar campaign — DINAMIS (24 Jul, ganti hardcode Senin; spec owner 17 Jul:
+    daftar CUMA di hari yg tepat biar ga kedinian). Hari daftar = config.HARI_FAKTA_MINGGUAN
+    (satu knob bareng grab kategori + housekeeping, keputusan owner 24 Jul). Daftar cuma buat
+    sesi yg TANGGAL-KUNCI-nya jatuh di jendela 7 hari [hari ini .. +6]:
+      - Sesi >1 hari  -> tanggal AWAL sesi (session_start) di jendela.
+      - Sesi ≤1 hari  -> TUTUP NOMINASI (nomination_end) di jendela.
+    Karena daftar selalu di hari PERTAMA jendela, tanggal-kunci selalu ≥ hari ini → daftar
+    dijamin keburu, apapun harinya (Senin→Sen-Min · Jumat→Jum-Kam). Tanggal-kunci yg udah
+    LEWAT (< hari ini) = SKIP, ga ada susulan. Return True kalau hari ini = hari daftar &
+    sesi masuk jendela."""
     from datetime import date, timedelta
     hari_ini = hari_ini or date.today()
-    if hari_ini.weekday() != 0:          # bukan Senin -> ga ada pendaftaran campaign
+    target = config.WEEKDAY_ID.get(str(config.HARI_FAKTA_MINGGUAN).upper(), 0)
+    if hari_ini.weekday() != target:     # bukan hari daftar -> ga ada pendaftaran campaign
         return False
     start = int(s.get("session_start_time", 0) or 0)
     end = int(s.get("session_end_time", 0) or 0)
@@ -360,9 +365,8 @@ def _senin_daftar(s, hari_ini=None):
     anchor_ts = start if (end - start) > 86400 else (nom_end or start)
     if anchor_ts <= 0:
         return False
-    a = date.fromtimestamp(anchor_ts)    # WIB (jam mesin)
-    senin_anchor = a - timedelta(days=a.weekday())
-    return hari_ini == senin_anchor
+    key_date = date.fromtimestamp(anchor_ts)    # WIB (jam mesin)
+    return hari_ini <= key_date <= hari_ini + timedelta(days=6)
 
 
 def _faktor_harga_sesi(s):
@@ -410,9 +414,10 @@ def campaign(shop, nama_toko, session):
         for s in sesi:
             sid = s["session_id"]
             cid = s.get("campaign_id")
-            # ⏱️ timing Senin (owner 17 Jul): cuma daftar pas Senin yg tepat buat sesi ini
-            if not _senin_daftar(s):
-                log(f"sesi {s.get('session_name','')[:40]} BELUM jatuh tempo daftar (aturan Senin) — skip",
+            # ⏱️ timing hari daftar (owner 17 Jul, dinamis 24 Jul): cuma daftar pas hari
+            # config.HARI_FAKTA_MINGGUAN & sesi masuk jendela 7 hari
+            if not _hari_daftar(s):
+                log(f"sesi {s.get('session_name','')[:40]} BELUM jatuh tempo daftar (di luar jendela {config.HARI_FAKTA_MINGGUAN}) — skip",
                     level="detail", fase="F2", toko=nama_toko, modul="campaign")
                 continue
             faktor = _faktor_harga_sesi(s)                     # KPI harga per DURASI sesi

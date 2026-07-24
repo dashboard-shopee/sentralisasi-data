@@ -65,7 +65,9 @@ DRY_RUN = not MODE_LIVE
 # ╚══════════════════════════════════════════════════════════════════╝
 MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
 JAM_FAKTA_HARIAN    = "10"        # tier HARIAN jalan sekali sehari jam ini (08:00)
-HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari
+HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari (grab kategori + housekeeping).
+                                 # JUGA hari DAFTAR CAMPAIGN (24 Jul) — jendela 7 hari mulai
+                                 # hari ini; ganti = ketiganya gerak bareng.
 JAM_FAKTA_MINGGUAN  = "9"        # tier MINGGUAN: jam (09:00 di hari itu)
 # (Buat TES tier harian/mingguan pakai tes_harga.bat — JAM_TES harus SAMA dgn
 #  JAM_FAKTA_HARIAN (harian) atau JAM_FAKTA_MINGGUAN + HARI_TES (mingguan).)
@@ -147,6 +149,8 @@ HARI_ID = {
     "Monday": "SENIN", "Tuesday": "SELASA", "Wednesday": "RABU", "Thursday": "KAMIS",
     "Friday": "JUMAT", "Saturday": "SABTU", "Sunday": "MINGGU",
 }
+# Indonesia -> weekday int (0=Senin .. 6=Minggu) buat itungan hari (mis. HARI_FAKTA_MINGGUAN).
+WEEKDAY_ID = {"SENIN": 0, "SELASA": 1, "RABU": 2, "KAMIS": 3, "JUMAT": 4, "SABTU": 5, "MINGGU": 6}
 
 # Umur maksimum baris fakta sebelum dianggap yatim & di-prune housekeeping (hari).
 FAKTA_MAKS_UMUR_HARI = 35
