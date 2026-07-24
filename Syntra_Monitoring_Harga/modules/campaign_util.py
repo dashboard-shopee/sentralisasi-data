@@ -92,7 +92,10 @@ def api_post_browser(url, params, payload, kunci="data", attempts=4):
             return res
         except Exception as e:
             cuplikan = str(e)
-            if attempt < attempts - 1:
+            # Error TERMINAL (retry ga nolong) → langsung lempar, jangan buang 3× backoff.
+            # 329400028 = kuota produk campaign PENUH ("0 products more can be added").
+            terminal = "329400028" in cuplikan or "exceeds the limit" in cuplikan
+            if attempt < attempts - 1 and not terminal:
                 log(f"api_browser gagal → {cuplikan} | coba lagi dalam {delay}s ({attempt+1}/{attempts-1})", level="warning", modul="campaign")
                 time.sleep(delay)
                 delay = min(delay * 2, 20)
@@ -440,6 +443,11 @@ def nominate(session, shop, session_id, produk_list, chunk=50, campaign_id=None)
             staged += int(d.get("product_success_num") or 0)
             preview_no = str(d.get("preview_no") or preview_no)   # dipakai buat preview/edit
         except Exception as e:
+            # Kuota sesi PENUH → chunk sisa pasti gagal sama, STOP stage sesi ini (jangan flood).
+            if "329400028" in str(e) or "exceeds the limit" in str(e):
+                log(f"sesi {session_id}: kuota produk campaign PENUH (0 bisa ditambah) — "
+                    f"stop stage sesi ini ({staged} udah ke-stage)", level="warning", toko=shop, modul="campaign")
+                break
             log(f"preview/add chunk gagal ({len(c)}): {type(e).__name__} — lanjut", level="error", toko=shop, modul="campaign")
 
     if not staged:
