@@ -64,13 +64,17 @@ DRY_RUN = not MODE_LIVE
 # ║   nembak 1×/jam di menit MENIT_RUNNING. (Tier BULANAN dihapus.)    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 MENIT_RUNNING       = "5"        # scheduler nembak tiap jam di menit ini (:05)
-JAM_FAKTA_HARIAN    = "10"        # tier HARIAN jalan sekali sehari jam ini (08:00)
+JAM_FAKTA           = "10"       # SATU jam buat tier HARIAN & MINGGUAN (digabung 24 Jul, owner).
+                                 # Harian: jalan tiap hari jam ini. Mingguan: jam ini juga, tapi
+                                 # cuma di HARI_FAKTA_MINGGUAN → di hari itu jadi 1 siklus gabungan
+                                 # + 1 harvest sesi (dulu 2 siklus = 2 harvest, boros & rawan
+                                 # anti-bot). Konsekuensi: blok hari itu lebih panjang, grab per-JAM
+                                 # di jam-jam yg kelewat ke-skip (scheduler single-thread blocking).
 HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari (grab kategori + housekeeping).
                                  # JUGA hari DAFTAR CAMPAIGN (24 Jul) — jendela 7 hari mulai
                                  # hari ini; ganti = ketiganya gerak bareng.
-JAM_FAKTA_MINGGUAN  = "9"        # tier MINGGUAN: jam (09:00 di hari itu)
 # (Buat TES tier harian/mingguan pakai tes_harga.bat — JAM_TES harus SAMA dgn
-#  JAM_FAKTA_HARIAN (harian) atau JAM_FAKTA_MINGGUAN + HARI_TES (mingguan).)
+#  JAM_FAKTA (+ HARI_TES buat mingguan).)
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║           KPI PER-MODUL — PASANG & TAKEDOWN (EDIT DI SINI)         ║

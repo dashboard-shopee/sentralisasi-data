@@ -95,8 +95,8 @@ def siklus_terpadu(paksa_semua=False, fase=None):
     jam = skr.hour
     hari = config.HARI_ID.get(skr.strftime("%A"), "")
 
-    due_harian = paksa_semua or (jam == int(config.JAM_FAKTA_HARIAN))
-    due_mingguan = paksa_semua or (hari == config.HARI_FAKTA_MINGGUAN and jam == int(config.JAM_FAKTA_MINGGUAN))
+    due_harian = paksa_semua or (jam == int(config.JAM_FAKTA))
+    due_mingguan = paksa_semua or (hari == config.HARI_FAKTA_MINGGUAN and jam == int(config.JAM_FAKTA))
     aktif = lambda m: m in config.MODUL_AKTIF          # modul jalan kalau ada di MODUL_AKTIF
 
     toko = config.daftar_toko_aktif()
@@ -293,7 +293,7 @@ def jalankan_provisioning(modul=("paket",)):
 #  TES 1 SIKLUS SEKARANG (tes_harga.bat) — ga nunggu MENIT_RUNNING.
 #  Fase/modul/toko/mode ikut config: FASE_AKTIF · MODUL_AKTIF · TOKO_AKTIF · MODE_LIVE.
 #  python run.py tes [jam] [hari] — jam & hari DISIMULASIKAN (jam_siklus.set_simulasi)
-#  biar tier HARIAN (jam == JAM_FAKTA_HARIAN) / MINGGUAN (hari+jam) bisa dites kapan aja.
+#  biar tier HARIAN (jam == JAM_FAKTA) / MINGGUAN (hari + jam sama) bisa dites kapan aja.
 # ══════════════════════════════════════════════════════════════════
 def jalankan_tes(jam=None, hari=None):
     from datetime import timedelta
@@ -314,8 +314,8 @@ def jalankan_tes(jam=None, hari=None):
     jam_siklus.set_simulasi(skr)
 
     hari_sim = config.HARI_ID.get(skr.strftime("%A"), "")
-    due_h = paksa or skr.hour == int(config.JAM_FAKTA_HARIAN)
-    due_m = paksa or (hari_sim == config.HARI_FAKTA_MINGGUAN and skr.hour == int(config.JAM_FAKTA_MINGGUAN))
+    due_h = paksa or skr.hour == int(config.JAM_FAKTA)
+    due_m = paksa or (hari_sim == config.HARI_FAKTA_MINGGUAN and skr.hour == int(config.JAM_FAKTA))
     tier = ("SEMUA — dipaksa FULL" if paksa else
             "JAM" + (" +HARIAN" if due_h else "") + (" +MINGGUAN" if due_m else ""))
     fase = config.FASE_AKTIF
@@ -327,7 +327,7 @@ def jalankan_tes(jam=None, hari=None):
     if not config.DRY_RUN:
         log("⚠️  MODE_LIVE=True — aksi Fase 2 bakal BENERAN ke Shopee!", level="live")
     if 2 in fase and not due_h:
-        log(f"info: provisioning paket/voucher/garansi cuma jalan di tier HARIAN — set JAM_TES={config.JAM_FAKTA_HARIAN} (atau FULL) biar ikut.", level="warning")
+        log(f"info: provisioning paket/voucher/garansi cuma jalan di tier HARIAN — set JAM_TES={config.JAM_FAKTA} (atau FULL) biar ikut.", level="warning")
 
     siklus_terpadu(paksa_semua=paksa)          # 1 loop toko, 1 sesi per toko utk semua fase
     log(f"=== TES 1 SIKLUS SELESAI (tier: {tier}) ===", level="header")
@@ -364,7 +364,7 @@ def scheduler():
     menit = int(config.MENIT_RUNNING)
     fase = config.FASE_AKTIF
     log(f"Scheduler aktif — FASE_AKTIF={fase} · modul={config.MODUL_AKTIF}. Nembak tiap jam di menit {menit:02d}. "
-        f"Harian@{config.JAM_FAKTA_HARIAN}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA_MINGGUAN}:00", level="header")
+        f"Harian@{config.JAM_FAKTA}:00 · Mingguan {config.HARI_FAKTA_MINGGUAN}@{config.JAM_FAKTA}:00", level="header")
     if 2 in fase:
         m = "🔴 LIVE (ubah Shopee)" if not config.DRY_RUN else "DRY (simulasi)"
         log(f"NOTE: FASE 2 aktif — mode {m} (ikut MODE_LIVE).", level="warning")

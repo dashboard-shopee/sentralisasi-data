@@ -14,7 +14,8 @@ REM    TOKO_AKTIF   = scope toko     ([]=semua . ["kimmioshop"]=1 toko)
 REM    MODE_LIVE    = True=BENERAN ke Shopee . False=DRY simulasi  <-- IKUT CONFIG
 REM
 REM  Tier per-JAM selalu jalan; tier HARIAN/MINGGUAN cuma kena kalau jam sekarang
-REM  == JAM_FAKTA_HARIAN / JAM_FAKTA_MINGGUAN di config (persis kayak scheduler).
+REM  == JAM_FAKTA di config (satu jam buat harian & mingguan; mingguan tambah syarat
+REM  hari == HARI_FAKTA_MINGGUAN). Persis kayak scheduler.
 REM  Butuh paksa semua tier buat tes modul? Pakai tes_harga.bat (JAM_TES=FULL).
 REM ============================================================
 

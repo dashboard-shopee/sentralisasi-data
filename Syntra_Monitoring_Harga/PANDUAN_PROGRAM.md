@@ -249,7 +249,7 @@ Ringkas per-milestone:
 
 **CARA JALANIN:**
 - Scheduler 24 jam: `python run.py` / double-klik `RUN.bat` (jalan tiap jam di menit `MENIT_RUNNING`).
-- **Tes 1 siklus SEKARANG: double-klik `tes_harga.bat`** (`JAM_TES=FULL` = semua tier dipaksa, ga nunggu jadwal · atau `JAM_TES=<jam>` samain sama `JAM_FAKTA_HARIAN` buat simulasi). Setara `python run.py tes [full|jam] [hari]`.
+- **Tes 1 siklus SEKARANG: double-klik `tes_harga.bat`** (`JAM_TES=FULL` = semua tier dipaksa, ga nunggu jadwal · atau `JAM_TES=<jam>` samain sama `JAM_FAKTA` buat simulasi). Setara `python run.py tes [full|jam] [hari]`.
 - Command manual tetep ada: `grab`/`grab full` (fase 1 doang) · `fase2` (harga) · `provisioning [modul]`.
 - Scope: `config.TOKO_AKTIF` (`[]`=semua 10, `["kimmioshop"]`=1 toko) · `FASE_AKTIF` ([1]=grab · [2]=aksi · [1,2]=dua-duanya) · `MODE_LIVE` (live/DRY).
 
@@ -298,7 +298,7 @@ Ringkas per-milestone:
 - `MODE_LIVE` = **SATU saklar** (True=SEMUA modul live · False=SEMUA DRY simulasi). `DRY_RUN` turunan otomatis.
 - `FASE_AKTIF` — fase yg dijalanin scheduler (1=Fakta · 2=aksi harga+provisioning · 3=laporan belum). Orkestrasi = **`siklus_terpadu`** (1 loop toko, 1 sesi per toko, semua fase); set `[1,2]` buat nyalain Fase 2. ⚠️ Fase 2 aktif = harga poin 1–4 ikut jalan (GA ke-gate `MODUL_AKTIF`).
 - `TOKO_AKTIF` (`[]`=semua 10 · `["kimmioshop"]`=1 toko) · `MODUL_AKTIF` (list modul yg di-grab & diproses; buang = skip).
-- Trigger: `MENIT_RUNNING` · `JAM_FAKTA_HARIAN` · `HARI_FAKTA_MINGGUAN`+`JAM_FAKTA_MINGGUAN`. (bulanan DIHAPUS.)
+- Trigger: `MENIT_RUNNING` · `JAM_FAKTA` (satu jam buat harian & mingguan, digabung 24 Jul) · `HARI_FAKTA_MINGGUAN` (hari mingguan = JUGA hari daftar campaign). (bulanan DIHAPUS.)
 - **🔴 `MODE_LIVE` = SATU saklar live/DRY** — True: SEMUA modul (harga + provisioning) beneran ke Shopee; False: semua simulasi. Rem paksa-DRY & env `PROV_LIVE` **udah dihapus** (13 Jul). ⚠️ Modul selain paket belum diverifikasi live — pas nyalain, scope `TOKO_AKTIF`/`MODUL_AKTIF` dulu. Command manual tetap ada. `SKIP_FLASH_TAKEDOWN=True`.
 
 **Commands:** `run.py` (scheduler) · `tes [jam|full] [hari]` (**tes_harga.bat** — 1 siklus SEKARANG, fase+modul ikut config. `tes full` = SEMUA tier dipaksa (paling gampang); `tes <jam> [hari]` = simulasi via `jam_siklus.set_simulasi`, tier harian/mingguan kena cuma kalau jam-nya SAMA dgn `JAM_FAKTA_*`) · `grab`/`grab full` · `kategori` · `fase2` · `provisioning [modul]` · `komisi_grab` · `*_sniff`.

@@ -14,7 +14,7 @@ REM
 REM  JAM_TES  = FULL  -> SEMUA tier dipaksa jalan (jam + harian + mingguan),
 REM                      ga peduli jam & jadwal. PALING GAMPANG buat tes modul.
 REM           = angka 0-23 -> simulasi jam segitu; tier harian/mingguan cuma kena
-REM                      kalau angkanya SAMA dgn JAM_FAKTA_HARIAN/MINGGUAN di config
+REM                      kalau angkanya SAMA dgn JAM_FAKTA di config (1 jam buat dua-duanya)
 REM           = kosong -> pakai jam sekarang (biasanya tier per-JAM doang)
 REM  HARI_TES = hari simulasi buat tier mingguan (SENIN..MINGGU, kosongin = hari ini;
 REM             ga kepake kalau JAM_TES=FULL)
