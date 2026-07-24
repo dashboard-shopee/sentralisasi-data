@@ -177,10 +177,20 @@ def siapkan_produk(session, nama_toko):
             "model_id": int(r.model_id), "stok": int(r.stok or 0),
             "harga_diskon": int(r.harga_diskon or 0),
         })
-    hasil = list(by_item.values())
+    # ELIGIBILITY (24 Jul — implement TODO yg dulu nganggur, SAMAIN campaign): stok item
+    # > MIN DAN > X_PJH×pjh. Biar produk yg masuk flash di ATAS ambang takedown (stok<30) →
+    # cegah churn pasang→langsung-cabut. Stok item = SUM stok model (variasi yg mau di-flash).
+    smin = config.KPI_FLASH_PASANG_STOK_MIN
+    xf = config.KPI_FLASH_PASANG_STOK_X_PJH
+    hasil = []
+    for p in by_item.values():
+        stok_item = sum(m["stok"] for m in p["models"])
+        if stok_item > smin and stok_item > xf * p["sales"]:
+            hasil.append(p)
     # URUT: kategori (grup) lalu penjualan tertinggi
     hasil.sort(key=lambda p: (p["kategori"], -p["sales"]))
-    log(f"{len(hasil)} produk siap, urut kategori+penjualan", level="detail", toko=nama_toko, modul="flash")
+    log(f"{len(hasil)}/{len(by_item)} produk LOLOS eligibility (stok>{smin} & >{xf}×pjh), urut kategori+penjualan",
+        level="detail", toko=nama_toko, modul="flash")
     return hasil
 
 

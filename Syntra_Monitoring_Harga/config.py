@@ -70,7 +70,7 @@ JAM_FAKTA           = "10"       # SATU jam buat tier HARIAN & MINGGUAN (digabun
                                  # + 1 harvest sesi (dulu 2 siklus = 2 harvest, boros & rawan
                                  # anti-bot). Konsekuensi: blok hari itu lebih panjang, grab per-JAM
                                  # di jam-jam yg kelewat ke-skip (scheduler single-thread blocking).
-HARI_FAKTA_MINGGUAN = "SENIN"    # tier MINGGUAN: hari (grab kategori + housekeeping).
+HARI_FAKTA_MINGGUAN = "JUMAT"    # tier MINGGUAN: hari (grab kategori + housekeeping).
                                  # JUGA hari DAFTAR CAMPAIGN (24 Jul) — jendela 7 hari mulai
                                  # hari ini; ganti = ketiganya gerak bareng.
 # (Buat TES tier harian/mingguan pakai tes_harga.bat — JAM_TES harus SAMA dgn
@@ -145,8 +145,9 @@ KPI_FLASH_MAKS_PRODUK_PER_SESI = 50   # maks produk per sesi flash
 KPI_FLASH_MAKS_STOK            = 350  # stok promo maks per item (aturan Shopee)
 KPI_FLASH_POTONG_HARGA         = 10   # harga flash = harga_diskon − ini
 KPI_FLASH_SLOT_HARI            = 7    # ambil slot s/d berapa hari ke depan
-KPI_FLASH_PASANG_STOK_MIN      = 50   # syarat pasang: stok > ini
-KPI_FLASH_PASANG_STOK_X_PJH    = 10   # ATAU stok > ini × pjh
+KPI_FLASH_PASANG_STOK_MIN      = 50   # syarat pasang (eligibility): stok item > ini
+KPI_FLASH_PASANG_STOK_X_PJH    = 10   # DAN stok item > ini × pjh (samain campaign, 24 Jul —
+                                      # enforced di siapkan_produk; di ATAS ambang takedown <30)
 
 # Map weekday Inggris -> Indonesia (buat banding dgn HARI_FAKTA_MINGGUAN).
 HARI_ID = {

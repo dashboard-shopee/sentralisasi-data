@@ -458,8 +458,8 @@ def flash(shop, nama_toko, session):
     """Flash Sale MINGGUAN — daftar produk ke sesi flash (grab slot 7hr, rotasi maks 50/sesi, urut
     kategori+penjualan tertinggi, harga = real−POTONG_HARGA). Reuse `flash_sale_daftar.daftar_mingguan`
     (udah lengkap). ⚠️ verif live endpoint flash (RENCANA §1 B&D — set_item_sequence pernah param-err,
-    udah non-fatal). Kriteria stok>KPI_FLASH_PASANG_STOK_MIN / >×pjh = refinement TODO (siapkan_produk
-    skrg cuma stok>0)."""
+    udah non-fatal). Eligibility stok>KPI_FLASH_PASANG_STOK_MIN DAN >X_PJH×pjh di-enforce di
+    siapkan_produk (24 Jul, samain campaign — cegah churn pasang→takedown)."""
     from modules import flash_sale_daftar as FSD
     r = FSD.daftar_mingguan(session, nama_toko)
     catat(f"flash → {r}", status="live" if r.get("sesi") else "ok",
