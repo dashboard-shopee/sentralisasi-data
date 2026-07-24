@@ -37,19 +37,25 @@ def _margin(harga, cost):
     return 1.0 - cost["pct"] - (cost["hpp"] + cost["biaya"]) / harga
 
 
-def _cek_flash(target, by_jenis):
+def _cek_flash(target, stok, pjh, by_jenis):
     """Poin 3④ — audit FLASH (dipisah 17 Jul, alasan sama _cek_campaign): entri flash di
     sesi AKAN DATANG nempel pas harga tampil masih on-target (kasus 'sesuai') — kalau cuma
-    dicek di koreksi_turun, pelanggaran baru ketauan pas sesinya jalan (telat). Kriteria:
-    harga < target−FLASH_SELISIH / stok 0."""
+    dicek di koreksi_turun, pelanggaran baru ketauan pas sesinya jalan (telat).
+    Trigger DISAMAIN campaign (owner 24 Jul: stok menipis ikut ke-takedown; collateral
+    level-sesi DITERIMA owner). Kriteria: harga < target−FLASH_SELISIH / stok < CAMPAIGN_STOK_MIN
+    / stok < pjh. ⚠️ cabut flash = AKHIRI SESI (semua item se-sesi kena).
+    Harga TETEP pakai −FLASH_SELISIH (rupiah), BUKAN ×faktor kayak campaign: flash di-set
+    diskon−10 jadi ambang −10 udah pas & JUSTRU lebih ketat dari % (owner 24 Jul)."""
     fs = by_jenis.get("Flash Sale")
     if fs is None:
         return []
     sebab = []
     if fs["harga_promo"] and fs["harga_promo"] < target - FLASH_SELISIH:
         sebab.append(f"flash {fs['harga_promo']} < target-{FLASH_SELISIH}")
-    if fs["stok"] == 0:
-        sebab.append("stok real 0")
+    if stok < CAMPAIGN_STOK_MIN:                       # samain campaign (mencakup stok 0)
+        sebab.append(f"stok {stok} < {CAMPAIGN_STOK_MIN}")
+    if pjh and stok < pjh:                             # samain campaign
+        sebab.append(f"stok {stok} < penjualan/hari {pjh:.1f}")
     if sebab:
         return [{"promo": "Flash Sale", "aksi": "takedown", "sebab": " & ".join(sebab)}]
     return []
@@ -108,7 +114,7 @@ def _cek_koreksi_turun(target, real, stok, pjh, promos, gar, cost):
                          "bid_id": (gar or {}).get("bid_id")})
 
     # 3c — FLASH SALE
-    aksi.extend(_cek_flash(target, by_jenis))
+    aksi.extend(_cek_flash(target, stok, pjh, by_jenis))
 
     # 3d — CAMPAIGN
     aksi.extend(_cek_campaign(target, stok, pjh, by_jenis))
@@ -195,7 +201,7 @@ def diagnosa_toko(nama_toko):
             # sesi yg BELUM mulai pas harga masih on-target — harus kecabut SEBELUM sesi live.
             kasus = "sesuai"
             bj = {p["jenis"]: p for p in promo.get(key, [])}
-            aksi = _cek_campaign(target, stok, pjh, bj) + _cek_flash(target, bj)
+            aksi = _cek_campaign(target, stok, pjh, bj) + _cek_flash(target, stok, pjh, bj)
         elif hd > 0 and target < hd * (1 - REM_MAKS_TURUN):
             # REM 40% (per-produk): target di bawah 60% Harga Diskon = curiga pancing/komisi salah
             # input → JANGAN diubah (jaring pengaman, keputusan owner). Komisi ≥ Diskon jd ga bakal
