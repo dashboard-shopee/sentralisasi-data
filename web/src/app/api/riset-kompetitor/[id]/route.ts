@@ -54,7 +54,7 @@ export async function GET(
         `select p.produk_id, p.toko_id, t.nama as toko_nama
          from dim_produk p
          join dim_toko t on p.toko_id = t.toko_id
-         where p.sku_induk = $1 and p.toko_id in (1, 2)`,
+         where p.sku_induk iLike '%' || $1 || '%' and p.toko_id in (1, 2)`,
         [prod.sku]
       );
       
